@@ -344,7 +344,7 @@ function KlarityApp() {
         id: `u-${Date.now()}`,
         email: profile.email,
         name: profile.name || profile.email.split('@')[0],
-        avatar: profile.picture || '👤',
+        avatar: profile.picture || '',
         role: 'Primary Member'
       };
       setCurrentUser(fallbackUser);
@@ -412,7 +412,7 @@ function KlarityApp() {
           id: `u-${Date.now()}`,
           email,
           name: nameInput.trim() || email.split('@')[0],
-          avatar: '👤',
+          avatar: '',
           role: 'Primary Member'
         };
         setCurrentUser(localUser);
@@ -444,7 +444,7 @@ function KlarityApp() {
           id: `u-${Date.now()}`,
           email,
           name: email.split('@')[0],
-          avatar: '👤',
+          avatar: '',
           role: 'Primary Member'
         };
         setCurrentUser(localUser);
@@ -580,6 +580,21 @@ function KlarityApp() {
     }
   };
 
+  // Remove / Delete Card or Account
+  const handleDeleteAccount = async (accountId, accountName) => {
+    if (!window.confirm(`Are you sure you want to remove ${accountName || 'this card'}?`)) return;
+    try {
+      const res = await fetch(`/api/accounts/${accountId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setNotificationToast('Card removed successfully.');
+        setTimeout(() => setNotificationToast(''), 3000);
+        await fetchData();
+      }
+    } catch (err) {
+      console.error('Failed to remove card:', err);
+    }
+  };
+
   // Add Bill
   const handleAddBill = async (e) => {
     e.preventDefault();
@@ -685,13 +700,9 @@ function KlarityApp() {
       <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col justify-between selection:bg-blue-600 selection:text-white">
         {/* Top Navbar */}
         <header className="border-b border-slate-800 bg-[#0c1427]/90 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white shadow-md shadow-blue-600/30">
-              K
-            </div>
-            <span className="text-lg font-black tracking-wider text-white">KLARITY</span>
+          <div className="flex items-center">
+            <span className="text-xl font-black tracking-wider text-white">KLARITY</span>
           </div>
-          <span className="text-xs text-slate-400">Personal & Family Financial Hub</span>
         </header>
 
         {/* Center Container */}
@@ -771,51 +782,44 @@ function KlarityApp() {
               {authMode === 'signup' && (
                 <div>
                   <label className="block font-semibold text-slate-300 mb-1">Your Name</label>
-                  <div className="relative">
-                    <User className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. John Doe"
-                      value={nameInput}
-                      onChange={e => setNameInput(e.target.value)}
-                      className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl pl-10 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. John Doe"
+                    value={nameInput}
+                    onChange={e => setNameInput(e.target.value)}
+                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  />
                 </div>
               )}
 
               <div>
                 <label className="block font-semibold text-slate-300 mb-1">Email Address</label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="name@email.com"
-                    value={emailInput}
-                    onChange={e => setEmailInput(e.target.value)}
-                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl pl-10 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
+                <input
+                  type="email"
+                  required
+                  placeholder="name@email.com"
+                  value={emailInput}
+                  onChange={e => setEmailInput(e.target.value)}
+                  className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
               </div>
 
               <div>
                 <label className="block font-semibold text-slate-300 mb-1">Password</label>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
                     placeholder={authMode === 'signup' ? 'At least 6 characters' : 'Enter your password'}
                     value={passwordInput}
                     onChange={e => setPasswordInput(e.target.value)}
-                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl pl-10 pr-10 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 pr-10 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
+                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-200"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -825,17 +829,14 @@ function KlarityApp() {
               {authMode === 'signup' && (
                 <div>
                   <label className="block font-semibold text-slate-300 mb-1">Confirm Password</label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      placeholder="Repeat your password"
-                      value={confirmPasswordInput}
-                      onChange={e => setConfirmPasswordInput(e.target.value)}
-                      className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl pl-10 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Repeat your password"
+                    value={confirmPasswordInput}
+                    onChange={e => setConfirmPasswordInput(e.target.value)}
+                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  />
                 </div>
               )}
 
@@ -896,39 +897,34 @@ function KlarityApp() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="h-16 flex items-center justify-between gap-4">
             {/* Logo */}
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white shadow-md shadow-blue-600/30">
-                K
-              </div>
-              <span className="text-lg font-black tracking-wider text-white">KLARITY</span>
+            <div className="flex items-center">
+              <span className="text-xl font-black tracking-wider text-white">KLARITY</span>
             </div>
 
             {/* Top Right Controls */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <button
                 onClick={initiatePlaidLink}
                 disabled={isConnectingPlaid}
-                className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 transition-all"
+                className="hidden sm:inline-flex px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
               >
-                <Building2 className="w-3.5 h-3.5" />
-                <span>Connect Real Bank (Plaid)</span>
+                Connect Bank (Plaid)
               </button>
 
               <button
                 onClick={() => setIsAddAccountOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-white border border-slate-700"
+                className="px-3.5 py-1.5 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Add Card</span>
+                Add Card
               </button>
 
               {/* User Dropdown */}
               <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
                 <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-full px-2.5 py-1">
                   {currentUser.avatar?.startsWith('http') ? (
-                    <img src={currentUser.avatar} alt="Google avatar" className="w-6 h-6 rounded-full" />
+                    <img src={currentUser.avatar} alt="Google avatar" className="w-5 h-5 rounded-full" />
                   ) : (
-                    <div className="w-6 h-6 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center font-bold text-xs">
+                    <div className="w-5 h-5 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center font-bold text-xs">
                       {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
                     </div>
                   )}
@@ -938,19 +934,21 @@ function KlarityApp() {
                 </div>
 
                 <button
-                  onClick={() => setIsSettingsOpen(true)}
-                  title="Settings & Plaid Keys"
-                  className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                  onClick={() => setActiveTab('settings')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                    activeTab === 'settings'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                  }`}
                 >
-                  <Settings className="w-4 h-4" />
+                  Settings
                 </button>
 
                 <button
                   onClick={handleLogout}
-                  title="Sign Out"
-                  className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10"
+                  className="px-3 py-1.5 rounded-xl text-xs font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 cursor-pointer"
                 >
-                  <LogOut className="w-4 h-4" />
+                  Sign Out
                 </button>
               </div>
             </div>
@@ -959,28 +957,27 @@ function KlarityApp() {
           {/* Navigation Tabs */}
           <nav className="flex space-x-6 overflow-x-auto border-t border-slate-800/60 pt-2 text-xs font-semibold">
             {[
-              { id: 'summary', label: 'Summary', icon: Wallet },
-              { id: 'cards', label: `My Cards (${creditCards.length})`, icon: CreditCard },
-              { id: 'bills', label: `Household Bills (${billsList.length})`, icon: Zap },
-              { id: 'transactions', label: `Transactions (${transactionsList.length})`, icon: Receipt },
-              { id: 'advisor', label: 'AI Advisor', icon: Bot, badge: 'Live' }
+              { id: 'summary', label: 'Summary' },
+              { id: 'cards', label: `My Cards (${creditCards.length})` },
+              { id: 'bills', label: `Household Bills (${billsList.length})` },
+              { id: 'transactions', label: `Transactions (${transactionsList.length})` },
+              { id: 'advisor', label: 'AI Advisor', badge: 'Live' },
+              { id: 'settings', label: 'Settings' }
             ].map(tab => {
-              const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`pb-3 px-1 flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${
+                  className={`pb-3 px-1 transition-all whitespace-nowrap cursor-pointer ${
                     isActive
-                      ? 'border-blue-500 text-blue-400 font-bold'
-                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                      ? 'border-b-2 border-blue-500 text-blue-400 font-bold'
+                      : 'border-b-2 border-transparent text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
                   <span>{tab.label}</span>
                   {tab.badge && (
-                    <span className="px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider bg-blue-600 text-white font-bold">
+                    <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider bg-blue-600 text-white font-bold">
                       {tab.badge}
                     </span>
                   )}
@@ -1000,8 +997,8 @@ function KlarityApp() {
               <span>{plaidError}</span>
             </div>
             <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="px-3 py-1 rounded-lg bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 font-semibold"
+              onClick={() => setActiveTab('settings')}
+              className="px-3 py-1 rounded-lg bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 font-semibold cursor-pointer"
             >
               Open Settings
             </button>
@@ -1016,11 +1013,8 @@ function KlarityApp() {
             {/* Stat Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-                  <span>Connected Checking</span>
-                  <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
-                    <DollarSign className="w-4 h-4" />
-                  </div>
+                <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                  Connected Checking
                 </div>
                 <div className="text-2xl font-black text-white mt-3">
                   ${(data?.metrics?.totalChecking || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -1029,11 +1023,8 @@ function KlarityApp() {
               </div>
 
               <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-                  <span>Total Card Balances</span>
-                  <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
-                    <CreditCard className="w-4 h-4" />
-                  </div>
+                <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                  Total Card Balances
                 </div>
                 <div className="text-2xl font-black text-white mt-3">
                   ${(data?.metrics?.totalCreditDebt || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -1042,11 +1033,8 @@ function KlarityApp() {
               </div>
 
               <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-                  <span>Monthly Bills</span>
-                  <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
-                    <Zap className="w-4 h-4" />
-                  </div>
+                <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                  Monthly Bills
                 </div>
                 <div className="text-2xl font-black text-white mt-3">
                   ${(data?.metrics?.totalMonthlyBills || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -1055,11 +1043,8 @@ function KlarityApp() {
               </div>
 
               <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-                  <span>Estimated Net Available</span>
-                  <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
-                    <TrendingUp className="w-4 h-4" />
-                  </div>
+                <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                  Estimated Net Available
                 </div>
                 <div className="text-2xl font-black text-white mt-3">
                   ${(data?.metrics?.netWorthEstimate || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -1074,21 +1059,27 @@ function KlarityApp() {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setIsAddBillOpen(true)}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5 text-blue-400" /> Add Utility Bill
+                  Add Utility Bill
                 </button>
                 <button
                   onClick={() => setIsScanBillOpen(true)}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer"
                 >
-                  <FileText className="w-3.5 h-3.5 text-emerald-400" /> Scan Statement
+                  Scan Statement
                 </button>
                 <button
                   onClick={() => setActiveTab('advisor')}
-                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white flex items-center gap-1.5 shadow-md shadow-blue-600/20"
+                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/20 cursor-pointer"
                 >
-                  <Sparkles className="w-3.5 h-3.5" /> Ask AI Advisor
+                  Ask AI Advisor
+                </button>
+                <button
+                  onClick={() => setActiveTab('settings')}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer"
+                >
+                  Manage Settings
                 </button>
               </div>
             </div>
@@ -1096,7 +1087,6 @@ function KlarityApp() {
             {/* Empty State vs Connected Accounts */}
             {accountsList.length === 0 ? (
               <div className="p-10 text-center bg-[#0d1527] border border-dashed border-slate-800 rounded-2xl flex flex-col items-center gap-4">
-                <CreditCard className="w-10 h-10 text-slate-600" />
                 <div>
                   <h3 className="text-base font-bold text-white">No Connected Cards or Accounts Yet</h3>
                   <p className="text-xs text-slate-400 max-w-sm mt-1">
@@ -1106,15 +1096,15 @@ function KlarityApp() {
                 <div className="flex gap-3">
                   <button
                     onClick={initiatePlaidLink}
-                    className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 flex items-center gap-2"
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 cursor-pointer"
                   >
-                    <Building2 className="w-4 h-4" /> Connect Bank (Plaid)
+                    Connect Bank (Plaid)
                   </button>
                   <button
                     onClick={() => setIsAddAccountOpen(true)}
-                    className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 flex items-center gap-2"
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 cursor-pointer"
                   >
-                    <Plus className="w-4 h-4" /> Add Card Manually
+                    Add Card Manually
                   </button>
                 </div>
               </div>
@@ -1178,9 +1168,9 @@ function KlarityApp() {
               </div>
               <button
                 onClick={() => setIsAddAccountOpen(true)}
-                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/20 flex items-center gap-1.5"
+                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/20 cursor-pointer"
               >
-                <Plus className="w-4 h-4" /> Add Card
+                Add Card
               </button>
             </div>
 
@@ -1290,15 +1280,15 @@ function KlarityApp() {
               <div className="flex gap-2">
                 <button
                   onClick={() => setIsScanBillOpen(true)}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 flex items-center gap-1.5"
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer"
                 >
-                  <FileText className="w-3.5 h-3.5 text-emerald-400" /> Scan Statement
+                  Scan Statement
                 </button>
                 <button
                   onClick={() => setIsAddBillOpen(true)}
-                  className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/20 flex items-center gap-1.5"
+                  className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/20 cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Add Bill
+                  Add Bill
                 </button>
               </div>
             </div>
@@ -1430,14 +1420,9 @@ function KlarityApp() {
         {activeTab === 'advisor' && (
           <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col h-[650px] shadow-xl">
             <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center">
-                  <Bot className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white">Klarity AI Financial Advisor</h3>
-                  <p className="text-[11px] text-slate-400">Analyzes your actual connected cards, APRs & bills</p>
-                </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Klarity AI Financial Advisor</h3>
+                <p className="text-[11px] text-slate-400">Analyzes your actual connected cards, APRs & bills</p>
               </div>
             </div>
 
@@ -1480,11 +1465,178 @@ function KlarityApp() {
               <button
                 type="submit"
                 disabled={isAiTyping || !chatInput.trim()}
-                className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/20"
+                className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/20 cursor-pointer"
               >
                 Send
               </button>
             </form>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 6: SETTINGS */}
+        {/* ========================================================================= */}
+        {activeTab === 'settings' && (
+          <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full">
+            <div>
+              <h2 className="text-xl font-bold text-white">Settings</h2>
+              <p className="text-xs text-slate-400 mt-1">Manage bank connections, linked credit cards, profile, and security</p>
+            </div>
+
+            {/* 1. Plaid Banking Integration */}
+            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-6 flex flex-col gap-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-white">Plaid Banking Integration</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Secure bank account linking via Plaid API</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${
+                    settings.hasPlaidKeys
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                  }`}>
+                    {settings.hasPlaidKeys ? `Active (${settings.plaidEnv || 'sandbox'})` : 'API Keys Needed'}
+                  </span>
+                  <button
+                    onClick={initiatePlaidLink}
+                    disabled={isConnectingPlaid}
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-600/20 cursor-pointer"
+                  >
+                    {isConnectingPlaid ? 'Opening Plaid...' : 'Launch Plaid Link'}
+                  </button>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveSettings} className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <label className="font-semibold text-slate-300 block mb-1">Plaid Client ID</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 64a8b8c123..."
+                    value={plaidClientIdInput}
+                    onChange={e => setPlaidClientIdInput(e.target.value)}
+                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-300 block mb-1">Plaid Secret</label>
+                  <input
+                    type="password"
+                    placeholder="••••••••••••••••••••"
+                    value={plaidSecretInput}
+                    onChange={e => setPlaidSecretInput(e.target.value)}
+                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                  <div className="flex items-center gap-3">
+                    <label className="font-semibold text-slate-300">Environment:</label>
+                    <select
+                      value={plaidEnvInput}
+                      onChange={e => setPlaidEnvInput(e.target.value)}
+                      className="bg-[#080d19] border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="development">Development (Real Bank Accounts)</option>
+                      <option value="sandbox">Sandbox (Testing / Demo)</option>
+                      <option value="production">Production</option>
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+                  >
+                    Save Plaid Keys
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* 2. Manage Cards & Accounts */}
+            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-6 flex flex-col gap-5">
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-white">Manage Cards & Accounts</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">View and manage all active cards ({accountsList.length} total)</p>
+                </div>
+                <button
+                  onClick={() => setIsAddAccountOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 cursor-pointer"
+                >
+                  Add Card
+                </button>
+              </div>
+
+              {accountsList.length === 0 ? (
+                <p className="text-xs text-slate-500 py-4 text-center">No cards or accounts added yet. Click 'Add Card' above to link one.</p>
+              ) : (
+                <div className="divide-y divide-slate-800/80">
+                  {accountsList.map(acc => (
+                    <div key={acc.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white">{acc.name}</span>
+                          <span className="text-slate-400">({acc.institution})</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 font-mono">•••• {acc.mask}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          Limit: ${Number(acc.limit || 0).toLocaleString()} | APR: {acc.apr || 0}% | Min: ${Number(acc.minPayment || 0).toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <span className="text-[10px] text-slate-500 block uppercase">Balance</span>
+                          <span className="font-bold text-rose-400 text-sm">${Number(acc.balance || 0).toFixed(2)}</span>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteAccount(acc.id, acc.name)}
+                          className="px-3 py-1 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 font-semibold text-xs border border-rose-500/20 cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 3. Account Profile */}
+            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-6 flex flex-col gap-4 text-xs">
+              <h3 className="text-sm font-bold text-white border-b border-slate-800/80 pb-3">User Profile</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Full Name</span>
+                  <span className="text-white font-semibold text-sm">{currentUser.name}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Email Address</span>
+                  <span className="text-white font-semibold text-sm">{currentUser.email}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Authentication Status</span>
+                  <span className="text-emerald-400 font-semibold">Google OAuth Verified</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Household Role</span>
+                  <span className="text-white font-semibold">{currentUser.role || 'Primary Member'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Security & Sign Out */}
+            <div className="bg-[#0d1527] border border-rose-950/40 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-bold text-white">Sign Out</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Securely log out of this browser session</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition-all shadow-md shadow-rose-600/20 cursor-pointer"
+              >
+                Sign Out of Klarity
+              </button>
+            </div>
           </div>
         )}
       </main>
@@ -1498,10 +1650,8 @@ function KlarityApp() {
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <CreditCard className="w-4 h-4 text-blue-400" /> Add Credit Card
-              </h3>
-              <button onClick={() => setIsAddAccountOpen(false)} className="text-slate-400 hover:text-white">✕</button>
+              <h3 className="text-sm font-bold text-white">Add Credit Card</h3>
+              <button onClick={() => setIsAddAccountOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
             </div>
             <form onSubmit={handleAddAccount} className="flex flex-col gap-3 text-xs">
               <div>
@@ -1596,10 +1746,8 @@ function KlarityApp() {
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Zap className="w-4 h-4 text-amber-400" /> Add Utility / Bill
-              </h3>
-              <button onClick={() => setIsAddBillOpen(false)} className="text-slate-400 hover:text-white">✕</button>
+              <h3 className="text-sm font-bold text-white">Add Utility / Bill</h3>
+              <button onClick={() => setIsAddBillOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
             </div>
             <form onSubmit={handleAddBill} className="flex flex-col gap-3 text-xs">
               <div>
@@ -1655,10 +1803,8 @@ function KlarityApp() {
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <FileText className="w-4 h-4 text-emerald-400" /> Scan PG&E or Utility Statement
-              </h3>
-              <button onClick={() => setIsScanBillOpen(false)} className="text-slate-400 hover:text-white">✕</button>
+              <h3 className="text-sm font-bold text-white">Scan Statement</h3>
+              <button onClick={() => setIsScanBillOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
             </div>
             <p className="text-xs text-slate-400">
               Paste the text from your e-bill PDF or statement below. Klarity will automatically extract the utility company, amount, and due date.
@@ -1675,70 +1821,15 @@ function KlarityApp() {
               </div>
             )}
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-              <button type="button" onClick={() => setIsScanBillOpen(false)} className="px-3 py-1.5 text-xs text-slate-400">Close</button>
+              <button type="button" onClick={() => setIsScanBillOpen(false)} className="px-3 py-1.5 text-xs text-slate-400 cursor-pointer">Close</button>
               <button
                 type="button"
                 onClick={handleScanBill}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer"
               >
                 Parse & Register Bill
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Settings Modal (Strictly inside user menu) */}
-      {isSettingsOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Settings className="w-4 h-4 text-blue-400" /> Financial API Settings
-              </h3>
-              <button onClick={() => setIsSettingsOpen(false)} className="text-slate-400 hover:text-white">✕</button>
-            </div>
-            <p className="text-xs text-slate-400">
-              Configure your Plaid network keys for linking bank accounts.
-            </p>
-            <form onSubmit={handleSaveSettings} className="flex flex-col gap-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-300">Plaid Client ID</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 64a8b..."
-                  value={plaidClientIdInput}
-                  onChange={e => setPlaidClientIdInput(e.target.value)}
-                  className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-600"
-                />
-              </div>
-              <div>
-                <label className="font-semibold text-slate-300">Plaid Secret</label>
-                <input
-                  type="password"
-                  placeholder="••••••••••••••••••••"
-                  value={plaidSecretInput}
-                  onChange={e => setPlaidSecretInput(e.target.value)}
-                  className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="font-semibold text-slate-300">Plaid Environment</label>
-                <select
-                  value={plaidEnvInput}
-                  onChange={e => setPlaidEnvInput(e.target.value)}
-                  className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                >
-                  <option value="development">Development (Connect Real Banks)</option>
-                  <option value="sandbox">Sandbox (Simulation)</option>
-                  <option value="production">Production</option>
-                </select>
-              </div>
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800 mt-2">
-                <button type="button" onClick={() => setIsSettingsOpen(false)} className="px-3 py-1.5 text-slate-400">Cancel</button>
-                <button type="submit" className="px-4 py-1.5 rounded-xl bg-blue-600 text-white font-semibold">Save Settings</button>
-              </div>
-            </form>
           </div>
         </div>
       )}
