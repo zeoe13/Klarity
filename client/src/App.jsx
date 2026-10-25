@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  ShieldCheck,
   CreditCard,
   Building2,
   Lock,
@@ -30,13 +29,13 @@ import {
   Sparkles,
   Smartphone,
   Wallet,
-  Landmark,
-  ShieldAlert
+  ShieldCheck,
+  Percent
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 
 export default function App() {
-  // Current authenticated user
+  // Current user state (persisted)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const saved = localStorage.getItem('klarity_user');
@@ -48,27 +47,24 @@ export default function App() {
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(true);
-  const [showPassword, setShowPassword] = useState(false);
-  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
-  const [googleEmailInput, setGoogleEmailInput] = useState('');
-  const [googleNameInput, setGoogleNameInput] = useState('');
   const [authError, setAuthError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [isGoogleOAuthModalOpen, setIsGoogleOAuthModalOpen] = useState(false);
+  const [googleClientIdSetting, setGoogleClientIdSetting] = useState('');
 
   // Main dashboard state
-  const [data, setData] = useState(null);
+  const [data, setData] = useState({ accounts: [], bills: [], transactions: [], metrics: { totalChecking: 0, totalCreditDebt: 0, totalMonthlyBills: 0, netWorthEstimate: 0 } });
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('summary'); // summary | accounts | bills | transactions | advisor
+  const [activeTab, setActiveTab] = useState('summary'); // summary | cards | bills | transactions | advisor
   const [viewHousehold, setViewHousehold] = useState(false);
 
-  // Settings & Plaid state (accessible strictly from secure dashboard settings, never login screen)
-  const [settings, setSettings] = useState({ hasPlaidKeys: false, plaidEnv: 'sandbox' });
+  // Settings & Plaid state
+  const [settings, setSettings] = useState({ hasPlaidKeys: false, plaidEnv: 'sandbox', googleClientId: '' });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [plaidClientIdInput, setPlaidClientIdInput] = useState('');
   const [plaidSecretInput, setPlaidSecretInput] = useState('');
   const [plaidEnvInput, setPlaidEnvInput] = useState('development');
+  const [googleClientIdInput, setGoogleClientIdInput] = useState('');
 
   // Plaid Link token state
   const [linkToken, setLinkToken] = useState(null);
@@ -79,26 +75,25 @@ export default function App() {
   const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
   const [isAddBillOpen, setIsAddBillOpen] = useState(false);
   const [isScanBillOpen, setIsScanBillOpen] = useState(false);
-  const [isTransferOpen, setIsTransferOpen] = useState(false);
-  const [paymentSuccessToast, setPaymentSuccessToast] = useState('');
+  const [notificationToast, setNotificationToast] = useState('');
 
-  // Forms
+  // Forms for real accounts and real bills
   const [newAccount, setNewAccount] = useState({
     institution: 'Capital One',
-    name: 'Savor Rewards Card',
+    name: '',
     type: 'credit',
     balance: '',
-    limit: '5000',
-    apr: '24.99',
-    minPayment: '45',
-    dueDate: '2026-11-18'
+    limit: '',
+    apr: '',
+    minPayment: '',
+    dueDate: ''
   });
 
   const [newBill, setNewBill] = useState({
-    name: 'Pacific Gas & Electric (PG&E)',
-    biller: 'PG&E',
+    name: '',
+    biller: '',
     category: 'Utilities',
-    expectedAmount: '248.50',
+    expectedAmount: '',
     dueDay: '15'
   });
 
@@ -113,7 +108,7 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState([
     {
       role: 'assistant',
-      text: "Hello! I am Klarity, your AI Banking Advisor. I'm actively monitoring your accounts, payment due dates, and cash flow. How can I help you today?"
+      text: "Hello! I am Klarity, your personal financial advisor. I monitor your actual connected cards, real APRs, and utility bills to help you optimize cash flow and pay off debt. How can I help you today?"
     }
   ]);
   const [chatInput, setChatInput] = useState('');
@@ -127,6 +122,10 @@ export default function App() {
       if (res.ok) {
         const json = await res.json();
         setSettings(json);
+        if (json.googleClientId) {
+          setGoogleClientIdSetting(json.googleClientId);
+          setGoogleClientIdInput(json.googleClientId);
+        }
       }
     } catch (err) {
       console.warn('Could not fetch settings:', err);
@@ -144,7 +143,7 @@ export default function App() {
         setData(json);
       }
     } catch (err) {
-      console.error('Failed to load banking data:', err);
+      console.error('Failed to load data:', err);
     } finally {
       setLoading(false);
     }
@@ -164,11 +163,11 @@ export default function App() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, isAiTyping]);
 
-  // Handle Google Login Flow
-  const handleGoogleSignIn = async (emailToUse, nameToUse) => {
-    const finalEmail = (emailToUse || googleEmailInput || loginEmail).trim();
-    if (!finalEmail) {
-      setAuthError('Please enter a valid Google email address.');
+  // Google OAuth flow
+  const handleGoogleSignIn = async (emailInput) => {
+    const emailToUse = (emailInput || loginEmail).trim();
+    if (!emailToUse) {
+      setAuthError('Please enter your Google email address');
       return;
     }
 
@@ -179,8 +178,8 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: finalEmail,
-          name: nameToUse || googleNameInput || finalEmail.split('@')[0],
+          email: emailToUse,
+          name: emailToUse.split('@')[0],
           picture: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
           sub: `google-${Date.now()}`
         })
@@ -189,35 +188,25 @@ export default function App() {
       if (res.ok && json.user) {
         setCurrentUser(json.user);
         localStorage.setItem('klarity_user', JSON.stringify(json.user));
-        setIsGoogleModalOpen(false);
+        setIsGoogleOAuthModalOpen(false);
       } else {
-        setAuthError(json.error || 'Authentication failed. Please try again.');
+        setAuthError(json.error || 'Login failed. Please try again.');
       }
     } catch (err) {
-      console.error('Google Auth error:', err);
-      // Fallback local authentication so user is never blocked
+      // Fallback
       const fallbackUser = {
         id: `u-${Date.now()}`,
-        email: finalEmail,
-        name: nameToUse || finalEmail.split('@')[0],
+        email: emailToUse,
+        name: emailToUse.split('@')[0],
         avatar: '👤',
-        role: 'Primary Account Holder'
+        role: 'Primary Member'
       };
       setCurrentUser(fallbackUser);
       localStorage.setItem('klarity_user', JSON.stringify(fallbackUser));
-      setIsGoogleModalOpen(false);
+      setIsGoogleOAuthModalOpen(false);
     } finally {
       setIsAuthenticating(false);
     }
-  };
-
-  const handleStandardLogin = (e) => {
-    e.preventDefault();
-    if (!loginEmail.trim()) {
-      setAuthError('Please enter your User ID or Email');
-      return;
-    }
-    handleGoogleSignIn(loginEmail, loginEmail.split('@')[0]);
   };
 
   const handleLogout = () => {
@@ -225,7 +214,7 @@ export default function App() {
     localStorage.removeItem('klarity_user');
   };
 
-  // Save Settings
+  // Save Settings (Plaid / Google OAuth Keys)
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     try {
@@ -235,13 +224,14 @@ export default function App() {
         body: JSON.stringify({
           plaidClientId: plaidClientIdInput,
           plaidSecret: plaidSecretInput,
-          plaidEnv: plaidEnvInput
+          plaidEnv: plaidEnvInput,
+          googleClientId: googleClientIdInput
         })
       });
       setIsSettingsOpen(false);
       await fetchSettings();
-      setPaymentSuccessToast('Banking credentials updated securely.');
-      setTimeout(() => setPaymentSuccessToast(''), 4000);
+      setNotificationToast('Settings updated securely.');
+      setTimeout(() => setNotificationToast(''), 4000);
     } catch (err) {
       console.error(err);
     }
@@ -261,7 +251,7 @@ export default function App() {
 
       if (json.needsKeys) {
         setIsSettingsOpen(true);
-        setPlaidError('Please configure your Plaid credentials in Banking Settings first.');
+        setPlaidError('Please enter your Plaid keys in Settings to connect live banks.');
         return;
       }
 
@@ -271,7 +261,7 @@ export default function App() {
         setPlaidError(json.error || 'Could not initialize bank connection.');
       }
     } catch (err) {
-      setPlaidError('Unable to connect to financial network. You can also add accounts manually.');
+      setPlaidError('Could not reach bank network. You can also add cards manually.');
     } finally {
       setIsConnectingPlaid(false);
     }
@@ -293,8 +283,8 @@ export default function App() {
           });
           setLinkToken(null);
           await fetchData();
-          setPaymentSuccessToast('Bank account successfully linked!');
-          setTimeout(() => setPaymentSuccessToast(''), 4000);
+          setNotificationToast('Bank account successfully linked!');
+          setTimeout(() => setNotificationToast(''), 4000);
         } catch (err) {
           console.error(err);
         }
@@ -309,9 +299,11 @@ export default function App() {
     return null;
   }
 
-  // Add Manual Account
+  // Add Manual Card
   const handleAddAccount = async (e) => {
     e.preventDefault();
+    if (!newAccount.name.trim()) return;
+
     try {
       const res = await fetch('/api/accounts', {
         method: 'POST',
@@ -329,14 +321,14 @@ export default function App() {
           name: '',
           type: 'credit',
           balance: '',
-          limit: '5000',
-          apr: '24.99',
-          minPayment: '45',
-          dueDate: '2026-11-18'
+          limit: '',
+          apr: '',
+          minPayment: '',
+          dueDate: ''
         });
         await fetchData();
-        setPaymentSuccessToast('New card added to your portfolio.');
-        setTimeout(() => setPaymentSuccessToast(''), 4000);
+        setNotificationToast('Card added to your portfolio.');
+        setTimeout(() => setNotificationToast(''), 4000);
       }
     } catch (err) {
       console.error(err);
@@ -346,6 +338,8 @@ export default function App() {
   // Add Bill
   const handleAddBill = async (e) => {
     e.preventDefault();
+    if (!newBill.name.trim() || !newBill.expectedAmount) return;
+
     try {
       const res = await fetch('/api/bills', {
         method: 'POST',
@@ -357,9 +351,16 @@ export default function App() {
       });
       if (res.ok) {
         setIsAddBillOpen(false);
+        setNewBill({
+          name: '',
+          biller: '',
+          category: 'Utilities',
+          expectedAmount: '',
+          dueDay: '15'
+        });
         await fetchData();
-        setPaymentSuccessToast(`Bill added: ${newBill.name}`);
-        setTimeout(() => setPaymentSuccessToast(''), 4000);
+        setNotificationToast(`Bill added: ${newBill.name}`);
+        setTimeout(() => setNotificationToast(''), 4000);
       }
     } catch (err) {
       console.error(err);
@@ -372,8 +373,8 @@ export default function App() {
       const res = await fetch(`/api/bills/${billId}/pay`, { method: 'POST' });
       if (res.ok) {
         await fetchData();
-        setPaymentSuccessToast(`Payment of $${Number(amount).toFixed(2)} sent to ${billName}.`);
-        setTimeout(() => setPaymentSuccessToast(''), 4000);
+        setNotificationToast(`Payment recorded: $${Number(amount).toFixed(2)} to ${billName}.`);
+        setTimeout(() => setNotificationToast(''), 4000);
       }
     } catch (err) {
       console.error(err);
@@ -392,8 +393,8 @@ export default function App() {
         const json = await res.json();
         setScanResult(json.summary);
         await fetchData();
-        setPaymentSuccessToast('Utility statement parsed and added to Bill Pay.');
-        setTimeout(() => setPaymentSuccessToast(''), 4000);
+        setNotificationToast('Statement parsed and added to bills.');
+        setTimeout(() => setNotificationToast(''), 4000);
       }
     } catch (err) {
       console.error(err);
@@ -423,7 +424,7 @@ export default function App() {
         ...prev,
         {
           role: 'assistant',
-          text: `I've reviewed your connected portfolio. You have total checking reserves of $${data?.metrics?.totalChecking?.toFixed(2) || '0.00'} and credit card obligations of $${data?.metrics?.totalCreditDebt?.toFixed(2) || '0.00'}. Pay off your highest APR cards first while maintaining minimums on others.`
+          text: `I've analyzed your real connected data. You currently have checking balance of $${data?.metrics?.totalChecking?.toFixed(2) || '0.00'} and credit card balances of $${data?.metrics?.totalCreditDebt?.toFixed(2) || '0.00'}. Keep extra payments targeted at your highest APR cards.`
         }
       ]);
     } finally {
@@ -432,244 +433,147 @@ export default function App() {
   };
 
   // =========================================================================
-  // 1. BANKING LOGIN SCREEN (Capital One / Citi / Discover Style)
+  // 1. CLEAN SIGN-IN SCREEN
   // =========================================================================
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col justify-between selection:bg-blue-600 selection:text-white">
-        {/* Top Banking Security Banner */}
-        <header className="border-b border-slate-800/80 bg-[#0b1120]/90 backdrop-blur px-6 py-3.5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-700 via-indigo-600 to-sky-500 flex items-center justify-center shadow-md shadow-blue-600/30">
-              <Landmark className="w-5 h-5 text-white" />
+        {/* Top Navbar */}
+        <header className="border-b border-slate-800 bg-[#0c1427]/90 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white shadow-md shadow-blue-600/30">
+              K
             </div>
-            <div>
-              <span className="text-lg font-black tracking-wider text-white">KLARITY</span>
-              <span className="hidden sm:inline-block ml-2 text-[10px] tracking-widest font-semibold uppercase text-slate-400 border-l border-slate-700 pl-2">
-                Online Banking & Wealth
-              </span>
-            </div>
+            <span className="text-lg font-black tracking-wider text-white">KLARITY</span>
           </div>
-          <div className="flex items-center gap-4 text-xs text-slate-400 font-medium">
-            <span className="hidden md:flex items-center gap-1.5 text-emerald-400 bg-emerald-950/40 border border-emerald-800/50 px-2.5 py-1 rounded-full">
-              <ShieldCheck className="w-3.5 h-3.5" /> 256-Bit SSL Encrypted
-            </span>
-            <span>Customer Care: 1-800-KLARITY</span>
-          </div>
+          <span className="text-xs text-slate-400">Family Financial Hub</span>
         </header>
 
         {/* Center Sign In Container */}
         <div className="flex-1 flex items-center justify-center px-4 py-12">
-          <div className="max-w-md w-full bg-[#0d1527] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
-            {/* Card Header */}
-            <div className="bg-gradient-to-b from-[#131e38] to-[#0d1527] px-6 pt-7 pb-5 border-b border-slate-800/60 text-center">
-              <h2 className="text-xl font-bold tracking-tight text-white">Sign In to Klarity</h2>
+          <div className="max-w-md w-full bg-[#0d1527] border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8 flex flex-col gap-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold tracking-tight text-white">Sign In to Klarity</h2>
               <p className="text-xs text-slate-400 mt-1">
-                Access your checking, credit cards, and household finances
+                Manage your real cards, banks, and household bills in one place
               </p>
             </div>
 
-            <div className="p-6 sm:p-8 flex flex-col gap-5">
-              {authError && (
-                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                  <ShieldAlert className="w-4 h-4 shrink-0 text-rose-400" />
-                  <span>{authError}</span>
-                </div>
-              )}
-
-              {/* Official Google Sign-In Button */}
-              <button
-                type="button"
-                onClick={() => setIsGoogleModalOpen(true)}
-                className="w-full py-3 px-4 rounded-xl bg-white hover:bg-slate-50 text-slate-800 font-semibold text-xs flex items-center justify-center gap-3 transition-all shadow-md shadow-white/5 active:scale-[0.99] border border-slate-200"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.34 24 12 24z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.92 0 12s.45 3.85 1.24 5.42l4.04-3.15z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.24 6.58l4.04 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                  />
-                </svg>
-                <span>Continue with Google</span>
-              </button>
-
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-slate-800"></div>
-                <span className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
-                  or sign in with user id
-                </span>
-                <div className="flex-1 h-px bg-slate-800"></div>
+            {authError && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{authError}</span>
               </div>
+            )}
 
-              {/* Standard Banking User ID / Password Sign In */}
-              <form onSubmit={handleStandardLogin} className="flex flex-col gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    User ID or Email
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Enter User ID or Google Email"
-                    value={loginEmail}
-                    onChange={e => setLoginEmail(e.target.value)}
-                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
-                  />
-                </div>
+            {/* Google Sign In Button */}
+            <button
+              type="button"
+              onClick={() => setIsGoogleOAuthModalOpen(true)}
+              className="w-full py-3 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-800 font-semibold text-xs flex items-center justify-center gap-3 transition-all shadow-md active:scale-[0.99]"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.34 24 12 24z"/>
+                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.92 0 12s.45 3.85 1.24 5.42l4.04-3.15z"/>
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.24 6.58l4.04 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+              </svg>
+              <span>Continue with Google</span>
+            </button>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-semibold text-slate-300">Password</label>
-                    <a href="#forgot" onClick={e => e.preventDefault()} className="text-[11px] text-blue-400 hover:text-blue-300">
-                      Forgot Password?
-                    </a>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="••••••••••••"
-                      value={loginPassword}
-                      onChange={e => setLoginPassword(e.target.value)}
-                      className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-xs">
-                  <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={e => setRememberMe(e.target.checked)}
-                      className="rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
-                    />
-                    <span>Remember User ID</span>
-                  </label>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isAuthenticating}
-                  className="w-full mt-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-xs tracking-wide shadow-lg shadow-blue-600/25 transition-all flex items-center justify-center gap-2"
-                >
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>{isAuthenticating ? 'Authenticating...' : 'Sign In Securely'}</span>
-                </button>
-              </form>
-
-              {/* Security Footnote */}
-              <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-                <span className="flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  FDIC Insured up to $250,000
-                </span>
-                <span className="text-slate-500">Klarity Trust Bank</span>
-              </div>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-slate-800"></div>
+              <span className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
+                or continue with email
+              </span>
+              <div className="flex-1 h-px bg-slate-800"></div>
             </div>
+
+            {/* Email Sign In */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleGoogleSignIn(loginEmail);
+              }}
+              className="flex flex-col gap-3"
+            >
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="name@gmail.com"
+                  value={loginEmail}
+                  onChange={e => setLoginEmail(e.target.value)}
+                  className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isAuthenticating}
+                className="w-full mt-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/20"
+              >
+                {isAuthenticating ? 'Signing In...' : 'Sign In'}
+              </button>
+            </form>
           </div>
         </div>
 
-        {/* Google Account Selector Modal (When user clicks Continue with Google) */}
-        {isGoogleModalOpen && (
+        {/* Google OAuth Modal / Clarification */}
+        {isGoogleOAuthModalOpen && (
           <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-sm w-full p-6 shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-sm w-full p-6 shadow-2xl flex flex-col gap-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.34 24 12 24z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.92 0 12s.45 3.85 1.24 5.42l4.04-3.15z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.24 6.58l4.04 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                    />
+                <span className="text-sm font-bold text-white flex items-center gap-2">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.34 24 12 24z"/>
+                    <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.92 0 12s.45 3.85 1.24 5.42l4.04-3.15z"/>
+                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.24 6.58l4.04 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
                   </svg>
-                  <span className="text-sm font-bold text-white">Choose a Google Account</span>
-                </div>
-                <button
-                  onClick={() => setIsGoogleModalOpen(false)}
-                  className="text-slate-400 hover:text-white text-sm"
-                >
-                  ✕
-                </button>
+                  Sign In with Google
+                </span>
+                <button onClick={() => setIsGoogleOAuthModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
               </div>
 
               <p className="text-xs text-slate-300">
-                to continue to <span className="font-semibold text-white">Klarity Online Banking</span>
+                Enter your Gmail address to sign in and open your private financial vault:
               </p>
 
               <form
-                onSubmit={e => {
+                onSubmit={(e) => {
                   e.preventDefault();
-                  handleGoogleSignIn(googleEmailInput, googleNameInput);
+                  handleGoogleSignIn(loginEmail);
                 }}
                 className="flex flex-col gap-3"
               >
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-300">Google / Gmail Address</label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="yourname@gmail.com"
-                    value={googleEmailInput}
-                    onChange={e => setGoogleEmailInput(e.target.value)}
-                    className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                    autoFocus
-                  />
-                </div>
+                <input
+                  type="email"
+                  required
+                  placeholder="yourname@gmail.com"
+                  value={loginEmail}
+                  onChange={e => setLoginEmail(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  autoFocus
+                />
 
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-300">Your Full Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Robert Vance"
-                    value={googleNameInput}
-                    onChange={e => setGoogleNameInput(e.target.value)}
-                    className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-slate-800">
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
                   <button
                     type="button"
-                    onClick={() => setIsGoogleModalOpen(false)}
-                    className="px-3 py-2 text-xs text-slate-400 hover:text-slate-200"
+                    onClick={() => setIsGoogleOAuthModalOpen(false)}
+                    className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isAuthenticating}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/20"
+                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white"
                   >
-                    {isAuthenticating ? 'Signing In...' : 'Continue to Klarity'}
+                    {isAuthenticating ? 'Signing In...' : 'Continue'}
                   </button>
                 </div>
               </form>
@@ -677,27 +581,15 @@ export default function App() {
           </div>
         )}
 
-        {/* Banking Footer */}
-        <footer className="border-t border-slate-800/80 bg-[#070b14] px-6 py-6 text-center text-xs text-slate-500 flex flex-col items-center gap-2">
-          <div className="flex flex-wrap justify-center gap-4 text-slate-400">
-            <a href="#security" className="hover:text-slate-200">Security & Fraud Protection</a>
-            <span>•</span>
-            <a href="#privacy" className="hover:text-slate-200">Privacy Policy</a>
-            <span>•</span>
-            <a href="#fdic" className="hover:text-slate-200">FDIC Insurance</a>
-            <span>•</span>
-            <a href="#terms" className="hover:text-slate-200">Online Banking Agreement</a>
-          </div>
-          <p className="text-[11px] text-slate-600">
-            © 2026 Klarity Bank & Wealth Financial Services Inc. Equal Housing Lender. All rights reserved.
-          </p>
+        <footer className="border-t border-slate-800 py-4 text-center text-xs text-slate-500">
+          © 2026 Klarity. All financial data is private and encrypted.
         </footer>
       </div>
     );
   }
 
   // =========================================================================
-  // 2. MAIN BANKING DASHBOARD (Capital One / Citi / Discover Style)
+  // 2. MAIN APP: REAL CARDS, REAL BILLS, REAL DATA ONLY
   // =========================================================================
   const accountsList = data?.accounts || [];
   const billsList = data?.bills || [];
@@ -716,40 +608,35 @@ export default function App() {
     <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col font-sans">
       {linkToken && <PlaidLauncher token={linkToken} />}
 
-      {/* Payment Success Toast */}
-      {paymentSuccessToast && (
+      {/* Notification Toast */}
+      {notificationToast && (
         <div className="fixed top-5 right-5 z-50 bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-xs font-semibold animate-in fade-in slide-in-from-top-2">
           <CheckCircle2 className="w-4 h-4" />
-          <span>{paymentSuccessToast}</span>
+          <span>{notificationToast}</span>
         </div>
       )}
 
-      {/* Capital One / Citi Style Banking Top Navbar */}
+      {/* Top Navbar */}
       <header className="border-b border-slate-800 bg-[#0c1427]/95 backdrop-blur sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="h-16 flex items-center justify-between gap-4">
             {/* Logo */}
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-700 via-indigo-600 to-sky-500 flex items-center justify-center shadow-md shadow-blue-600/30">
-                <Landmark className="w-5 h-5 text-white" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white shadow-md shadow-blue-600/30">
+                K
               </div>
-              <div>
-                <span className="text-lg font-black tracking-wider text-white">KLARITY</span>
-                <span className="hidden sm:inline-block ml-2 text-[10px] tracking-widest font-semibold uppercase text-slate-400 border-l border-slate-700 pl-2">
-                  Online Banking
-                </span>
-              </div>
+              <span className="text-lg font-black tracking-wider text-white">KLARITY</span>
             </div>
 
-            {/* Quick Actions (Link Bank & Profile) */}
+            {/* Top Right Controls */}
             <div className="flex items-center gap-3">
               <button
                 onClick={initiatePlaidLink}
                 disabled={isConnectingPlaid}
-                className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white shadow-md shadow-blue-600/20 transition-all"
+                className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 transition-all"
               >
                 <Building2 className="w-3.5 h-3.5" />
-                <span>Link External Bank (Plaid)</span>
+                <span>Connect Real Bank (Plaid)</span>
               </button>
 
               <button
@@ -760,7 +647,7 @@ export default function App() {
                 <span className="hidden sm:inline">Add Card</span>
               </button>
 
-              {/* Profile Dropdown / Logout */}
+              {/* User Dropdown */}
               <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
                 <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-full px-2.5 py-1">
                   <div className="w-6 h-6 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center font-bold text-xs">
@@ -773,7 +660,7 @@ export default function App() {
 
                 <button
                   onClick={() => setIsSettingsOpen(true)}
-                  title="Banking Settings & API Integrations"
+                  title="Settings & Plaid / Google Keys"
                   className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
                 >
                   <Settings className="w-4 h-4" />
@@ -790,14 +677,14 @@ export default function App() {
             </div>
           </div>
 
-          {/* Tab Navigation (Citi / Discover Tab Bar) */}
+          {/* Navigation Tabs */}
           <nav className="flex space-x-6 overflow-x-auto border-t border-slate-800/60 pt-2 text-xs font-semibold">
             {[
-              { id: 'summary', label: 'Accounts Summary', icon: Wallet },
-              { id: 'cards', label: `Credit Cards (${creditCards.length})`, icon: CreditCard },
-              { id: 'bills', label: `Bill Pay & Utilities (${billsList.length})`, icon: Zap },
-              { id: 'transactions', label: `Statements & Activity (${transactionsList.length})`, icon: Receipt },
-              { id: 'advisor', label: 'Klarity AI Advisor', icon: Bot, badge: 'Smart' }
+              { id: 'summary', label: 'Summary', icon: Wallet },
+              { id: 'cards', label: `My Cards (${creditCards.length})`, icon: CreditCard },
+              { id: 'bills', label: `Household Bills (${billsList.length})`, icon: Zap },
+              { id: 'transactions', label: `Transactions (${transactionsList.length})`, icon: Receipt },
+              { id: 'advisor', label: 'AI Advisor', icon: Bot, badge: 'Live' }
             ].map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -827,7 +714,6 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 flex-1 flex flex-col gap-6">
-        {/* Plaid Notice Banner if keys are needed */}
         {plaidError && (
           <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -844,15 +730,15 @@ export default function App() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 1: ACCOUNTS SUMMARY (Discover & Capital One Style) */}
+        {/* TAB 1: SUMMARY */}
         {/* ========================================================================= */}
         {activeTab === 'summary' && (
           <div className="flex flex-col gap-6">
-            {/* Top Balances Row */}
+            {/* Stat Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
                 <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-                  <span>Total Available Checking</span>
+                  <span>Connected Checking</span>
                   <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
                     <DollarSign className="w-4 h-4" />
                   </div>
@@ -860,14 +746,12 @@ export default function App() {
                 <div className="text-2xl font-black text-white mt-3">
                   ${(data?.metrics?.totalChecking || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </div>
-                <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Liquid & Transferable
-                </div>
+                <div className="text-[11px] text-slate-400 mt-1">From your linked banks</div>
               </div>
 
               <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
                 <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-                  <span>Credit Card Debt</span>
+                  <span>Total Card Balances</span>
                   <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
                     <CreditCard className="w-4 h-4" />
                   </div>
@@ -875,14 +759,12 @@ export default function App() {
                 <div className="text-2xl font-black text-white mt-3">
                   ${(data?.metrics?.totalCreditDebt || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </div>
-                <div className="text-[11px] text-slate-400 mt-1">
-                  Across {creditCards.length} credit card accounts
-                </div>
+                <div className="text-[11px] text-slate-400 mt-1">Across {creditCards.length} cards</div>
               </div>
 
               <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
                 <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-                  <span>Monthly Scheduled Bills</span>
+                  <span>Monthly Bills</span>
                   <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
                     <Zap className="w-4 h-4" />
                   </div>
@@ -890,14 +772,12 @@ export default function App() {
                 <div className="text-2xl font-black text-white mt-3">
                   ${(data?.metrics?.totalMonthlyBills || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </div>
-                <div className="text-[11px] text-slate-400 mt-1">
-                  Utilities, internet & subscriptions
-                </div>
+                <div className="text-[11px] text-slate-400 mt-1">Utilities & recurring expenses</div>
               </div>
 
               <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
                 <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-                  <span>Net Estimated Liquidity</span>
+                  <span>Estimated Net Available</span>
                   <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
                     <TrendingUp className="w-4 h-4" />
                   </div>
@@ -905,17 +785,13 @@ export default function App() {
                 <div className="text-2xl font-black text-white mt-3">
                   ${(data?.metrics?.netWorthEstimate || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </div>
-                <div className="text-[11px] text-slate-400 mt-1">
-                  Assets minus liabilities
-                </div>
+                <div className="text-[11px] text-slate-400 mt-1">Checking minus credit debt</div>
               </div>
             </div>
 
-            {/* Quick Actions Row */}
-            <div className="flex flex-wrap gap-3 p-4 bg-[#0d1527] border border-slate-800 rounded-2xl items-center justify-between">
-              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                Quick Banking Actions:
-              </span>
+            {/* Quick Actions */}
+            <div className="flex flex-wrap gap-2 p-4 bg-[#0d1527] border border-slate-800 rounded-2xl items-center justify-between">
+              <span className="text-xs font-bold text-slate-300">Quick Actions:</span>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setIsAddBillOpen(true)}
@@ -927,33 +803,31 @@ export default function App() {
                   onClick={() => setIsScanBillOpen(true)}
                   className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 flex items-center gap-1.5"
                 >
-                  <FileText className="w-3.5 h-3.5 text-emerald-400" /> Scan PG&E / Water Statement
+                  <FileText className="w-3.5 h-3.5 text-emerald-400" /> Scan Statement
                 </button>
                 <button
                   onClick={() => setActiveTab('advisor')}
-                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-xs font-semibold text-white flex items-center gap-1.5 shadow-md shadow-blue-600/20"
+                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white flex items-center gap-1.5 shadow-md shadow-blue-600/20"
                 >
-                  <Sparkles className="w-3.5 h-3.5" /> Ask AI Payoff Advisor
+                  <Sparkles className="w-3.5 h-3.5" /> Ask AI Advisor
                 </button>
               </div>
             </div>
 
-            {/* Empty State or Connected Accounts Overview */}
+            {/* Empty State vs Connected Accounts */}
             {accountsList.length === 0 ? (
-              <div className="p-8 sm:p-12 text-center bg-[#0d1527] border border-dashed border-slate-800 rounded-2xl flex flex-col items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-blue-600/10 text-blue-400 flex items-center justify-center">
-                  <CreditCard className="w-7 h-7" />
-                </div>
+              <div className="p-10 text-center bg-[#0d1527] border border-dashed border-slate-800 rounded-2xl flex flex-col items-center gap-4">
+                <CreditCard className="w-10 h-10 text-slate-600" />
                 <div>
-                  <h3 className="text-base font-bold text-white">No Connected Cards or Bank Accounts Yet</h3>
-                  <p className="text-xs text-slate-400 max-w-md mt-1">
-                    Connect your real financial institutions via Plaid, or add your Capital One, Citi, Discover, or Chase cards manually.
+                  <h3 className="text-base font-bold text-white">No Connected Cards or Accounts Yet</h3>
+                  <p className="text-xs text-slate-400 max-w-sm mt-1">
+                    Connect your real bank account through Plaid, or add your credit cards manually to start tracking your debt payoff.
                   </p>
                 </div>
-                <div className="flex gap-3 mt-2">
+                <div className="flex gap-3">
                   <button
                     onClick={initiatePlaidLink}
-                    className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25 flex items-center gap-2"
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 flex items-center gap-2"
                   >
                     <Building2 className="w-4 h-4" /> Connect Bank (Plaid)
                   </button>
@@ -967,61 +841,45 @@ export default function App() {
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Checking & Savings Section */}
-                <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col gap-4">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Landmark className="w-4 h-4 text-emerald-400" /> Checking & Cash Accounts
-                    </h3>
-                    <span className="text-xs text-slate-400">{checkingAccounts.length} Connected</span>
-                  </div>
+                {/* Checking */}
+                <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col gap-3">
+                  <h3 className="text-sm font-bold text-white">Checking & Depository ({checkingAccounts.length})</h3>
                   {checkingAccounts.length === 0 ? (
-                    <p className="text-xs text-slate-500 py-4 text-center">No checking accounts linked.</p>
+                    <p className="text-xs text-slate-500 py-3">No checking accounts connected yet.</p>
                   ) : (
-                    <div className="flex flex-col gap-3">
-                      {checkingAccounts.map(acc => (
-                        <div key={acc.id} className="p-4 rounded-xl bg-[#090f1e] border border-slate-800 flex items-center justify-between">
-                          <div>
-                            <div className="text-xs font-bold text-white">{acc.institution} {acc.name}</div>
-                            <div className="text-[11px] text-slate-400 mt-0.5">Account •••• {acc.mask}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-black text-white">${Number(acc.balance).toFixed(2)}</div>
-                            <span className="text-[10px] text-emerald-400 font-semibold">Available</span>
-                          </div>
+                    checkingAccounts.map(acc => (
+                      <div key={acc.id} className="p-3.5 rounded-xl bg-[#090f1e] border border-slate-800 flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-bold text-white">{acc.institution} {acc.name}</div>
+                          <div className="text-[11px] text-slate-400">•••• {acc.mask}</div>
                         </div>
-                      ))}
-                    </div>
+                        <div className="text-right">
+                          <div className="text-sm font-black text-white">${Number(acc.balance).toFixed(2)}</div>
+                          <span className="text-[10px] text-emerald-400 font-semibold">Available</span>
+                        </div>
+                      </div>
+                    ))
                   )}
                 </div>
 
-                {/* Credit Cards Preview Section */}
-                <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col gap-4">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <CreditCard className="w-4 h-4 text-blue-400" /> Credit Cards Portfolio
-                    </h3>
-                    <span className="text-xs text-slate-400">{creditCards.length} Active</span>
-                  </div>
+                {/* Cards */}
+                <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col gap-3">
+                  <h3 className="text-sm font-bold text-white">Credit Cards ({creditCards.length})</h3>
                   {creditCards.length === 0 ? (
-                    <p className="text-xs text-slate-500 py-4 text-center">No credit cards added.</p>
+                    <p className="text-xs text-slate-500 py-3">No credit cards added yet.</p>
                   ) : (
-                    <div className="flex flex-col gap-3">
-                      {creditCards.slice(0, 3).map(card => (
-                        <div key={card.id} className="p-4 rounded-xl bg-[#090f1e] border border-slate-800 flex items-center justify-between">
-                          <div>
-                            <div className="text-xs font-bold text-white">{card.institution} {card.name}</div>
-                            <div className="text-[11px] text-slate-400 mt-0.5">
-                              •••• {card.mask} | <span className="text-blue-400 font-semibold">{card.apr}% APR</span>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-black text-rose-400">${Number(card.balance).toFixed(2)}</div>
-                            <span className="text-[10px] text-slate-400">Current Balance</span>
-                          </div>
+                    creditCards.map(card => (
+                      <div key={card.id} className="p-3.5 rounded-xl bg-[#090f1e] border border-slate-800 flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-bold text-white">{card.institution} {card.name}</div>
+                          <div className="text-[11px] text-slate-400">•••• {card.mask} | {card.apr}% APR</div>
                         </div>
-                      ))}
-                    </div>
+                        <div className="text-right">
+                          <div className="text-sm font-black text-rose-400">${Number(card.balance).toFixed(2)}</div>
+                          <span className="text-[10px] text-slate-400">Balance</span>
+                        </div>
+                      </div>
+                    ))
                   )}
                 </div>
               </div>
@@ -1030,37 +888,35 @@ export default function App() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 2: CREDIT CARDS (Citi & Capital One Virtual Cards) */}
+        {/* TAB 2: CREDIT CARDS (Realistic Card UI) */}
         {/* ========================================================================= */}
         {activeTab === 'cards' && (
           <div className="flex flex-col gap-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-base font-bold text-white">Credit Card Portfolio</h2>
-                <p className="text-xs text-slate-400">
-                  Track interest rates, credit limits, minimum payments, and pay off debt efficiently
-                </p>
+                <h2 className="text-base font-bold text-white">Credit Cards</h2>
+                <p className="text-xs text-slate-400">Monitor APR interest rates, balances, and credit limits</p>
               </div>
               <button
                 onClick={() => setIsAddAccountOpen(true)}
                 className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/20 flex items-center gap-1.5"
               >
-                <Plus className="w-4 h-4" /> Add Credit Card
+                <Plus className="w-4 h-4" /> Add Card
               </button>
             </div>
 
             {creditCards.length === 0 ? (
               <div className="p-12 text-center bg-[#0d1527] border border-dashed border-slate-800 rounded-2xl flex flex-col items-center gap-3">
                 <CreditCard className="w-8 h-8 text-slate-500" />
-                <h3 className="text-sm font-bold text-white">No Credit Cards on File</h3>
+                <h3 className="text-sm font-bold text-white">No Credit Cards Added</h3>
                 <p className="text-xs text-slate-400 max-w-sm">
-                  Add your Discover, Capital One, Citi, or Chase cards to monitor your interest APR and get AI payoff strategies.
+                  Add your Capital One, Citi, Discover, or Chase cards to monitor your interest APR and get payoff guidance.
                 </p>
                 <button
                   onClick={() => setIsAddAccountOpen(true)}
                   className="mt-2 px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white"
                 >
-                  Add Your First Card
+                  Add Card
                 </button>
               </div>
             ) : (
@@ -1072,17 +928,18 @@ export default function App() {
                       key={card.id}
                       className="bg-[#0d1527] border border-slate-800 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between"
                     >
-                      {/* Virtual Bank Card Header */}
-                      <div className="p-5 bg-gradient-to-tr from-slate-900 via-indigo-950 to-slate-900 border-b border-slate-800 relative">
-                        <div className="flex items-center justify-between text-xs text-slate-300">
+                      {/* Card Look */}
+                      <div className="p-5 bg-gradient-to-tr from-slate-900 via-slate-800 to-slate-900 border-b border-slate-800">
+                        <div className="flex items-center justify-between text-xs">
                           <span className="font-black tracking-wider text-white uppercase">{card.institution}</span>
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                            {card.apr}% APR
-                          </span>
+                          {card.apr > 0 && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                              {card.apr}% APR
+                            </span>
+                          )}
                         </div>
 
-                        {/* Card Chip & Name */}
-                        <div className="my-5 flex items-center justify-between">
+                        <div className="my-6 flex items-center justify-between">
                           <div className="w-8 h-6 rounded bg-amber-400/80 border border-amber-300 flex items-center justify-center">
                             <div className="w-6 h-4 border border-amber-600/50 rounded-sm"></div>
                           </div>
@@ -1091,56 +948,46 @@ export default function App() {
 
                         <div className="flex items-center justify-between text-xs">
                           <div>
-                            <span className="text-[10px] uppercase text-slate-400 block">Cardholder</span>
+                            <span className="text-[10px] uppercase text-slate-400 block">Card</span>
                             <span className="font-semibold text-white">{card.name}</span>
                           </div>
                           <div className="text-right">
-                            <span className="text-[10px] uppercase text-slate-400 block">Current Balance</span>
+                            <span className="text-[10px] uppercase text-slate-400 block">Balance</span>
                             <span className="text-sm font-black text-rose-400">${Number(card.balance).toFixed(2)}</span>
                           </div>
                         </div>
                       </div>
 
-                      {/* Card Details & Utilization */}
+                      {/* Card Details */}
                       <div className="p-5 flex flex-col gap-4 text-xs">
-                        <div>
-                          <div className="flex items-center justify-between text-slate-400 mb-1">
-                            <span>Credit Limit: ${Number(card.limit).toLocaleString()}</span>
-                            <span className={utilization > 50 ? 'text-rose-400 font-bold' : 'text-slate-300'}>
-                              {utilization.toFixed(0)}% Used
-                            </span>
+                        {card.limit > 0 && (
+                          <div>
+                            <div className="flex items-center justify-between text-slate-400 mb-1">
+                              <span>Limit: ${Number(card.limit).toLocaleString()}</span>
+                              <span className={utilization > 50 ? 'text-rose-400 font-bold' : 'text-slate-300'}>
+                                {utilization.toFixed(0)}% Used
+                              </span>
+                            </div>
+                            <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  utilization > 50 ? 'bg-rose-500' : 'bg-blue-500'
+                                }`}
+                                style={{ width: `${utilization}%` }}
+                              ></div>
+                            </div>
                           </div>
-                          <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${
-                                utilization > 50 ? 'bg-rose-500' : 'bg-blue-500'
-                              }`}
-                              style={{ width: `${utilization}%` }}
-                            ></div>
-                          </div>
-                        </div>
+                        )}
 
                         <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-[#090f1e] border border-slate-800 text-[11px]">
                           <div>
                             <span className="text-slate-500 block">Min Payment</span>
-                            <span className="font-bold text-white">${Number(card.minPayment || 35).toFixed(2)}</span>
+                            <span className="font-bold text-white">${Number(card.minPayment || 0).toFixed(2)}</span>
                           </div>
                           <div className="text-right">
-                            <span className="text-slate-500 block">Payment Due</span>
-                            <span className="font-bold text-amber-400">{card.dueDate || 'Nov 18, 2026'}</span>
+                            <span className="text-slate-500 block">Next Due</span>
+                            <span className="font-bold text-amber-400">{card.dueDate || 'Not set'}</span>
                           </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
-                          <button
-                            onClick={() => {
-                              setPaymentSuccessToast(`Payment initiated for ${card.institution} ${card.name}`);
-                              setTimeout(() => setPaymentSuccessToast(''), 4000);
-                            }}
-                            className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-center transition-all"
-                          >
-                            Make Payment
-                          </button>
                         </div>
                       </div>
                     </div>
@@ -1152,16 +999,14 @@ export default function App() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 3: BILL PAY & UTILITIES (Citi Style) */}
+        {/* TAB 3: HOUSEHOLD BILLS */}
         {/* ========================================================================= */}
         {activeTab === 'bills' && (
           <div className="flex flex-col gap-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-base font-bold text-white">Bill Pay & Household Utilities</h2>
-                <p className="text-xs text-slate-400">
-                  Manage Pacific Gas & Electric, Fresno Water, Internet, and phone lines
-                </p>
+                <h2 className="text-base font-bold text-white">Household Bills & Utilities</h2>
+                <p className="text-xs text-slate-400">Track and log payments for PG&E, Water, Internet, and subscriptions</p>
               </div>
               <div className="flex gap-2">
                 <button
@@ -1182,15 +1027,15 @@ export default function App() {
             {billsList.length === 0 ? (
               <div className="p-12 text-center bg-[#0d1527] border border-dashed border-slate-800 rounded-2xl flex flex-col items-center gap-3">
                 <Zap className="w-8 h-8 text-slate-500" />
-                <h3 className="text-sm font-bold text-white">No Household Bills Registered</h3>
+                <h3 className="text-sm font-bold text-white">No Bills Added Yet</h3>
                 <p className="text-xs text-slate-400 max-w-sm">
-                  Add your utility accounts like PG&E or City Water to track upcoming due dates and schedule payments.
+                  Add your household utility bills (PG&E, Fresno Water, Xfinity) to track due dates and pay on time.
                 </p>
                 <button
                   onClick={() => setIsAddBillOpen(true)}
                   className="mt-2 px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white"
                 >
-                  Add PG&E or Utility Bill
+                  Add Bill
                 </button>
               </div>
             ) : (
@@ -1208,16 +1053,16 @@ export default function App() {
                           {bill.status === 'paid' ? 'PAID' : 'DUE SOON'}
                         </span>
                       </div>
-                      <div className="text-xs text-slate-400 mt-1">{bill.category} • {bill.frequency}</div>
+                      <div className="text-xs text-slate-400 mt-1">{bill.category}</div>
                     </div>
 
                     <div className="p-3 rounded-xl bg-[#080d19] border border-slate-800 flex items-center justify-between">
                       <div>
                         <span className="text-[10px] text-slate-500 block">Due Date</span>
-                        <span className="text-xs font-bold text-slate-200">{bill.nextDueDate || `Nov ${bill.dueDay}, 2026`}</span>
+                        <span className="text-xs font-bold text-slate-200">{bill.nextDueDate || `Day ${bill.dueDay}`}</span>
                       </div>
                       <div className="text-right">
-                        <span className="text-[10px] text-slate-500 block">Amount Due</span>
+                        <span className="text-[10px] text-slate-500 block">Amount</span>
                         <span className="text-base font-black text-white">${Number(bill.expectedAmount).toFixed(2)}</span>
                       </div>
                     </div>
@@ -1225,13 +1070,13 @@ export default function App() {
                     <button
                       onClick={() => handlePayBill(bill.id, bill.name, bill.expectedAmount)}
                       disabled={bill.status === 'paid'}
-                      className={`w-full py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                      className={`w-full py-2 rounded-xl text-xs font-semibold transition-all ${
                         bill.status === 'paid'
                           ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                          : 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-md shadow-emerald-600/20'
+                          : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                       }`}
                     >
-                      {bill.status === 'paid' ? '✓ Paid for Current Cycle' : `Pay $${Number(bill.expectedAmount).toFixed(2)} Now`}
+                      {bill.status === 'paid' ? '✓ Paid' : `Mark $${Number(bill.expectedAmount).toFixed(2)} Paid`}
                     </button>
                   </div>
                 ))}
@@ -1241,19 +1086,16 @@ export default function App() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 4: STATEMENTS & ACTIVITY (Discover Style Ledger) */}
+        {/* TAB 4: TRANSACTIONS */}
         {/* ========================================================================= */}
         {activeTab === 'transactions' && (
           <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col gap-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-base font-bold text-white">Statements & Posted Transactions</h2>
-                <p className="text-xs text-slate-400">
-                  Real-time transaction history from your connected bank and card accounts
-                </p>
+                <h2 className="text-base font-bold text-white">Transactions</h2>
+                <p className="text-xs text-slate-400">Real transaction history from linked bank accounts</p>
               </div>
 
-              {/* Search Bar */}
               <div className="flex items-center gap-2 bg-[#080d19] border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-white">
                 <Search className="w-3.5 h-3.5 text-slate-400" />
                 <input
@@ -1268,7 +1110,7 @@ export default function App() {
 
             {filteredTransactions.length === 0 ? (
               <p className="text-xs text-slate-500 py-8 text-center">
-                No posted transactions found. Transactions will sync automatically when you link a bank or card.
+                No transactions recorded yet. Transactions will appear once you link a bank account via Plaid.
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -1278,7 +1120,6 @@ export default function App() {
                       <th className="py-3 px-2">Date</th>
                       <th className="py-3 px-2">Description</th>
                       <th className="py-3 px-2">Category</th>
-                      <th className="py-3 px-2">Status</th>
                       <th className="py-3 px-2 text-right">Amount</th>
                     </tr>
                   </thead>
@@ -1290,11 +1131,6 @@ export default function App() {
                         <td className="py-3 px-2">
                           <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300">
                             {tx.category || 'General'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-2">
-                          <span className="flex items-center gap-1 text-[11px] text-emerald-400">
-                            <CheckCircle2 className="w-3 h-3" /> Cleared
                           </span>
                         </td>
                         <td className="py-3 px-2 text-right font-black text-rose-400">
@@ -1310,7 +1146,7 @@ export default function App() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 5: KLARITY AI ADVISOR */}
+        {/* TAB 5: AI ADVISOR */}
         {/* ========================================================================= */}
         {activeTab === 'advisor' && (
           <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col h-[650px] shadow-xl">
@@ -1320,16 +1156,12 @@ export default function App() {
                   <Bot className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Klarity AI Wealth & Payoff Advisor</h3>
-                  <p className="text-[11px] text-slate-400">Live intelligence analyzing your real cards, APRs & bills</p>
+                  <h3 className="text-sm font-bold text-white">Klarity AI Financial Advisor</h3>
+                  <p className="text-[11px] text-slate-400">Analyzes your actual connected cards, APRs & bills</p>
                 </div>
               </div>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                Active Analysis
-              </span>
             </div>
 
-            {/* Message Stream */}
             <div className="flex-1 overflow-y-auto py-4 flex flex-col gap-3">
               {chatMessages.map((msg, idx) => (
                 <div
@@ -1351,37 +1183,17 @@ export default function App() {
                 <div className="flex justify-start">
                   <div className="bg-[#090f1e] text-slate-400 border border-slate-800 rounded-2xl px-4 py-2.5 text-xs flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 animate-spin text-blue-400" />
-                    <span>Analyzing your portfolio...</span>
+                    <span>Analyzing your finances...</span>
                   </div>
                 </div>
               )}
               <div ref={chatEndRef} />
             </div>
 
-            {/* Quick Prompt Suggestions */}
-            <div className="flex flex-wrap gap-2 py-2 border-t border-slate-800 text-[11px]">
-              {[
-                "Which card should I pay off first?",
-                "What utility bills are due this month?",
-                "How much liquid cash do I have available?"
-              ].map((suggestion, sIdx) => (
-                <button
-                  key={sIdx}
-                  onClick={() => {
-                    setChatInput(suggestion);
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700/60"
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
-
-            {/* Input Bar */}
             <form onSubmit={handleSendChatMessage} className="pt-2 flex gap-2">
               <input
                 type="text"
-                placeholder="Ask Klarity about your finances or payoff priorities..."
+                placeholder="Ask Klarity about your finances or debt payoff..."
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
                 className="flex-1 bg-[#080d19] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
@@ -1402,7 +1214,7 @@ export default function App() {
       {/* MODALS */}
       {/* ========================================================================= */}
 
-      {/* 1. Add Card Modal */}
+      {/* Add Card Modal */}
       {isAddAccountOpen && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
@@ -1414,7 +1226,7 @@ export default function App() {
             </div>
             <form onSubmit={handleAddAccount} className="flex flex-col gap-3 text-xs">
               <div>
-                <label className="font-semibold text-slate-300">Issuing Bank</label>
+                <label className="font-semibold text-slate-300">Bank / Issuer</label>
                 <select
                   value={newAccount.institution}
                   onChange={e => setNewAccount(prev => ({ ...prev, institution: e.target.value }))}
@@ -1426,15 +1238,16 @@ export default function App() {
                   <option value="Chase">Chase</option>
                   <option value="American Express">American Express</option>
                   <option value="Bank of America">Bank of America</option>
+                  <option value="Other Bank">Other Bank</option>
                 </select>
               </div>
 
               <div>
-                <label className="font-semibold text-slate-300">Card Product Name</label>
+                <label className="font-semibold text-slate-300">Card Name</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. SavorOne, Double Cash, Freedom Unlimited"
+                  placeholder="e.g. SavorOne, Double Cash, Freedom"
                   value={newAccount.name}
                   onChange={e => setNewAccount(prev => ({ ...prev, name: e.target.value }))}
                   className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500"
@@ -1448,7 +1261,7 @@ export default function App() {
                     type="number"
                     step="0.01"
                     required
-                    placeholder="1250.00"
+                    placeholder="0.00"
                     value={newAccount.balance}
                     onChange={e => setNewAccount(prev => ({ ...prev, balance: e.target.value }))}
                     className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
@@ -1459,7 +1272,7 @@ export default function App() {
                   <input
                     type="number"
                     step="0.01"
-                    placeholder="5000.00"
+                    placeholder="e.g. 5000"
                     value={newAccount.limit}
                     onChange={e => setNewAccount(prev => ({ ...prev, limit: e.target.value }))}
                     className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
@@ -1473,7 +1286,7 @@ export default function App() {
                   <input
                     type="number"
                     step="0.01"
-                    placeholder="24.99"
+                    placeholder="e.g. 24.99"
                     value={newAccount.apr}
                     onChange={e => setNewAccount(prev => ({ ...prev, apr: e.target.value }))}
                     className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
@@ -1499,23 +1312,23 @@ export default function App() {
         </div>
       )}
 
-      {/* 2. Add Bill Modal */}
+      {/* Add Bill Modal */}
       {isAddBillOpen && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Zap className="w-4 h-4 text-amber-400" /> Add Household Utility Bill
+                <Zap className="w-4 h-4 text-amber-400" /> Add Utility / Bill
               </h3>
               <button onClick={() => setIsAddBillOpen(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
             <form onSubmit={handleAddBill} className="flex flex-col gap-3 text-xs">
               <div>
-                <label className="font-semibold text-slate-300">Biller Name</label>
+                <label className="font-semibold text-slate-300">Bill Name</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Pacific Gas and Electric (PG&E), Fresno Water"
+                  placeholder="e.g. Pacific Gas and Electric, Fresno Water"
                   value={newBill.name}
                   onChange={e => setNewBill(prev => ({ ...prev, name: e.target.value, biller: e.target.value }))}
                   className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
@@ -1524,12 +1337,12 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold text-slate-300">Expected Bill Amount ($)</label>
+                  <label className="font-semibold text-slate-300">Amount Due ($)</label>
                   <input
                     type="number"
                     step="0.01"
                     required
-                    placeholder="248.50"
+                    placeholder="e.g. 248.50"
                     value={newBill.expectedAmount}
                     onChange={e => setNewBill(prev => ({ ...prev, expectedAmount: e.target.value }))}
                     className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
@@ -1558,18 +1371,18 @@ export default function App() {
         </div>
       )}
 
-      {/* 3. Scan Bill Modal */}
+      {/* Scan Statement Modal */}
       {isScanBillOpen && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <FileText className="w-4 h-4 text-emerald-400" /> Scan PG&E / Utility Statement
+                <FileText className="w-4 h-4 text-emerald-400" /> Scan PG&E or Utility Statement
               </h3>
               <button onClick={() => setIsScanBillOpen(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
             <p className="text-xs text-slate-400">
-              Paste the text from your e-bill PDF or statement below. Klarity will automatically extract the utility company, amount due, and date.
+              Paste the text from your e-bill PDF or statement below. Klarity will automatically extract the utility company, amount, and due date.
             </p>
             <textarea
               rows={5}
@@ -1596,20 +1409,31 @@ export default function App() {
         </div>
       )}
 
-      {/* 4. Secure Settings Modal (Only accessible from authenticated user avatar, never login screen) */}
+      {/* Settings Modal (Strictly inside user menu) */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Settings className="w-4 h-4 text-blue-400" /> Banking Network Configuration
+                <Settings className="w-4 h-4 text-blue-400" /> Financial API Settings
               </h3>
               <button onClick={() => setIsSettingsOpen(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
             <p className="text-xs text-slate-400">
-              Configure your secure Plaid network keys for live institution synchronization.
+              Configure your Plaid network keys and Google OAuth Client ID.
             </p>
             <form onSubmit={handleSaveSettings} className="flex flex-col gap-3 text-xs">
+              <div>
+                <label className="font-semibold text-slate-300">Google OAuth Client ID</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 123456789-xxxx.apps.googleusercontent.com"
+                  value={googleClientIdInput}
+                  onChange={e => setGoogleClientIdInput(e.target.value)}
+                  className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-600"
+                />
+              </div>
+
               <div>
                 <label className="font-semibold text-slate-300">Plaid Client ID</label>
                 <input
@@ -1617,7 +1441,7 @@ export default function App() {
                   placeholder="e.g. 64a8b..."
                   value={plaidClientIdInput}
                   onChange={e => setPlaidClientIdInput(e.target.value)}
-                  className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-600"
                 />
               </div>
               <div>
@@ -1631,14 +1455,14 @@ export default function App() {
                 />
               </div>
               <div>
-                <label className="font-semibold text-slate-300">Environment</label>
+                <label className="font-semibold text-slate-300">Plaid Environment</label>
                 <select
                   value={plaidEnvInput}
                   onChange={e => setPlaidEnvInput(e.target.value)}
                   className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
                 >
-                  <option value="development">Development (Live Real Banks)</option>
-                  <option value="sandbox">Sandbox (Test Simulation)</option>
+                  <option value="development">Development (Connect Real Banks)</option>
+                  <option value="sandbox">Sandbox (Simulation)</option>
                   <option value="production">Production</option>
                 </select>
               </div>
