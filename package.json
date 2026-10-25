@@ -1,0 +1,29 @@
+{
+  "name": "family-finance-app",
+  "version": "1.0.0",
+  "description": "Private Family Finance, Cards, Bills & AI Advisor",
+  "scripts": {
+    "server": "node server/index.js",
+    "client": "npm --prefix client run dev",
+    "dev": "npx concurrently -k -n \"SERVER,CLIENT\" -c \"blue,green\" \"npm run server\" \"npm run client\"",
+    "build": "npm --prefix client run build",
+    "start": "node server/index.js"
+  },
+  "keywords": [
+    "fintech",
+    "family-finance",
+    "ai-advisor",
+    "bills",
+    "plaid",
+    "gemini"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@google/genai": "^2.31.0",
+    "@supabase/supabase-js": "^2.118.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0"
+  }
+}
