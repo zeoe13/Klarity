@@ -1,97 +1,248 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// In-Memory / Fallback Data Store with Users
-let memoryStore = {
-  users: [
-    { id: 'u1', username: 'robert', password: 'password123', name: 'Robert (Dad)', role: 'Parent', avatar: '👨‍💼', color: 'blue' },
-    { id: 'u2', username: 'sarah', password: 'password123', name: 'Sarah (Mom)', role: 'Parent', avatar: '👩‍⚕️', color: 'purple' },
-    { id: 'u3', username: 'alex', password: 'password123', name: 'Alex (College)', role: 'Student (20)', avatar: '🧑‍🎓', color: 'emerald' },
-    { id: 'u4', username: 'maya', password: 'password123', name: 'Maya (High School)', role: 'Teen (17)', avatar: '👧', color: 'amber' },
-    { id: 'u5', username: 'jordan', password: 'password123', name: 'Jordan (Middle)', role: 'Kid (14)', avatar: '👦', color: 'pink' },
-    { id: 'u6', username: 'leo', password: 'password123', name: 'Leo (Elementary)', role: 'Kid (10)', avatar: '🧒', color: 'cyan' }
-  ],
-  accounts: [
-    { id: 'acc-1', ownerId: 'u1', institution: 'Chase', name: 'Freedom Unlimited', type: 'credit', mask: '3912', balance: 2450.00, limit: 8000.00, apr: 26.49, minPayment: 65.00, dueDate: '2026-11-14', color: '#1e40af', isShared: false },
-    { id: 'acc-2', ownerId: 'u2', institution: 'Capital One', name: 'SavorOne Rewards', type: 'credit', mask: '8204', balance: 820.50, limit: 5000.00, apr: 19.99, minPayment: 35.00, dueDate: '2026-11-20', color: '#991b1b', isShared: false },
-    { id: 'acc-3', ownerId: 'u1', institution: 'Bank of America', name: 'Family Checking', type: 'depository', mask: '5190', balance: 5340.25, limit: 0, apr: 0, minPayment: 0, dueDate: '', color: '#065f46', isShared: true },
-    { id: 'acc-4', ownerId: 'u3', institution: 'Discover', name: 'Student Chrome Card', type: 'credit', mask: '1192', balance: 310.00, limit: 1500.00, apr: 17.24, minPayment: 25.00, dueDate: '2026-11-08', color: '#ea580c', isShared: false },
-    { id: 'acc-5', ownerId: 'u4', institution: 'Chase', name: 'Teen Debit Checking', type: 'depository', mask: '6641', balance: 215.00, limit: 0, apr: 0, minPayment: 0, dueDate: '', color: '#4338ca', isShared: false }
-  ],
-  bills: [
-    { id: 'bill-1', name: 'Pacific Gas and Electric (PG&E)', biller: 'PG&E', category: 'Utilities', expectedAmount: 268.40, dueDay: 12, nextDueDate: '2026-11-12', frequency: 'monthly', status: 'due_soon', assignedOwnerId: 'u1', isHouseholdBill: true, notes: 'Shared electric/gas' },
-    { id: 'bill-2', name: 'City of Fresno Water & Solid Waste', biller: 'City of Fresno Utilities', category: 'Utilities', expectedAmount: 74.20, dueDay: 16, nextDueDate: '2026-11-16', frequency: 'monthly', status: 'due_soon', assignedOwnerId: 'u1', isHouseholdBill: true, notes: 'Water and trash' },
-    { id: 'bill-3', name: 'Xfinity Gigabit Internet', biller: 'Comcast / Xfinity', category: 'Utilities', expectedAmount: 90.00, dueDay: 22, nextDueDate: '2026-11-22', frequency: 'monthly', status: 'upcoming', assignedOwnerId: 'u2', isHouseholdBill: true, notes: 'Home internet' },
-    { id: 'bill-4', name: 'T-Mobile Family Magenta Max (6 lines)', biller: 'T-Mobile', category: 'Utilities', expectedAmount: 185.00, dueDay: 28, nextDueDate: '2026-11-28', frequency: 'monthly', status: 'upcoming', assignedOwnerId: 'u1', isHouseholdBill: true, notes: '6 phone lines' },
-    { id: 'bill-5', name: 'Netflix Premium 4K + Family', biller: 'Netflix', category: 'Subscriptions', expectedAmount: 22.99, dueDay: 5, nextDueDate: '2026-11-05', frequency: 'monthly', status: 'due_soon', assignedOwnerId: 'u2', isHouseholdBill: true, notes: 'Shared family tier' }
-  ],
-  transactions: [
-    { id: 'tx-101', accountId: 'acc-1', ownerId: 'u1', date: '2026-10-23', name: 'PG&E *WEB ONLINE PMT', amount: 252.18, category: 'Utilities', isRecurring: true, billId: 'bill-1' },
-    { id: 'tx-102', accountId: 'acc-3', ownerId: 'u1', date: '2026-10-22', name: 'CITY OF FRESNO UTILITIES', amount: 71.80, category: 'Utilities', isRecurring: true, billId: 'bill-2' },
-    { id: 'tx-103', accountId: 'acc-2', ownerId: 'u2', date: '2026-10-21', name: "TRADER JOE'S #144 FRESNO", amount: 164.35, category: 'Groceries', isRecurring: false },
-    { id: 'tx-106', accountId: 'acc-1', ownerId: 'u5', date: '2026-10-17', name: 'ROBLOX CORP ROBUX PACK', amount: 19.99, category: 'Gaming', isRecurring: false }
-  ]
+// In Vercel serverless environment, local filesystem root is read-only; use /tmp or memory
+const DATA_FILE = process.env.VERCEL ? '/tmp/klarity_data.json' : path.join(__dirname, '../server/data.json');
+
+// Memory store fallback
+let memoryData = {
+  users: [],
+  accounts: [],
+  bills: [],
+  transactions: [],
+  settings: {}
 };
+
+function readData() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf8');
+      return JSON.parse(raw);
+    }
+  } catch (err) {
+    console.error('Error reading data:', err.message);
+  }
+  return memoryData;
+}
+
+function writeData(data) {
+  memoryData = data;
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.warn('File write note (using memory store fallback):', err.message);
+    return false;
+  }
+}
+
+// Plaid Client Helper
+function getPlaidClient() {
+  const data = readData();
+  const clientId = process.env.PLAID_CLIENT_ID || data.settings?.plaidClientId;
+  const secret = process.env.PLAID_SECRET || data.settings?.plaidSecret;
+  const env = process.env.PLAID_ENV || data.settings?.plaidEnv || 'sandbox';
+
+  if (!clientId || !secret) return null;
+
+  const basePath = PlaidEnvironments[env] || PlaidEnvironments.sandbox;
+  const configuration = new Configuration({
+    basePath,
+    baseOptions: {
+      headers: {
+        'PLAID-CLIENT-ID': clientId,
+        'PLAID-SECRET': secret,
+      },
+    },
+  });
+
+  return new PlaidApi(configuration);
+}
 
 // Auto-categorize
 function autoCategorize(name) {
   const n = (name || '').toLowerCase();
   if (/pg&e|pacific gas|fresno water|xfinity|comcast|t-mobile|at&t|verizon|smud|edison|electric|water|utilities|waste|trash/.test(n)) return 'Utilities';
-  if (/netflix|spotify|hulu|disney|max|paramount|apple tv|prime video|youtube/.test(n)) return 'Subscriptions';
-  if (/steam|nintendo|playstation|xbox|roblox|epic games|riot|minecraft|v-bucks/.test(n)) return 'Gaming';
-  if (/amc|regal|cinemark|dave & buster|concert|ticketmaster/.test(n)) return 'Entertainment';
-  if (/trader joe|costco|safeway|whole foods|walmart|target|grocery/.test(n)) return 'Groceries';
-  if (/in-n-out|mcdonald|starbucks|chipotle|burger|pizza|doordash/.test(n)) return 'Dining';
-  if (/chevron|shell|arco|exxon|mobil|gas|fuel/.test(n)) return 'Transportation';
+  if (/netflix|spotify|hulu|disney|max|paramount|apple tv|prime video|youtube|audible|crunchyroll/.test(n)) return 'Subscriptions';
+  if (/steam|nintendo|playstation|xbox|roblox|epic games|riot|minecraft|v-bucks|robux/.test(n)) return 'Gaming';
+  if (/amc|regal|cinemark|dave & buster|concert|ticketmaster|cinema|movie/.test(n)) return 'Entertainment';
+  if (/trader joe|costco|safeway|whole foods|kroger|walmart|target|grocery|supermarket|aldi/.test(n)) return 'Groceries';
+  if (/in-n-out|mcdonald|starbucks|chipotle|burger|pizza|doordash|ubereats|restaurant|cafe|taco/.test(n)) return 'Dining';
+  if (/chevron|shell|arco|exxon|mobil|gas|fuel|speedway|76 station/.test(n)) return 'Transportation';
   return 'Other';
 }
 
-// 1. POST /api/auth/login
-app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
-  const user = memoryStore.users.find(u => u.username.toLowerCase() === (username || '').toLowerCase() && u.password === password);
-  if (!user) return res.status(401).json({ error: 'Invalid username or password' });
-  const { password: _, ...userProfile } = user;
-  res.json({ success: true, user: userProfile });
+// 1. Google OAuth Auth Endpoint
+app.post('/api/auth/google', (req, res) => {
+  const { email, name, picture, sub } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required from Google profile' });
+
+  const data = readData();
+  let user = data.users.find(u => u.email === email || (sub && u.googleId === sub));
+
+  if (!user) {
+    user = {
+      id: `u-${Date.now()}`,
+      googleId: sub || '',
+      email: email.toLowerCase().trim(),
+      name: name || email.split('@')[0],
+      avatar: picture || '👤',
+      role: data.users.length === 0 ? 'Head of Household' : 'Family Member',
+      createdAt: new Date().toISOString()
+    };
+    data.users.push(user);
+    writeData(data);
+  } else {
+    if (name) user.name = name;
+    if (picture) user.avatar = picture;
+    writeData(data);
+  }
+
+  res.json({ success: true, user, token: `token-${user.id}` });
 });
 
-// 2. POST /api/auth/register
-app.post('/api/auth/register', (req, res) => {
-  const { username, password, name, role, avatar } = req.body;
-  if (!username || !password || !name) return res.status(400).json({ error: 'Missing fields' });
-  const existing = memoryStore.users.find(u => u.username.toLowerCase() === username.toLowerCase());
-  if (existing) return res.status(400).json({ error: 'Username already in use' });
-
-  const newUser = { id: `u${Date.now()}`, username: username.toLowerCase().trim(), password, name: name.trim(), role: role || 'Member', avatar: avatar || '👤', color: 'blue' };
-  memoryStore.users.push(newUser);
-  const { password: _, ...userProfile } = newUser;
-  res.json({ success: true, user: userProfile });
+// 2. Settings Endpoints
+app.get('/api/settings', (req, res) => {
+  const data = readData();
+  res.json({
+    hasPlaidKeys: Boolean(process.env.PLAID_CLIENT_ID || data.settings?.plaidClientId),
+    plaidEnv: process.env.PLAID_ENV || data.settings?.plaidEnv || 'sandbox',
+    googleClientId: process.env.VITE_GOOGLE_CLIENT_ID || data.settings?.googleClientId || ''
+  });
 });
 
-// 3. GET /api/data (Filtered by logged-in user)
+app.post('/api/settings', (req, res) => {
+  const { plaidClientId, plaidSecret, plaidEnv, googleClientId } = req.body;
+  const data = readData();
+  data.settings = {
+    ...data.settings,
+    ...(plaidClientId ? { plaidClientId } : {}),
+    ...(plaidSecret ? { plaidSecret } : {}),
+    ...(plaidEnv ? { plaidEnv } : {}),
+    ...(googleClientId ? { googleClientId } : {})
+  };
+  writeData(data);
+  res.json({ success: true });
+});
+
+// 3. Plaid Endpoints
+app.post('/api/plaid/create-link-token', async (req, res) => {
+  const { userId } = req.body;
+  const plaidClient = getPlaidClient();
+
+  if (!plaidClient) {
+    return res.status(400).json({
+      error: 'Plaid API keys are not configured yet.',
+      needsKeys: true
+    });
+  }
+
+  try {
+    const response = await plaidClient.linkTokenCreate({
+      user: { client_user_id: userId || 'user-1' },
+      client_name: 'Klarity',
+      products: ['transactions'],
+      country_codes: ['US'],
+      language: 'en'
+    });
+    res.json({ link_token: response.data.link_token });
+  } catch (err) {
+    console.error('Plaid linkTokenCreate error:', err.response?.data || err.message);
+    res.status(500).json({ error: err.response?.data?.error_message || err.message });
+  }
+});
+
+app.post('/api/plaid/exchange-public-token', async (req, res) => {
+  const { public_token, metadata, userId } = req.body;
+  const plaidClient = getPlaidClient();
+
+  if (!plaidClient) {
+    return res.status(400).json({ error: 'Plaid keys not configured' });
+  }
+
+  try {
+    const tokenResponse = await plaidClient.itemPublicTokenExchange({ public_token });
+    const accessToken = tokenResponse.data.access_token;
+    const itemId = tokenResponse.data.item_id;
+
+    const accountsResponse = await plaidClient.accountsBalanceGet({ access_token: accessToken });
+    const data = readData();
+
+    const addedAccounts = [];
+    for (const acc of accountsResponse.data.accounts) {
+      const newAcc = {
+        id: `acc-${acc.account_id}`,
+        ownerId: userId || 'u1',
+        institution: metadata?.institution?.name || 'Connected Bank',
+        name: acc.name,
+        type: acc.type === 'credit' ? 'credit' : 'depository',
+        mask: acc.mask || 'XXXX',
+        balance: acc.balances?.current || 0,
+        limit: acc.balances?.limit || 0,
+        apr: 0,
+        minPayment: 0,
+        dueDate: '',
+        color: acc.type === 'credit' ? '#1e40af' : '#065f46',
+        plaidAccessToken: accessToken,
+        plaidItemId: itemId
+      };
+      data.accounts.push(newAcc);
+      addedAccounts.push(newAcc);
+    }
+
+    writeData(data);
+    res.json({ success: true, accounts: addedAccounts });
+  } catch (err) {
+    console.error('Plaid exchange error:', err.response?.data || err.message);
+    res.status(500).json({ error: err.response?.data?.error_message || err.message });
+  }
+});
+
+// 4. Data Endpoint
 app.get('/api/data', (req, res) => {
-  const currentUserId = req.query.userId || 'u1';
+  const data = readData();
+  const currentUserId = req.query.userId || req.headers['x-user-id'];
   const showHousehold = req.query.household === 'true';
 
-  const currentUser = memoryStore.users.find(u => u.id === currentUserId) || memoryStore.users[0];
-  const safeMembers = memoryStore.users.map(({ password: _, ...u }) => u);
+  const currentUser = data.users.find(u => u.id === currentUserId) || null;
 
-  const visibleAccounts = memoryStore.accounts.filter(acc => showHousehold ? true : acc.ownerId === currentUserId || acc.isShared);
-  const visibleBills = memoryStore.bills.filter(b => showHousehold ? true : b.isHouseholdBill || b.assignedOwnerId === currentUserId);
-  const visibleTransactions = memoryStore.transactions.filter(t => showHousehold ? true : t.ownerId === currentUserId || t.isRecurring);
+  const visibleAccounts = (data.accounts || []).filter(acc => {
+    if (showHousehold) return true;
+    return acc.ownerId === currentUserId;
+  });
 
-  const totalChecking = visibleAccounts.filter(a => a.type === 'depository').reduce((s, a) => s + (Number(a.balance) || 0), 0);
-  const totalCreditDebt = visibleAccounts.filter(a => a.type === 'credit').reduce((s, a) => s + (Number(a.balance) || 0), 0);
-  const totalMonthlyBills = visibleBills.reduce((s, b) => s + (Number(b.expectedAmount) || 0), 0);
+  const visibleBills = data.bills || [];
+
+  const visibleTransactions = (data.transactions || []).filter(tx => {
+    if (showHousehold) return true;
+    return tx.ownerId === currentUserId;
+  });
+
+  const totalChecking = visibleAccounts
+    .filter(a => a.type === 'depository')
+    .reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+
+  const totalCreditDebt = visibleAccounts
+    .filter(a => a.type === 'credit')
+    .reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+
+  const totalMonthlyBills = visibleBills
+    .reduce((sum, b) => {
+      const amt = Number(b.expectedAmount) || 0;
+      return sum + (b.frequency === 'yearly' ? amt / 12 : amt);
+    }, 0);
 
   res.json({
-    currentUser: { id: currentUser.id, name: currentUser.name, username: currentUser.username, role: currentUser.role, avatar: currentUser.avatar },
-    familyMembers: safeMembers,
+    currentUser,
+    familyMembers: data.users || [],
     accounts: visibleAccounts,
     bills: visibleBills,
     transactions: visibleTransactions,
@@ -104,64 +255,177 @@ app.get('/api/data', (req, res) => {
   });
 });
 
-// 4. POST /api/accounts
+// 5. Account Manual Creation & Deletion
 app.post('/api/accounts', (req, res) => {
-  const { ownerId, institution, name, type, mask, balance, limit, apr, minPayment, dueDate, isShared } = req.body;
+  const { ownerId, institution, name, type, mask, balance, limit, apr, minPayment, dueDate } = req.body;
+  const data = readData();
+
   const newAccount = {
     id: `acc-${Date.now()}`,
-    ownerId: ownerId || 'u1',
-    institution: institution || 'Connected Bank',
+    ownerId: ownerId,
+    institution: institution || 'My Bank',
     name: name || 'Account',
     type: type || 'credit',
-    mask: mask || String(Math.floor(1000 + Math.random() * 9000)),
+    mask: mask || 'XXXX',
     balance: Number(balance) || 0,
     limit: Number(limit) || 0,
     apr: Number(apr) || 0,
     minPayment: Number(minPayment) || 0,
     dueDate: dueDate || '',
-    color: type === 'credit' ? '#1e40af' : '#065f46',
-    isShared: Boolean(isShared)
+    color: type === 'credit' ? '#1e40af' : '#065f46'
   };
-  memoryStore.accounts.push(newAccount);
+
+  data.accounts.push(newAccount);
+  writeData(data);
   res.json({ success: true, account: newAccount });
 });
 
-// 5. POST /api/transactions
+app.delete('/api/accounts/:id', (req, res) => {
+  const data = readData();
+  data.accounts = (data.accounts || []).filter(a => a.id !== req.params.id);
+  writeData(data);
+  res.json({ success: true });
+});
+
+// 6. Bills Endpoints
+app.post('/api/bills', (req, res) => {
+  const { name, biller, category, expectedAmount, dueDay, frequency, assignedOwnerId, notes } = req.body;
+  const data = readData();
+
+  const newBill = {
+    id: `bill-${Date.now()}`,
+    name: name,
+    biller: biller || name,
+    category: category || autoCategorize(name),
+    expectedAmount: Number(expectedAmount) || 0,
+    dueDay: Number(dueDay) || 1,
+    nextDueDate: `2026-11-${String(dueDay || 1).padStart(2, '0')}`,
+    frequency: frequency || 'monthly',
+    status: 'upcoming',
+    assignedOwnerId: assignedOwnerId || '',
+    notes: notes || ''
+  };
+
+  data.bills.push(newBill);
+  writeData(data);
+  res.json({ success: true, bill: newBill });
+});
+
+app.post('/api/bills/:id/pay', (req, res) => {
+  const data = readData();
+  const bill = (data.bills || []).find(b => b.id === req.params.id);
+  if (!bill) return res.status(404).json({ error: 'Bill not found' });
+
+  bill.status = 'paid';
+  bill.lastPaidDate = new Date().toISOString().split('T')[0];
+  bill.lastPaidAmount = bill.expectedAmount;
+
+  writeData(data);
+  res.json({ success: true, bill });
+});
+
+// 7. Transactions
 app.post('/api/transactions', (req, res) => {
   const { accountId, ownerId, name, amount, date, category } = req.body;
+  const data = readData();
+
   const detectedCategory = category || autoCategorize(name);
   const newTx = {
     id: `tx-${Date.now()}`,
-    accountId: accountId || memoryStore.accounts[0]?.id || 'acc-1',
-    ownerId: ownerId || 'u1',
+    accountId: accountId || (data.accounts[0]?.id || ''),
+    ownerId: ownerId,
     date: date || new Date().toISOString().split('T')[0],
     name: name || 'Purchase',
     amount: Number(amount) || 0,
     category: detectedCategory,
     isRecurring: /pg&e|fresno water|xfinity|t-mobile/.test((name || '').toLowerCase())
   };
-  memoryStore.transactions.unshift(newTx);
+
+  data.transactions.unshift(newTx);
+  writeData(data);
   res.json({ success: true, transaction: newTx });
 });
 
-// 6. POST /api/ai/chat
-app.post('/api/ai/chat', (req, res) => {
-  const { message, userId } = req.body;
-  const user = memoryStore.users.find(u => u.id === userId) || memoryStore.users[0];
-  const userCards = memoryStore.accounts.filter(a => a.ownerId === user.id && a.type === 'credit');
-  const sorted = [...userCards].sort((a, b) => b.apr - a.apr);
+// 8. Bill scan
+app.post('/api/bills/scan', async (req, res) => {
+  const { billText, ownerId } = req.body;
+  if (!billText) return res.status(400).json({ error: 'billText is required' });
 
-  let reply = '';
+  let biller = 'Utility Provider';
+  let category = 'Utilities';
+  let amount = 0;
+  let nextDueDate = '2026-11-15';
+
+  const t = billText.toLowerCase();
+  if (t.includes('pg&e') || t.includes('pacific gas')) {
+    biller = 'Pacific Gas and Electric (PG&E)';
+  } else if (t.includes('fresno') || t.includes('city of fresno')) {
+    biller = 'City of Fresno Utilities';
+  } else if (t.includes('xfinity') || t.includes('comcast')) {
+    biller = 'Xfinity Comcast';
+  } else if (t.includes('t-mobile')) {
+    biller = 'T-Mobile';
+  }
+
+  const amountMatch = billText.match(/\$\s*([0-9]+(?:\.[0-9]{2})?)/) ||
+                      billText.match(/(?:due|amount|total|charges)[:\s]+\$?([0-9]+(?:\.[0-9]{2})?)/i);
+  if (amountMatch) amount = parseFloat(amountMatch[1]);
+
+  const dateMatch = billText.match(/(?:due|by|date)[:\s]+([A-Za-z]+ \d{1,2},? \d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i) ||
+                    billText.match(/(?:due on|by)\s+([A-Za-z]+ \d{1,2}(?:,? \d{4})?)/i);
+  if (dateMatch) nextDueDate = dateMatch[1];
+
+  const data = readData();
+  const newBill = {
+    id: `bill-${Date.now()}`,
+    name: biller,
+    biller,
+    category,
+    expectedAmount: amount || 0,
+    dueDay: 15,
+    nextDueDate,
+    frequency: 'monthly',
+    status: 'due_soon',
+    assignedOwnerId: ownerId || '',
+    notes: 'Scanned statement'
+  };
+
+  data.bills.push(newBill);
+  writeData(data);
+
+  res.json({
+    success: true,
+    scannedBill: newBill,
+    summary: `Successfully parsed bill from ${biller} for $${newBill.expectedAmount} due on ${nextDueDate}`
+  });
+});
+
+// 9. AI Advisor Chat
+app.post('/api/ai/chat', async (req, res) => {
+  const { message, userId } = req.body;
+  const data = readData();
+
+  const currentUser = (data.users || []).find(u => u.id === userId) || { name: 'User' };
+  const userCards = (data.accounts || []).filter(a => a.ownerId === userId && a.type === 'credit');
+  const userChecking = (data.accounts || []).filter(a => a.ownerId === userId && a.type === 'depository');
+  const sortedByApr = [...userCards].sort((a, b) => b.apr - a.apr);
+
   const msg = (message || '').toLowerCase();
-  if (msg.includes('pay off') || msg.includes('debt') || msg.includes('card')) {
-    if (sorted.length > 0) {
-      reply = `### 💡 Personalized Advice for ${user.name}\n\n* **Top Priority:** Pay off **${sorted[0].institution} ${sorted[0].name}** first! It carries your highest interest rate at **${sorted[0].apr}% APR** with a balance of $${sorted[0].balance.toFixed(2)}.`;
+  let reply = '';
+
+  if (userCards.length === 0 && userChecking.length === 0) {
+    reply = `Hello ${currentUser.name}! You haven't connected any real bank accounts or credit cards yet. Click **"Connect Real Bank via Plaid"** or **"Add Card Manually"** to link your first card, and I'll immediately start tracking your balances, APRs, and payoff strategy!`;
+  } else if (msg.includes('pay off') || msg.includes('debt') || msg.includes('card')) {
+    if (sortedByApr.length > 0) {
+      const top = sortedByApr[0];
+      reply = `### 💡 Real Debt Payoff Strategy for ${currentUser.name}\n\n* **Priority #1:** Pay off **${top.institution} ${top.name}** first (Balance: $${top.balance.toFixed(2)} at **${top.apr}% APR**). Put extra payments toward this card while paying minimums on others.`;
     } else {
-      reply = `You don't have any credit card debt linked to your profile, ${user.name}! 🎉`;
+      reply = `You have no high-interest credit card debt active on your connected cards, ${currentUser.name}! 🎉`;
     }
   } else {
-    reply = `Hello ${user.name}! I'm Klarity. You have ${userCards.length} personal cards connected. Ask me how to optimize your bills or manage your payments.`;
+    reply = `Hello ${currentUser.name}! I am **Klarity**. I am monitoring your real connected accounts and household utility bills. Ask me what bills are due or how to optimize your spending.`;
   }
+
   res.json({ reply });
 });
 
