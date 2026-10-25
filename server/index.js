@@ -95,6 +95,59 @@ function autoCategorize(name) {
 
 // ================= AUTH ROUTES (Google Sign-In) =================
 
+// Standard Email Sign Up & Sign In Endpoints
+app.post('/api/auth/register', (req, res) => {
+  const { email, password, name } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
+
+  const data = readData();
+  const normalizedEmail = email.toLowerCase().trim();
+  const existing = (data.users || []).find(u => u.email?.toLowerCase() === normalizedEmail);
+  if (existing) {
+    return res.status(400).json({ error: 'An account with this email already exists. Please Sign In.' });
+  }
+
+  const newUser = {
+    id: `u-${Date.now()}`,
+    email: normalizedEmail,
+    name: name?.trim() || normalizedEmail.split('@')[0],
+    password: password,
+    avatar: '👤',
+    role: (data.users || []).length === 0 ? 'Head of Household' : 'Family Member',
+    createdAt: new Date().toISOString()
+  };
+
+  data.users.push(newUser);
+  writeData(data);
+
+  const { password: _, ...safeUser } = newUser;
+  res.json({ success: true, user: safeUser, token: `token-${newUser.id}` });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
+
+  const data = readData();
+  const normalizedEmail = email.toLowerCase().trim();
+  const user = (data.users || []).find(u => u.email?.toLowerCase() === normalizedEmail);
+
+  if (!user) {
+    return res.status(401).json({ error: 'No account found with this email. Please click "Sign Up" to create an account.' });
+  }
+
+  if (user.password && user.password !== password) {
+    return res.status(401).json({ error: 'Incorrect password. Please try again.' });
+  }
+
+  const { password: _, ...safeUser } = user;
+  res.json({ success: true, user: safeUser, token: `token-${user.id}` });
+});
+
 // Google Sign-In Endpoint
 app.post('/api/auth/google', (req, res) => {
   const { email, name, picture, sub } = req.body;
