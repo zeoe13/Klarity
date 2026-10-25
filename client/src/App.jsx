@@ -101,7 +101,6 @@ function KlarityApp() {
   });
 
   // Login form state
-  const [loginEmail, setLoginEmail] = useState('');
   const [authError, setAuthError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
@@ -513,65 +512,14 @@ function KlarityApp() {
             )}
 
             {/* REAL GOOGLE OAUTH POPUP BUTTON */}
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 pt-2">
               <GoogleOAuthLoginButton
                 onAuthSuccess={handleGoogleSuccessProfile}
                 onError={err => setAuthError(err)}
                 setIsAuthenticating={setIsAuthenticating}
                 isAuthenticating={isAuthenticating}
               />
-
-              {/* Official Google Button fallback if preferred */}
-              <div className="w-full flex justify-center mt-1">
-                <GoogleLogin
-                  onSuccess={handleGoogleCredentialSuccess}
-                  onError={() => setAuthError('Google sign in failed')}
-                  shape="pill"
-                  size="medium"
-                  text="signin_with"
-                />
-              </div>
             </div>
-
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-slate-800"></div>
-              <span className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
-                or sign in with email
-              </span>
-              <div className="flex-1 h-px bg-slate-800"></div>
-            </div>
-
-            {/* Email Sign In */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!loginEmail.trim()) return;
-                handleGoogleSuccessProfile({ email: loginEmail, name: loginEmail.split('@')[0] });
-              }}
-              className="flex flex-col gap-3"
-            >
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="name@gmail.com"
-                  value={loginEmail}
-                  onChange={e => setLoginEmail(e.target.value)}
-                  className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isAuthenticating}
-                className="w-full mt-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/20"
-              >
-                {isAuthenticating ? 'Signing In...' : 'Sign In with Email'}
-              </button>
-            </form>
           </div>
         </div>
 
