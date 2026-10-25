@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 require('dotenv').config();
 
 const app = express();
@@ -28,7 +29,7 @@ function readData() {
     return JSON.parse(raw);
   } catch (err) {
     console.error('Error reading data.json:', err);
-    return { users: [], accounts: [], bills: [], transactions: [] };
+    return { users: [], accounts: [], bills: [], transactions: [], settings: {} };
   }
 }
 
@@ -40,6 +41,29 @@ function writeData(data) {
     console.error('Error writing data.json:', err);
     return false;
   }
+}
+
+// Plaid Client Helper
+function getPlaidClient() {
+  const data = readData();
+  const clientId = process.env.PLAID_CLIENT_ID || data.settings?.plaidClientId;
+  const secret = process.env.PLAID_SECRET || data.settings?.plaidSecret;
+  const env = process.env.PLAID_ENV || data.settings?.plaidEnv || 'sandbox';
+
+  if (!clientId || !secret) return null;
+
+  const basePath = PlaidEnvironments[env] || PlaidEnvironments.sandbox;
+  const configuration = new Configuration({
+    basePath,
+    baseOptions: {
+      headers: {
+        'PLAID-CLIENT-ID': clientId,
+        'PLAID-SECRET': secret,
+      },
+    },
+  });
+
+  return new PlaidApi(configuration);
 }
 
 // Automatic category detection for purchases
@@ -69,92 +93,185 @@ function autoCategorize(name) {
   return 'Other';
 }
 
-// ================= AUTH ROUTES =================
+// ================= AUTH ROUTES (Google Sign-In) =================
 
-// Login
-app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
+// Google Sign-In Endpoint
+app.post('/api/auth/google', (req, res) => {
+  const { email, name, picture, sub } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required from Google profile' });
+  }
+
   const data = readData();
-
-  const user = data.users.find(
-    u => u.username.toLowerCase() === (username || '').toLowerCase() && u.password === password
-  );
+  let user = data.users.find(u => u.email === email || (sub && u.googleId === sub));
 
   if (!user) {
-    return res.status(401).json({ error: 'Invalid username or password' });
+    user = {
+      id: `u-${Date.now()}`,
+      googleId: sub || '',
+      email: email.toLowerCase().trim(),
+      name: name || email.split('@')[0],
+      avatar: picture || '👤',
+      role: data.users.length === 0 ? 'Head of Household' : 'Family Member',
+      createdAt: new Date().toISOString()
+    };
+    data.users.push(user);
+    writeData(data);
+  } else {
+    // Update profile info if changed
+    if (name) user.name = name;
+    if (picture) user.avatar = picture;
+    writeData(data);
   }
 
-  // Return user info (omit password)
-  const { password: _, ...userProfile } = user;
-  res.json({ success: true, user: userProfile, token: `token-${user.id}` });
+  res.json({ success: true, user, token: `token-${user.id}` });
 });
 
-// Register new family member
-app.post('/api/auth/register', (req, res) => {
-  const { username, password, name, role, avatar } = req.body;
-  if (!username || !password || !name) {
-    return res.status(400).json({ error: 'Username, password, and name are required' });
-  }
-
+// Settings Endpoints
+app.get('/api/settings', (req, res) => {
   const data = readData();
-  const existing = data.users.find(u => u.username.toLowerCase() === username.toLowerCase());
-  if (existing) {
-    return res.status(400).json({ error: 'Username already taken' });
-  }
+  res.json({
+    hasPlaidKeys: Boolean(process.env.PLAID_CLIENT_ID || data.settings?.plaidClientId),
+    plaidEnv: process.env.PLAID_ENV || data.settings?.plaidEnv || 'sandbox',
+    googleClientId: process.env.VITE_GOOGLE_CLIENT_ID || data.settings?.googleClientId || ''
+  });
+});
 
-  const newUser = {
-    id: `u${Date.now()}`,
-    username: username.toLowerCase().trim(),
-    password,
-    name: name.trim(),
-    role: role || 'Member',
-    avatar: avatar || '👤',
-    color: 'blue'
+app.post('/api/settings', (req, res) => {
+  const { plaidClientId, plaidSecret, plaidEnv, googleClientId } = req.body;
+  const data = readData();
+  data.settings = {
+    ...data.settings,
+    ...(plaidClientId ? { plaidClientId } : {}),
+    ...(plaidSecret ? { plaidSecret } : {}),
+    ...(plaidEnv ? { plaidEnv } : {}),
+    ...(googleClientId ? { googleClientId } : {})
   };
-
-  data.users.push(newUser);
   writeData(data);
-
-  const { password: _, ...userProfile } = newUser;
-  res.json({ success: true, user: userProfile, token: `token-${newUser.id}` });
+  res.json({ success: true });
 });
 
-// List all member profiles in the family vault
-app.get('/api/family/members', (req, res) => {
-  const data = readData();
-  const safeMembers = data.users.map(({ password: _, ...u }) => u);
-  res.json({ members: safeMembers });
+// ================= REAL PLAID BANK INTEGRATION =================
+
+// Create Plaid Link Token
+app.post('/api/plaid/create-link-token', async (req, res) => {
+  const { userId } = req.body;
+  const plaidClient = getPlaidClient();
+
+  if (!plaidClient) {
+    return res.status(400).json({
+      error: 'Plaid API keys are not configured yet.',
+      needsKeys: true
+    });
+  }
+
+  try {
+    const response = await plaidClient.linkTokenCreate({
+      user: { client_user_id: userId || 'user-1' },
+      client_name: 'Klarity',
+      products: ['transactions'],
+      country_codes: ['US'],
+      language: 'en'
+    });
+
+    res.json({ link_token: response.data.link_token });
+  } catch (err) {
+    console.error('Plaid linkTokenCreate error:', err.response?.data || err.message);
+    res.status(500).json({ error: err.response?.data?.error_message || err.message });
+  }
 });
 
-// ================= DATA ROUTES (With Privacy Isolation) =================
+// Exchange Public Token & Connect Real Bank / Cards
+app.post('/api/plaid/exchange-public-token', async (req, res) => {
+  const { public_token, metadata, userId } = req.body;
+  const plaidClient = getPlaidClient();
+
+  if (!plaidClient) {
+    return res.status(400).json({ error: 'Plaid keys not configured' });
+  }
+
+  try {
+    // 1. Exchange public token for permanent access token
+    const tokenResponse = await plaidClient.itemPublicTokenExchange({ public_token });
+    const accessToken = tokenResponse.data.access_token;
+    const itemId = tokenResponse.data.item_id;
+
+    // 2. Fetch real accounts and balances from the connected bank
+    const accountsResponse = await plaidClient.accountsBalanceGet({ access_token: accessToken });
+    const data = readData();
+
+    const addedAccounts = [];
+    for (const acc of accountsResponse.data.accounts) {
+      const newAcc = {
+        id: `acc-${acc.account_id}`,
+        ownerId: userId || 'u1',
+        institution: metadata?.institution?.name || 'Connected Bank',
+        name: acc.name,
+        type: acc.type === 'credit' ? 'credit' : 'depository',
+        mask: acc.mask || 'XXXX',
+        balance: acc.balances?.current || 0,
+        limit: acc.balances?.limit || 0,
+        apr: 0,
+        minPayment: 0,
+        dueDate: '',
+        color: acc.type === 'credit' ? '#1e40af' : '#065f46',
+        plaidAccessToken: accessToken,
+        plaidItemId: itemId
+      };
+      data.accounts.push(newAcc);
+      addedAccounts.push(newAcc);
+    }
+
+    // 3. Sync real transactions from the bank
+    try {
+      const txResponse = await plaidClient.transactionsSync({ access_token: accessToken });
+      const addedTx = (txResponse.data.added || []).map(tx => ({
+        id: `tx-${tx.transaction_id}`,
+        accountId: `acc-${tx.account_id}`,
+        ownerId: userId || 'u1',
+        date: tx.date,
+        name: tx.name,
+        amount: Math.abs(tx.amount),
+        category: autoCategorize(tx.name),
+        isRecurring: /pg&e|fresno water|xfinity|t-mobile/.test((tx.name || '').toLowerCase())
+      }));
+      data.transactions.unshift(...addedTx);
+    } catch (txErr) {
+      console.warn('Initial transaction sync note:', txErr.message);
+    }
+
+    writeData(data);
+    res.json({ success: true, accounts: addedAccounts });
+  } catch (err) {
+    console.error('Plaid exchange error:', err.response?.data || err.message);
+    res.status(500).json({ error: err.response?.data?.error_message || err.message });
+  }
+});
+
+// ================= DATA ROUTES (No fake items) =================
 
 app.get('/api/data', (req, res) => {
   const data = readData();
-  const currentUserId = req.query.userId || req.headers['x-user-id'] || 'u1';
+  const currentUserId = req.query.userId || req.headers['x-user-id'];
   const showHousehold = req.query.household === 'true';
 
-  const currentUser = data.users.find(u => u.id === currentUserId) || data.users[0];
-  const safeMembers = data.users.map(({ password: _, ...u }) => u);
+  const currentUser = data.users.find(u => u.id === currentUserId) || null;
 
-  // Filter accounts: show user's own cards, plus shared cards if requested
-  const visibleAccounts = data.accounts.filter(acc => {
+  // Real accounts for logged-in user
+  const visibleAccounts = (data.accounts || []).filter(acc => {
     if (showHousehold) return true;
-    return acc.ownerId === currentUserId || acc.isShared;
+    return acc.ownerId === currentUserId;
   });
 
-  // Filter bills: household bills (PG&E, Fresno Water, Xfinity) + user's assigned bills
-  const visibleBills = data.bills.filter(bill => {
+  // Real bills
+  const visibleBills = data.bills || [];
+
+  // Real transactions for logged-in user
+  const visibleTransactions = (data.transactions || []).filter(tx => {
     if (showHousehold) return true;
-    return bill.isHouseholdBill || bill.assignedOwnerId === currentUserId;
+    return tx.ownerId === currentUserId;
   });
 
-  // Filter transactions
-  const visibleTransactions = data.transactions.filter(tx => {
-    if (showHousehold) return true;
-    return tx.ownerId === currentUserId || tx.isRecurring;
-  });
-
-  // Metrics calculation
   const totalChecking = visibleAccounts
     .filter(a => a.type === 'depository')
     .reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
@@ -170,14 +287,8 @@ app.get('/api/data', (req, res) => {
     }, 0);
 
   res.json({
-    currentUser: {
-      id: currentUser.id,
-      name: currentUser.name,
-      username: currentUser.username,
-      role: currentUser.role,
-      avatar: currentUser.avatar
-    },
-    familyMembers: safeMembers,
+    currentUser,
+    familyMembers: data.users || [],
     accounts: visibleAccounts,
     bills: visibleBills,
     transactions: visibleTransactions,
@@ -190,25 +301,24 @@ app.get('/api/data', (req, res) => {
   });
 });
 
-// Add card/bank owned by the logged-in user
+// Manual Card Add
 app.post('/api/accounts', (req, res) => {
-  const { ownerId, institution, name, type, mask, balance, limit, apr, minPayment, dueDate, isShared } = req.body;
+  const { ownerId, institution, name, type, mask, balance, limit, apr, minPayment, dueDate } = req.body;
   const data = readData();
 
   const newAccount = {
     id: `acc-${Date.now()}`,
-    ownerId: ownerId || 'u1',
-    institution: institution || 'Connected Bank',
+    ownerId: ownerId,
+    institution: institution || 'My Bank',
     name: name || 'Account',
     type: type || 'credit',
-    mask: mask || String(Math.floor(1000 + Math.random() * 9000)),
+    mask: mask || 'XXXX',
     balance: Number(balance) || 0,
     limit: Number(limit) || 0,
     apr: Number(apr) || 0,
     minPayment: Number(minPayment) || 0,
     dueDate: dueDate || '',
-    color: type === 'credit' ? '#1e40af' : '#065f46',
-    isShared: Boolean(isShared)
+    color: type === 'credit' ? '#1e40af' : '#065f46'
   };
 
   data.accounts.push(newAccount);
@@ -216,7 +326,7 @@ app.post('/api/accounts', (req, res) => {
   res.json({ success: true, account: newAccount });
 });
 
-// Delete card
+// Delete Card
 app.delete('/api/accounts/:id', (req, res) => {
   const data = readData();
   data.accounts = data.accounts.filter(a => a.id !== req.params.id);
@@ -224,14 +334,14 @@ app.delete('/api/accounts/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// Add Bill
+// Add Real Bill (PG&E, Fresno Water, Xfinity, T-Mobile)
 app.post('/api/bills', (req, res) => {
-  const { name, biller, category, expectedAmount, dueDay, frequency, assignedOwnerId, notes, isHouseholdBill } = req.body;
+  const { name, biller, category, expectedAmount, dueDay, frequency, assignedOwnerId, notes } = req.body;
   const data = readData();
 
   const newBill = {
     id: `bill-${Date.now()}`,
-    name: name || 'Utility / Bill',
+    name: name,
     biller: biller || name,
     category: category || autoCategorize(name),
     expectedAmount: Number(expectedAmount) || 0,
@@ -239,8 +349,7 @@ app.post('/api/bills', (req, res) => {
     nextDueDate: `2026-11-${String(dueDay || 1).padStart(2, '0')}`,
     frequency: frequency || 'monthly',
     status: 'upcoming',
-    assignedOwnerId: assignedOwnerId || 'u1',
-    isHouseholdBill: isHouseholdBill !== false,
+    assignedOwnerId: assignedOwnerId || '',
     notes: notes || ''
   };
 
@@ -259,40 +368,25 @@ app.post('/api/bills/:id/pay', (req, res) => {
   bill.lastPaidDate = new Date().toISOString().split('T')[0];
   bill.lastPaidAmount = bill.expectedAmount;
 
-  const paymentTx = {
-    id: `tx-${Date.now()}`,
-    accountId: data.accounts[0]?.id || 'acc-1',
-    ownerId: bill.assignedOwnerId || 'u1',
-    date: bill.lastPaidDate,
-    name: `${bill.biller || bill.name} (Payment)`,
-    amount: bill.expectedAmount,
-    category: bill.category,
-    isRecurring: true,
-    billId: bill.id
-  };
-  data.transactions.unshift(paymentTx);
-
   writeData(data);
-  res.json({ success: true, bill, transaction: paymentTx });
+  res.json({ success: true, bill });
 });
 
-// Log purchase for logged-in user
+// Log purchase
 app.post('/api/transactions', (req, res) => {
   const { accountId, ownerId, name, amount, date, category } = req.body;
   const data = readData();
 
   const detectedCategory = category || autoCategorize(name);
-  const isRecurring = /pg&e|fresno water|xfinity|t-mobile|netflix|spotify/.test((name || '').toLowerCase());
-
   const newTx = {
     id: `tx-${Date.now()}`,
-    accountId: accountId || (data.accounts[0] ? data.accounts[0].id : 'acc-1'),
-    ownerId: ownerId || 'u1',
+    accountId: accountId || (data.accounts[0]?.id || ''),
+    ownerId: ownerId,
     date: date || new Date().toISOString().split('T')[0],
     name: name || 'Purchase',
     amount: Number(amount) || 0,
     category: detectedCategory,
-    isRecurring
+    isRecurring: /pg&e|fresno water|xfinity|t-mobile/.test((name || '').toLowerCase())
   };
 
   data.transactions.unshift(newTx);
@@ -307,7 +401,7 @@ app.post('/api/bills/scan', async (req, res) => {
 
   let biller = 'Utility Provider';
   let category = 'Utilities';
-  let amount = 120.00;
+  let amount = 0;
   let nextDueDate = '2026-11-15';
 
   const t = billText.toLowerCase();
@@ -335,13 +429,12 @@ app.post('/api/bills/scan', async (req, res) => {
     name: biller,
     biller,
     category,
-    expectedAmount: amount,
+    expectedAmount: amount || 0,
     dueDay: 15,
     nextDueDate,
     frequency: 'monthly',
     status: 'due_soon',
-    assignedOwnerId: ownerId || 'u1',
-    isHouseholdBill: true,
+    assignedOwnerId: ownerId || '',
     notes: 'Scanned statement'
   };
 
@@ -355,57 +448,30 @@ app.post('/api/bills/scan', async (req, res) => {
   });
 });
 
-// Plaid simulation: link card to logged-in user
-app.post('/api/plaid/exchange-public-token', (req, res) => {
-  const { institution, accountName, ownerId } = req.body;
-  const data = readData();
-
-  const newAccount = {
-    id: `acc-plaid-${Date.now()}`,
-    ownerId: ownerId || 'u1',
-    institution: institution || 'Chase Bank',
-    name: accountName || 'Premier Sapphire Card',
-    type: 'credit',
-    mask: String(Math.floor(1000 + Math.random() * 9000)),
-    balance: Math.floor(Math.random() * 1500) + 200,
-    limit: 6000,
-    apr: 24.99,
-    minPayment: 40.00,
-    dueDate: '2026-11-18',
-    color: '#0284c7',
-    isShared: false
-  };
-
-  data.accounts.push(newAccount);
-  writeData(data);
-  res.json({ success: true, account: newAccount });
-});
-
-// AI Advisor chat tailored to the logged-in user
+// AI Advisor chat
 app.post('/api/ai/chat', async (req, res) => {
   const { message, userId } = req.body;
   const data = readData();
 
-  const currentUser = data.users.find(u => u.id === userId) || data.users[0];
-  const userCards = data.accounts.filter(a => a.ownerId === currentUser.id && a.type === 'credit');
-  const userChecking = data.accounts.filter(a => a.ownerId === currentUser.id && a.type === 'depository');
+  const currentUser = data.users.find(u => u.id === userId) || { name: 'User' };
+  const userCards = (data.accounts || []).filter(a => a.ownerId === userId && a.type === 'credit');
+  const userChecking = (data.accounts || []).filter(a => a.ownerId === userId && a.type === 'depository');
   const totalChecking = userChecking.reduce((s, a) => s + a.balance, 0);
 
   const sortedByApr = [...userCards].sort((a, b) => b.apr - a.apr);
 
-  // Gemini API
   if (aiClient && process.env.GEMINI_API_KEY) {
     try {
       const prompt = `
 You are Klarity, the personal AI Financial Advisor for a family.
-You are talking directly to: ${currentUser.name} (${currentUser.role}).
-Their personal financial snapshot:
-- Personal Checking: $${totalChecking.toFixed(2)}
-- Connected Credit Cards: ${userCards.map(c => `${c.institution} ${c.name}: $${c.balance} @ ${c.apr}% APR (Min $${c.minPayment})`).join(' | ')}
-- Household Utility Bills: ${data.bills.map(b => `${b.name}: $${b.expectedAmount} due ${b.nextDueDate}`).join(' | ')}
+User: ${currentUser.name}.
+Actual Connected Finances:
+- Checking Accounts: ${userChecking.map(c => `${c.institution} ${c.name}: $${c.balance}`).join(' | ') || 'None connected yet'}
+- Credit Cards: ${userCards.map(c => `${c.institution} ${c.name}: $${c.balance} @ ${c.apr}% APR`).join(' | ') || 'None connected yet'}
+- Household Bills: ${data.bills.map(b => `${b.name}: $${b.expectedAmount} due ${b.nextDueDate}`).join(' | ') || 'None added yet'}
 
-Question from ${currentUser.name}: "${message}"
-Give personalized, friendly, mathematically sound advice.
+Question: "${message}"
+Answer concisely, helpfully, and with empathy.
 `;
       const response = await aiClient.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -417,35 +483,27 @@ Give personalized, friendly, mathematically sound advice.
     }
   }
 
-  // Smart fallback tailored to the user
+  // Fallback
   const msg = (message || '').toLowerCase();
   let reply = '';
 
-  if (msg.includes('pay off') || msg.includes('debt') || msg.includes('card')) {
+  if (userCards.length === 0 && userChecking.length === 0) {
+    reply = `Hello ${currentUser.name}! You haven't connected any real bank accounts or credit cards yet. Click **"Connect Real Bank via Plaid"** or **"Add Card Manually"** to link your first card, and I'll immediately start tracking your balances, APRs, and payoff strategy!`;
+  } else if (msg.includes('pay off') || msg.includes('debt') || msg.includes('card')) {
     if (sortedByApr.length > 0) {
       const top = sortedByApr[0];
-      reply = `### 💡 Personalized Debt Payoff for ${currentUser.name}
-
-1. **Top Priority (Avalanche):** Pay off your **${top.institution} ${top.name}** first!
-   * **Balance:** $${top.balance.toFixed(2)}
-   * **Interest Rate:** **${top.apr}% APR** (Your highest cost debt)
-2. **Strategy:** Pay minimums on any other cards and put your extra savings toward the ${top.institution} card.`;
+      reply = `### 💡 Real Debt Payoff Strategy for ${currentUser.name}\n\n* **Priority #1:** Pay off **${top.institution} ${top.name}** first (Balance: $${top.balance.toFixed(2)} at **${top.apr}% APR**). Put extra payments toward this card while paying minimums on others.`;
     } else {
-      reply = `Great news, ${currentUser.name}! You currently have no high-interest credit card debt linked to your profile! 🎉`;
+      reply = `You have no high-interest credit card debt active on your connected cards, ${currentUser.name}! 🎉`;
     }
-  } else if (msg.includes('bill') || msg.includes('pg&e') || msg.includes('water') || msg.includes('fresno')) {
-    reply = `### 📅 Household Bills Overview for ${currentUser.name}
-
-Here are the upcoming household utility bills for this month:
-${data.bills.slice(0, 4).map(b => `* **${b.name}**: $${b.expectedAmount.toFixed(2)} due ${b.nextDueDate} (${b.status})`).join('\n')}`;
   } else {
-    reply = `Hello ${currentUser.name}! I am **Klarity**, your personal financial advisor. You have **${userCards.length} personal cards** connected. How can I help with your budget, bills, or payoff goals today?`;
+    reply = `Hello ${currentUser.name}! I am **Klarity**. I am monitoring your real connected accounts and household utility bills. Ask me what bills are due or how to optimize your spending.`;
   }
 
   res.json({ reply });
 });
 
-// Serve frontend in production/single-port mode
+// Production fallback
 const clientDistPath = path.join(__dirname, '../client/dist');
 if (fs.existsSync(clientDistPath)) {
   app.use(express.static(clientDistPath));
