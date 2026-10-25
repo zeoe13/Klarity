@@ -453,9 +453,9 @@ app.post('/api/bills/scan', async (req, res) => {
   });
 });
 
-// 9. AI Advisor Chat (Supports Gemini, OpenAI / ChatGPT, DeepSeek, and Custom API Keys)
+// 9. AI Advisor Chat (Supports Gemini, OpenAI / ChatGPT, DeepSeek, Custom API Keys, and User Memory)
 app.post('/api/ai/chat', async (req, res) => {
-  const { message, userId, aiProvider = 'gemini', apiKey, modelName, customBaseUrl } = req.body;
+  const { message, userId, aiProvider = 'gemini', apiKey, modelName, customBaseUrl, userMemory = [] } = req.body;
   const data = readData();
 
   const currentUser = (data.users || []).find(u => u.id === userId) || { name: 'User' };
@@ -464,12 +464,16 @@ app.post('/api/ai/chat', async (req, res) => {
   const userBills = data.bills || [];
   const sortedByApr = [...userCards].sort((a, b) => b.apr - a.apr);
 
+  const memoryContext = (userMemory && userMemory.length > 0)
+    ? `\n\nUser Personal Financial Memory & Core Rules (CRITICAL: Strictly adhere to these rules at all times):\n${userMemory.map(m => `- ${m}`).join('\n')}\nIf the user specifies they are Muslim or follow Islamic / Halal finance: NEVER recommend interest-bearing accounts, high-yield savings interest, or paying/earning APR interest (Riba). Direct all focus to eliminating debt completely, Halal cash flow preservation, and budgeting.`
+    : '';
+
   const systemContext = `
 You are Klarity, the personal AI Financial Advisor for ${currentUser.name}.
 Actual Connected Finances for ${currentUser.name}:
 - Checking Accounts: ${userChecking.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)}`).join(' | ') || 'None connected'}
 - Credit Cards: ${userCards.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)} @ ${c.apr}% APR (Min: $${c.minPayment || 0})`).join(' | ') || 'None connected'}
-- Household Bills: ${userBills.map(b => `${b.name}: $${Number(b.expectedAmount).toFixed(2)} due ${b.nextDueDate || b.dueDate || 'Day ' + b.dueDay}`).join(' | ') || 'None added'}
+- Household Bills: ${userBills.map(b => `${b.name}: $${Number(b.expectedAmount).toFixed(2)} due ${b.nextDueDate || b.dueDate || 'Day ' + b.dueDay}`).join(' | ') || 'None added'}${memoryContext}
 
 Provide concise, practical, empathetic debt-payoff and financial guidance using these exact numbers. Never request full credit card numbers or passwords.
 `.trim();
@@ -596,14 +600,20 @@ Provide concise, practical, empathetic debt-payoff and financial guidance using 
 
   // Built-in intelligent financial advisor fallback
   const msg = (message || '').toLowerCase();
+  const memoryStr = (userMemory || []).join(' ').toLowerCase();
+  const isHalalFinance = memoryStr.includes('muslim') || memoryStr.includes('halal') || memoryStr.includes('islam') || memoryStr.includes('riba') || msg.includes('halal') || msg.includes('islam');
   let reply = '';
 
   if (userCards.length === 0 && userChecking.length === 0) {
-    reply = `Hello ${currentUser.name}! You haven't connected any real bank accounts or credit cards yet. Click **"Connect Bank"** or **"Add Card"** to link your first card, and I'll immediately start tracking your balances, APRs, and payoff strategy!`;
+    reply = `Hello ${currentUser.name}! You haven't connected any real bank accounts or credit cards yet. Click **"Connect Bank"** or **"Add Card"** to link your first card, and I'll immediately start tracking your balances and payoff strategy!`;
   } else if (msg.includes('pay off') || msg.includes('debt') || msg.includes('card') || msg.includes('first')) {
     if (sortedByApr.length > 0) {
       const top = sortedByApr[0];
-      reply = `### Debt Payoff Strategy for ${currentUser.name}\n\n* **Priority #1:** Pay off **${top.institution} ${top.name}** first (Balance: $${Number(top.balance).toFixed(2)} at **${top.apr}% APR**). Put extra payments toward this card while paying minimums on others to save maximum interest.`;
+      if (isHalalFinance) {
+        reply = `### Halal Debt Elimination Strategy for ${currentUser.name}\n\n* **Priority #1:** Pay off **${top.institution} ${top.name}** first (Balance: $${Number(top.balance).toFixed(2)}). As per your preferences, prioritize clearing this balance as fast as possible to eliminate conventional debt and avoid any interest charges.`;
+      } else {
+        reply = `### Debt Payoff Strategy for ${currentUser.name}\n\n* **Priority #1:** Pay off **${top.institution} ${top.name}** first (Balance: $${Number(top.balance).toFixed(2)} at **${top.apr}% APR**). Put extra payments toward this card while paying minimums on others to save maximum interest.`;
+      }
     } else {
       reply = `You have no high-interest credit card debt active on your connected cards, ${currentUser.name}!`;
     }

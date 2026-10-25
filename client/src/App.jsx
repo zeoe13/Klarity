@@ -35,7 +35,11 @@ import {
   User,
   Gamepad2,
   Tv,
-  ChevronDown
+  ChevronDown,
+  Paperclip,
+  UploadCloud,
+  Brain,
+  X
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
@@ -291,6 +295,23 @@ function KlarityApp() {
   });
   const [showAiApiKey, setShowAiApiKey] = useState(false);
 
+  // AI Memory (e.g. "I am Muslim - do not mention interest", custom lifestyle constraints)
+  const [aiMemory, setAiMemory] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_ai_memory');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [newMemoryInput, setNewMemoryInput] = useState('');
+  const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
+
+  // Upload Menu & Document Scanner State
+  const [isUploadMenuOpen, setIsUploadMenuOpen] = useState(false);
+  const uploadMenuRef = useRef(null);
+  const fileInputRef = useRef(null);
+
   // User Dropdown Menu state & click-outside handling
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
@@ -300,10 +321,61 @@ function KlarityApp() {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
         setIsUserMenuOpen(false);
       }
+      if (uploadMenuRef.current && !uploadMenuRef.current.contains(e.target)) {
+        setIsUploadMenuOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Save AI Memory helper
+  const handleAddMemory = (fact) => {
+    const item = (fact || newMemoryInput).trim();
+    if (!item) return;
+    if (aiMemory.includes(item)) return;
+    const updated = [...aiMemory, item];
+    setAiMemory(updated);
+    localStorage.setItem('klarity_ai_memory', JSON.stringify(updated));
+    setNewMemoryInput('');
+    setNotificationToast('Saved to AI Memory!');
+    setTimeout(() => setNotificationToast(''), 3000);
+  };
+
+  const handleRemoveMemory = (index) => {
+    const updated = aiMemory.filter((_, i) => i !== index);
+    setAiMemory(updated);
+    localStorage.setItem('klarity_ai_memory', JSON.stringify(updated));
+    setNotificationToast('Removed from AI Memory');
+    setTimeout(() => setNotificationToast(''), 3000);
+  };
+
+  // Document / PDF Upload Handler
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type.includes('text') || file.name.endsWith('.txt') || file.name.endsWith('.csv')) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result || '';
+        setScanText(text);
+        setIsScanBillOpen(true);
+        setNotificationToast(`Loaded ${file.name} for statement analysis!`);
+        setTimeout(() => setNotificationToast(''), 4000);
+      };
+      reader.readAsText(file);
+    } else {
+      // PDF or Image
+      const noticeText = `[Uploaded Statement Document: ${file.name} (${(file.size / 1024).toFixed(1)} KB)]\nPlease extract and verify biller name, amount due, and due date from this document.`;
+      setScanText(noticeText);
+      setIsScanBillOpen(true);
+      setNotificationToast(`Selected ${file.name}! Review statement details.`);
+      setTimeout(() => setNotificationToast(''), 4000);
+    }
+    // Reset file input
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   // Fetch Settings
   const fetchSettings = async () => {
@@ -716,7 +788,8 @@ function KlarityApp() {
           aiProvider: aiConfig.provider,
           apiKey: aiConfig.apiKey,
           modelName: aiConfig.modelName,
-          customBaseUrl: aiConfig.customBaseUrl
+          customBaseUrl: aiConfig.customBaseUrl,
+          userMemory: aiMemory
         })
       });
       const json = await res.json();
@@ -918,6 +991,11 @@ function KlarityApp() {
   const highestAprCard = (creditCards || [])
     .filter(a => Number(a.balance) > 0)
     .sort((a, b) => Number(b.apr || 0) - Number(a.apr || 0))[0];
+
+  const isHalalFinance = aiMemory.some(m => {
+    const s = m.toLowerCase();
+    return s.includes('muslim') || s.includes('halal') || s.includes('islam') || s.includes('riba');
+  });
 
   const filteredTransactions = transactionsList.filter(t => {
     const matchCategory = categoryFilter === 'all' ? true : t.category === categoryFilter;
@@ -1149,7 +1227,7 @@ function KlarityApp() {
 
               <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
                 <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-                  <span>Monthly Bills & Utilities</span>
+                  <span>Bills</span>
                   <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
                     <Zap className="w-4 h-4" />
                   </div>
@@ -1159,13 +1237,13 @@ function KlarityApp() {
                     ${(data?.metrics?.totalMonthlyBills || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     <span className="text-xs font-normal text-slate-400">/mo</span>
                   </div>
-                  <p className="text-xs text-amber-400 mt-1">PG&E, Fresno Water, Xfinity, T-Mobile</p>
+                  <p className="text-xs text-slate-400 mt-1">Monthly total</p>
                 </div>
               </div>
 
               <div className="bg-gradient-to-br from-indigo-950/90 to-slate-900 border border-indigo-800/40 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
                 <div className="flex items-center justify-between text-indigo-300 text-xs font-semibold">
-                  <span>AI Payoff Priority</span>
+                  <span>{isHalalFinance ? 'Debt Elimination Priority' : 'AI Payoff Priority'}</span>
                   <Sparkles className="w-4 h-4 text-indigo-400" />
                 </div>
                 {highestAprCard ? (
@@ -1174,19 +1252,25 @@ function KlarityApp() {
                       {highestAprCard.institution} {highestAprCard.name}
                     </div>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30">
-                        {highestAprCard.apr}% APR
-                      </span>
+                      {!isHalalFinance ? (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30">
+                          {highestAprCard.apr}% APR
+                        </span>
+                      ) : (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          Halal Priority
+                        </span>
+                      )}
                       <span className="text-xs text-slate-300">Bal: ${Number(highestAprCard.balance).toFixed(2)}</span>
                     </div>
                     <button
                       onClick={() => {
                         setActiveTab('advisor');
-                        handleSendChatMessage('What should I pay off first and how much?');
+                        handleSendChatMessage(isHalalFinance ? 'How should I eliminate this debt in accordance with my Halal finance preferences?' : 'What should I pay off first and how much?');
                       }}
                       className="mt-3 text-xs text-indigo-300 hover:text-white font-medium flex items-center gap-1 cursor-pointer transition-colors"
                     >
-                      <span>Ask AI Advisor how to pay</span>
+                      <span>{isHalalFinance ? 'Ask AI how to eliminate debt' : 'Ask AI Advisor how to pay'}</span>
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -1199,55 +1283,14 @@ function KlarityApp() {
               </div>
             </div>
 
-            {/* Quick Actions Bar */}
-            <div className="flex flex-wrap gap-2 p-4 bg-[#0d1527] border border-slate-800 rounded-2xl items-center justify-between">
-              <span className="text-xs font-bold text-slate-300">Quick Actions:</span>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={initiatePlaidLink}
-                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white shadow-md shadow-emerald-600/20 cursor-pointer transition-colors"
-                >
-                  Connect Bank
-                </button>
-                <button
-                  onClick={() => setIsAddAccountOpen(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer transition-colors"
-                >
-                  Add Card
-                </button>
-                <button
-                  onClick={() => setIsAddBillOpen(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer transition-colors"
-                >
-                  Add Utility Bill
-                </button>
-                <button
-                  onClick={() => setIsScanBillOpen(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer transition-colors"
-                >
-                  Scan Statement
-                </button>
-                <button
-                  onClick={() => setActiveTab('settings')}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer transition-colors"
-                >
-                  Manage Settings
-                </button>
-              </div>
-            </div>
-
             {/* Split Grid: Upcoming Bills & AI Advisor Quick Preview */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Upcoming Bills List */}
               <div className="lg:col-span-2 bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="text-base font-bold text-white flex items-center gap-2">
-                      <Zap className="w-4 h-4 text-amber-400" />
-                      <span>Upcoming Household Bills & Utilities</span>
-                    </h2>
-                    <p className="text-xs text-slate-400">Includes Fresno Water, PG&E, Telecom & Subscriptions</p>
-                  </div>
+                  <h2 className="text-base font-bold text-white">
+                    Upcoming Bills
+                  </h2>
                   <button
                     onClick={() => setIsAddBillOpen(true)}
                     className="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1 cursor-pointer"
@@ -1267,33 +1310,14 @@ function KlarityApp() {
                       const isDueSoon = bill.status === 'due_soon';
                       return (
                         <div key={bill.id} className="py-3.5 flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div
-                              className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                                bill.category === 'Utilities'
-                                  ? 'bg-amber-500/10 text-amber-400'
-                                  : bill.category === 'Gaming'
-                                  ? 'bg-pink-500/10 text-pink-400'
-                                  : 'bg-purple-500/10 text-purple-400'
-                              }`}
-                            >
-                              {bill.category === 'Gaming' ? (
-                                <Gamepad2 className="w-4 h-4" />
-                              ) : bill.category === 'Subscriptions' ? (
-                                <Tv className="w-4 h-4" />
-                              ) : (
-                                <Zap className="w-4 h-4" />
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-white truncate">{bill.name}</p>
-                              <p className="text-xs text-slate-400 flex items-center gap-2">
-                                <span>Due {bill.nextDueDate || bill.dueDate || `Day ${bill.dueDay}`}</span>
-                                <span className="bg-slate-800 px-1.5 py-0.5 rounded text-[10px] text-slate-300">
-                                  {bill.category}
-                                </span>
-                              </p>
-                            </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-white truncate">{bill.name}</p>
+                            <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+                              <span>Due {bill.nextDueDate || bill.dueDate || `Day ${bill.dueDay}`}</span>
+                              <span className="bg-slate-800 px-1.5 py-0.5 rounded text-[10px] text-slate-300">
+                                {bill.category}
+                              </span>
+                            </p>
                           </div>
 
                           <div className="flex items-center gap-3 shrink-0">
@@ -1331,24 +1355,25 @@ function KlarityApp() {
               {/* AI Advisor Preview Card */}
               <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="p-2 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20">
-                      <Bot className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-white">Klarity AI Advisor</h3>
-                      <p className="text-xs text-slate-400">Real-time household analysis</p>
-                    </div>
+                  <div className="mb-3">
+                    <h3 className="text-sm font-bold text-white">AI Financial Advisor</h3>
+                    <p className="text-xs text-slate-400">Personalized household analysis</p>
                   </div>
 
                   <div className="bg-[#070b14] border border-slate-800/80 rounded-xl p-3 text-xs text-slate-300 leading-relaxed mb-4">
                     {highestAprCard ? (
-                      <span>
-                        I noticed your upcoming bills and connected credit debt. You can save money on interest by directing extra funds to <strong>{highestAprCard.institution} {highestAprCard.name}</strong> with <strong>{highestAprCard.apr}% APR</strong>.
-                      </span>
+                      isHalalFinance ? (
+                        <span>
+                          I noticed your upcoming bills and active cards. In alignment with your Halal preferences, prioritize clearing <strong>{highestAprCard.institution} {highestAprCard.name}</strong> (Balance: ${Number(highestAprCard.balance).toFixed(2)}) completely to eliminate debt without conventional interest.
+                        </span>
+                      ) : (
+                        <span>
+                          I noticed your upcoming bills and connected credit debt. You can save money on interest by directing extra funds to <strong>{highestAprCard.institution} {highestAprCard.name}</strong> with <strong>{highestAprCard.apr}% APR</strong>.
+                        </span>
+                      )
                     ) : (
                       <span>
-                        "I monitor your utility bills and credit cards to provide recommendations on cash flow, debt snowballing, and savings."
+                        I monitor your bills and accounts to provide recommendations on cash flow, debt elimination, and savings.
                       </span>
                     )}
                   </div>
@@ -1356,7 +1381,7 @@ function KlarityApp() {
                   <p className="text-xs font-semibold text-slate-400 mb-2">Quick Inquiries:</p>
                   <div className="flex flex-col gap-1.5">
                     {[
-                      'What should I pay off first?',
+                      isHalalFinance ? 'How should I eliminate debt without interest?' : 'What should I pay off first?',
                       'Show bills due in the next 14 days',
                       'How can I reduce expenses?'
                     ].map((q, i) => (
@@ -1388,11 +1413,10 @@ function KlarityApp() {
             <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-base font-bold text-white flex items-center gap-2">
-                    <Receipt className="w-4 h-4 text-emerald-400" />
-                    <span>Recent Purchases & Auto-Categories</span>
+                  <h2 className="text-base font-bold text-white">
+                    Recent Purchases
                   </h2>
-                  <p className="text-xs text-slate-400">Automatically categorized as Subscriptions, Gaming, Utilities, etc.</p>
+                  <p className="text-xs text-slate-400">Recent activity across connected accounts</p>
                 </div>
                 <button
                   onClick={() => setActiveTab('transactions')}
@@ -1410,18 +1434,13 @@ function KlarityApp() {
                 <div className="divide-y divide-slate-800/80">
                   {transactionsList.slice(0, 6).map(tx => (
                     <div key={tx.id} className="py-3 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400">
-                          <Receipt className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-white">{tx.name}</p>
-                          <p className="text-xs text-slate-400 flex items-center gap-2">
-                            <span>{tx.date}</span>
-                            <span>•</span>
-                            <span>{tx.account || 'Account'}</span>
-                          </p>
-                        </div>
+                      <div>
+                        <p className="text-sm font-semibold text-white">{tx.name}</p>
+                        <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+                          <span>{tx.date}</span>
+                          <span>•</span>
+                          <span>{tx.account || 'Account'}</span>
+                        </p>
                       </div>
 
                       <div className="text-right">
@@ -1705,8 +1724,24 @@ function KlarityApp() {
           <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col h-[650px] shadow-xl">
             <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-white">Klarity AI Financial Advisor</h3>
-                <p className="text-[11px] text-slate-400">Analyzes your actual connected cards, APRs & bills</p>
+                <h3 className="text-sm font-bold text-white">AI Financial Advisor</h3>
+                <p className="text-[11px] text-slate-400">Personalized debt & cash flow guidance</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsMemoryModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 cursor-pointer transition-all"
+                  title="Manage AI Memory & Preferences"
+                >
+                  <Brain className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Memory</span>
+                  {aiMemory.length > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[10px] font-bold">
+                      {aiMemory.length}
+                    </span>
+                  )}
+                </button>
               </div>
             </div>
 
@@ -1738,7 +1773,63 @@ function KlarityApp() {
               <div ref={chatEndRef} />
             </div>
 
-            <form onSubmit={handleSendChatMessage} className="pt-2 flex gap-2">
+            {/* AI Input Form with Upload Button */}
+            <form onSubmit={handleSendChatMessage} className="pt-2 flex items-center gap-2">
+              {/* Document / PDF Upload Dropdown */}
+              <div className="relative" ref={uploadMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsUploadMenuOpen(!isUploadMenuOpen)}
+                  className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 cursor-pointer transition-all flex items-center justify-center"
+                  title="Upload or scan statement / document"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </button>
+
+                {isUploadMenuOpen && (
+                  <div className="absolute bottom-12 left-0 w-60 rounded-2xl bg-[#0c1427] border border-slate-800 shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-bottom-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUploadMenuOpen(false);
+                        fileInputRef.current?.click();
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-xs text-slate-200 hover:bg-slate-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                    >
+                      <UploadCloud className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <div>
+                        <div className="font-semibold">Upload PDF / Document</div>
+                        <div className="text-[10px] text-slate-400">Attach statement, PDF, or image</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUploadMenuOpen(false);
+                        setIsScanBillOpen(true);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-xs text-slate-200 hover:bg-slate-800 flex items-center gap-2.5 transition-colors cursor-pointer border-t border-slate-800/60"
+                    >
+                      <FileText className="w-4 h-4 text-blue-400 shrink-0" />
+                      <div>
+                        <div className="font-semibold">Scan Statement Text</div>
+                        <div className="text-[10px] text-slate-400">Paste raw bill or statement details</div>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Hidden file input for statement PDFs & documents */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                accept=".pdf,.png,.jpg,.jpeg,.txt,.csv"
+                className="hidden"
+              />
+
               <input
                 type="text"
                 placeholder="Ask Klarity about your finances or debt payoff..."
@@ -1876,7 +1967,64 @@ function KlarityApp() {
               </div>
             </div>
 
-            {/* 2. Plaid Banking Integration */}
+            {/* 2. AI Memory & Personal Preferences */}
+            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-6 flex flex-col gap-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Brain className="w-4 h-4 text-indigo-400" />
+                    <span>AI Memory & Personal Preferences</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Teach Klarity your personal financial values (e.g., Muslim / Halal finance, debt elimination) so it remembers them in every response.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMemoryModalOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 cursor-pointer transition-colors"
+                >
+                  Manage Memory ({aiMemory.length})
+                </button>
+              </div>
+
+              {aiMemory.length === 0 ? (
+                <div className="p-4 rounded-xl bg-[#080d19] border border-slate-800 text-center text-xs text-slate-500 flex flex-col items-center gap-3">
+                  <span>No custom rules or memory saved yet.</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleAddMemory(
+                        'I am Muslim: Never recommend conventional interest (Riba), interest-bearing debt, or interest savings. Focus strictly on debt elimination, cash preservation, and Halal budgeting.'
+                      )
+                    }
+                    className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold cursor-pointer"
+                  >
+                    + Add Preset: I am Muslim (Halal Finance)
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {aiMemory.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="px-3 py-1.5 rounded-xl bg-[#080d19] border border-slate-800 text-xs text-slate-200 flex items-center gap-2"
+                    >
+                      <span className="truncate max-w-md">{item}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMemory(idx)}
+                        className="text-slate-500 hover:text-rose-400 cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 3. Plaid Banking Integration */}
             <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-6 flex flex-col gap-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
                 <div>
@@ -2221,6 +2369,152 @@ function KlarityApp() {
                 className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer"
               >
                 Parse & Register Bill
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Memory & Preferences Modal */}
+      {isMemoryModalOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Brain className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-base font-bold text-white">AI Advisor Memory</h3>
+              </div>
+              <button
+                onClick={() => setIsMemoryModalOpen(false)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Klarity remembers your personal beliefs, financial rules, and lifestyle facts across every conversation so you never have to repeat them.
+            </p>
+
+            {/* Quick Presets */}
+            <div className="bg-[#080d19] border border-slate-800 rounded-xl p-3 flex flex-col gap-2">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                Quick Presets
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleAddMemory(
+                      'I am Muslim: Never recommend conventional interest (Riba), interest-bearing debt, or interest savings. Focus strictly on debt elimination, cash preservation, and Halal budgeting.'
+                    )
+                  }
+                  className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold cursor-pointer transition-colors"
+                >
+                  + I am Muslim (Halal Finance)
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleAddMemory(
+                      'Aggressive debt elimination: Prioritize clearing existing balances as rapidly as possible.'
+                    )
+                  }
+                  className="px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-semibold cursor-pointer transition-colors"
+                >
+                  + Rapid Debt Elimination
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleAddMemory(
+                      'High savings rate: Prioritize growing cash reserves and cutting unnecessary subscriptions.'
+                    )
+                  }
+                  className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold cursor-pointer transition-colors"
+                >
+                  + Frugal & High Savings
+                </button>
+              </div>
+            </div>
+
+            {/* Add Custom Fact */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Add custom memory (e.g., 'I am Muslim', 'I have two kids')..."
+                value={newMemoryInput}
+                onChange={e => setNewMemoryInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddMemory();
+                  }
+                }}
+                className="flex-1 bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              />
+              <button
+                type="button"
+                onClick={() => handleAddMemory()}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+              >
+                Add
+              </button>
+            </div>
+
+            {/* Active Memory Items */}
+            <div className="flex flex-col gap-2 mt-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-300">Active Memory Rules ({aiMemory.length})</span>
+                {aiMemory.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAiMemory([]);
+                      localStorage.removeItem('klarity_ai_memory');
+                      setNotificationToast('Memory cleared');
+                      setTimeout(() => setNotificationToast(''), 3000);
+                    }}
+                    className="text-[11px] text-rose-400 hover:text-rose-300 cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+
+              {aiMemory.length === 0 ? (
+                <div className="p-4 rounded-xl bg-[#080d19] border border-slate-800 text-center text-xs text-slate-500">
+                  No memory rules saved yet. Add one above or pick a preset like "I am Muslim".
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
+                  {aiMemory.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-xl bg-[#080d19] border border-slate-800 flex items-start justify-between gap-3 text-xs"
+                    >
+                      <span className="text-slate-200 leading-relaxed">{item}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMemory(idx)}
+                        className="text-slate-500 hover:text-rose-400 p-1 cursor-pointer transition-colors shrink-0"
+                        title="Delete memory"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsMemoryModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs cursor-pointer"
+              >
+                Done
               </button>
             </div>
           </div>
