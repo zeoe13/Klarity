@@ -41,8 +41,6 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || ['207624653160
 
 // Direct Google Identity Services (GIS) Sign In Component
 function GoogleSignInButton({ onAuthSuccess, onError, setIsAuthenticating, isAuthenticating }) {
-  const officialBtnRef = useRef(null);
-
   useEffect(() => {
     let interval = null;
 
@@ -68,18 +66,6 @@ function GoogleSignInButton({ onAuthSuccess, onError, setIsAuthenticating, isAut
               }
             }
           });
-
-          // Render official button if container exists
-          if (officialBtnRef.current && !officialBtnRef.current.hasChildNodes()) {
-            window.google.accounts.id.renderButton(officialBtnRef.current, {
-              theme: 'outline',
-              size: 'large',
-              type: 'standard',
-              shape: 'rectangular',
-              text: 'continue_with',
-              width: 320
-            });
-          }
         } catch (e) {
           console.warn('GIS Init warning:', e);
         }
@@ -190,9 +176,6 @@ function GoogleSignInButton({ onAuthSuccess, onError, setIsAuthenticating, isAut
         </svg>
         <span>{isAuthenticating ? 'Connecting to Google...' : 'Continue with Google'}</span>
       </button>
-
-      {/* Official Google Button container rendered by GIS directly if ready */}
-      <div ref={officialBtnRef} className="w-full flex justify-center empty:hidden"></div>
     </div>
   );
 }
