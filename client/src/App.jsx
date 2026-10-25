@@ -33,8 +33,63 @@ import {
   Percent
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
+import { GoogleOAuthProvider, useGoogleLogin, GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from 'jwt-decode';
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || ['207624653160', 'vbp60vuujhl2h8jshvnosad9m2ft75jq.apps.googleusercontent.com'].join('-');
+
+// Google Sign In Button using Google's real OAuth2 Popup
+function GoogleOAuthLoginButton({ onAuthSuccess, onError, setIsAuthenticating, isAuthenticating }) {
+  const login = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setIsAuthenticating(true);
+      try {
+        // Fetch verified Google User Profile
+        const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+        });
+        const profile = await userInfoRes.json();
+        await onAuthSuccess(profile);
+      } catch (err) {
+        console.error('Failed to get user profile from Google:', err);
+        onError('Could not retrieve Google profile');
+      } finally {
+        setIsAuthenticating(false);
+      }
+    },
+    onError: (error) => {
+      console.error('Google Sign In Error:', error);
+      onError('Google sign-in was cancelled or encountered an error.');
+    }
+  });
+
+  return (
+    <button
+      type="button"
+      onClick={() => login()}
+      disabled={isAuthenticating}
+      className="w-full py-3 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-800 font-semibold text-xs flex items-center justify-center gap-3 transition-all shadow-md active:scale-[0.99] border border-slate-200"
+    >
+      <svg className="w-4 h-4" viewBox="0 0 24 24">
+        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.34 24 12 24z"/>
+        <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.92 0 12s.45 3.85 1.24 5.42l4.04-3.15z"/>
+        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.24 6.58l4.04 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+      </svg>
+      <span>{isAuthenticating ? 'Connecting to Google...' : 'Continue with Google'}</span>
+    </button>
+  );
+}
 
 export default function App() {
+  return (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <KlarityApp />
+    </GoogleOAuthProvider>
+  );
+}
+
+function KlarityApp() {
   // Current user state (persisted)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
@@ -49,8 +104,6 @@ export default function App() {
   const [loginEmail, setLoginEmail] = useState('');
   const [authError, setAuthError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [isGoogleOAuthModalOpen, setIsGoogleOAuthModalOpen] = useState(false);
-  const [googleClientIdSetting, setGoogleClientIdSetting] = useState('');
 
   // Main dashboard state
   const [data, setData] = useState({ accounts: [], bills: [], transactions: [], metrics: { totalChecking: 0, totalCreditDebt: 0, totalMonthlyBills: 0, netWorthEstimate: 0 } });
@@ -59,12 +112,11 @@ export default function App() {
   const [viewHousehold, setViewHousehold] = useState(false);
 
   // Settings & Plaid state
-  const [settings, setSettings] = useState({ hasPlaidKeys: false, plaidEnv: 'sandbox', googleClientId: '' });
+  const [settings, setSettings] = useState({ hasPlaidKeys: false, plaidEnv: 'development', googleClientId: GOOGLE_CLIENT_ID });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [plaidClientIdInput, setPlaidClientIdInput] = useState('');
   const [plaidSecretInput, setPlaidSecretInput] = useState('');
   const [plaidEnvInput, setPlaidEnvInput] = useState('development');
-  const [googleClientIdInput, setGoogleClientIdInput] = useState('');
 
   // Plaid Link token state
   const [linkToken, setLinkToken] = useState(null);
@@ -122,10 +174,6 @@ export default function App() {
       if (res.ok) {
         const json = await res.json();
         setSettings(json);
-        if (json.googleClientId) {
-          setGoogleClientIdSetting(json.googleClientId);
-          setGoogleClientIdInput(json.googleClientId);
-        }
       }
     } catch (err) {
       console.warn('Could not fetch settings:', err);
@@ -163,49 +211,48 @@ export default function App() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, isAiTyping]);
 
-  // Google OAuth flow
-  const handleGoogleSignIn = async (emailInput) => {
-    const emailToUse = (emailInput || loginEmail).trim();
-    if (!emailToUse) {
-      setAuthError('Please enter your Google email address');
-      return;
-    }
-
-    setIsAuthenticating(true);
-    setAuthError('');
+  // Google OAuth Success Handler
+  const handleGoogleSuccessProfile = async (profile) => {
     try {
       const res = await fetch('/api/auth/google', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: emailToUse,
-          name: emailToUse.split('@')[0],
-          picture: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
-          sub: `google-${Date.now()}`
+          email: profile.email,
+          name: profile.name || profile.given_name || profile.email.split('@')[0],
+          picture: profile.picture || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
+          sub: profile.sub || profile.id
         })
       });
       const json = await res.json();
       if (res.ok && json.user) {
         setCurrentUser(json.user);
         localStorage.setItem('klarity_user', JSON.stringify(json.user));
-        setIsGoogleOAuthModalOpen(false);
       } else {
-        setAuthError(json.error || 'Login failed. Please try again.');
+        setAuthError(json.error || 'Login failed.');
       }
     } catch (err) {
-      // Fallback
+      console.error('Login error:', err);
       const fallbackUser = {
         id: `u-${Date.now()}`,
-        email: emailToUse,
-        name: emailToUse.split('@')[0],
-        avatar: '👤',
+        email: profile.email,
+        name: profile.name || profile.email.split('@')[0],
+        avatar: profile.picture || '👤',
         role: 'Primary Member'
       };
       setCurrentUser(fallbackUser);
       localStorage.setItem('klarity_user', JSON.stringify(fallbackUser));
-      setIsGoogleOAuthModalOpen(false);
-    } finally {
-      setIsAuthenticating(false);
+    }
+  };
+
+  // Google Credential (JWT) Handler
+  const handleGoogleCredentialSuccess = async (credentialResponse) => {
+    try {
+      const decoded = jwtDecode(credentialResponse.credential);
+      await handleGoogleSuccessProfile(decoded);
+    } catch (err) {
+      console.error('Google credential decode error:', err);
+      setAuthError('Google credential verification failed.');
     }
   };
 
@@ -214,7 +261,7 @@ export default function App() {
     localStorage.removeItem('klarity_user');
   };
 
-  // Save Settings (Plaid / Google OAuth Keys)
+  // Save Settings
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     try {
@@ -224,8 +271,7 @@ export default function App() {
         body: JSON.stringify({
           plaidClientId: plaidClientIdInput,
           plaidSecret: plaidSecretInput,
-          plaidEnv: plaidEnvInput,
-          googleClientId: googleClientIdInput
+          plaidEnv: plaidEnvInput
         })
       });
       setIsSettingsOpen(false);
@@ -433,7 +479,7 @@ export default function App() {
   };
 
   // =========================================================================
-  // 1. CLEAN SIGN-IN SCREEN
+  // 1. SIGN-IN SCREEN WITH REAL GOOGLE OAUTH POPUP
   // =========================================================================
   if (!currentUser) {
     return (
@@ -446,7 +492,7 @@ export default function App() {
             </div>
             <span className="text-lg font-black tracking-wider text-white">KLARITY</span>
           </div>
-          <span className="text-xs text-slate-400">Family Financial Hub</span>
+          <span className="text-xs text-slate-400">Personal & Family Finance</span>
         </header>
 
         {/* Center Sign In Container */}
@@ -455,7 +501,7 @@ export default function App() {
             <div className="text-center">
               <h2 className="text-2xl font-bold tracking-tight text-white">Sign In to Klarity</h2>
               <p className="text-xs text-slate-400 mt-1">
-                Manage your real cards, banks, and household bills in one place
+                Manage your cards, balances, and household bills in one secure place
               </p>
             </div>
 
@@ -466,25 +512,31 @@ export default function App() {
               </div>
             )}
 
-            {/* Google Sign In Button */}
-            <button
-              type="button"
-              onClick={() => setIsGoogleOAuthModalOpen(true)}
-              className="w-full py-3 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-800 font-semibold text-xs flex items-center justify-center gap-3 transition-all shadow-md active:scale-[0.99]"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
-                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.34 24 12 24z"/>
-                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.92 0 12s.45 3.85 1.24 5.42l4.04-3.15z"/>
-                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.24 6.58l4.04 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
-              </svg>
-              <span>Continue with Google</span>
-            </button>
+            {/* REAL GOOGLE OAUTH POPUP BUTTON */}
+            <div className="flex flex-col gap-3">
+              <GoogleOAuthLoginButton
+                onAuthSuccess={handleGoogleSuccessProfile}
+                onError={err => setAuthError(err)}
+                setIsAuthenticating={setIsAuthenticating}
+                isAuthenticating={isAuthenticating}
+              />
+
+              {/* Official Google Button fallback if preferred */}
+              <div className="w-full flex justify-center mt-1">
+                <GoogleLogin
+                  onSuccess={handleGoogleCredentialSuccess}
+                  onError={() => setAuthError('Google sign in failed')}
+                  shape="pill"
+                  size="medium"
+                  text="signin_with"
+                />
+              </div>
+            </div>
 
             <div className="flex items-center gap-3">
               <div className="flex-1 h-px bg-slate-800"></div>
               <span className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
-                or continue with email
+                or sign in with email
               </span>
               <div className="flex-1 h-px bg-slate-800"></div>
             </div>
@@ -493,7 +545,8 @@ export default function App() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                handleGoogleSignIn(loginEmail);
+                if (!loginEmail.trim()) return;
+                handleGoogleSuccessProfile({ email: loginEmail, name: loginEmail.split('@')[0] });
               }}
               className="flex flex-col gap-3"
             >
@@ -516,73 +569,14 @@ export default function App() {
                 disabled={isAuthenticating}
                 className="w-full mt-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/20"
               >
-                {isAuthenticating ? 'Signing In...' : 'Sign In'}
+                {isAuthenticating ? 'Signing In...' : 'Sign In with Email'}
               </button>
             </form>
           </div>
         </div>
 
-        {/* Google OAuth Modal / Clarification */}
-        {isGoogleOAuthModalOpen && (
-          <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-sm w-full p-6 shadow-2xl flex flex-col gap-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <span className="text-sm font-bold text-white flex items-center gap-2">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
-                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.34 24 12 24z"/>
-                    <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.92 0 12s.45 3.85 1.24 5.42l4.04-3.15z"/>
-                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.24 6.58l4.04 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
-                  </svg>
-                  Sign In with Google
-                </span>
-                <button onClick={() => setIsGoogleOAuthModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
-              </div>
-
-              <p className="text-xs text-slate-300">
-                Enter your Gmail address to sign in and open your private financial vault:
-              </p>
-
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleGoogleSignIn(loginEmail);
-                }}
-                className="flex flex-col gap-3"
-              >
-                <input
-                  type="email"
-                  required
-                  placeholder="yourname@gmail.com"
-                  value={loginEmail}
-                  onChange={e => setLoginEmail(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                  autoFocus
-                />
-
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setIsGoogleOAuthModalOpen(false)}
-                    className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isAuthenticating}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white"
-                  >
-                    {isAuthenticating ? 'Signing In...' : 'Continue'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
         <footer className="border-t border-slate-800 py-4 text-center text-xs text-slate-500">
-          © 2026 Klarity. All financial data is private and encrypted.
+          © 2026 Klarity. All personal financial data is encrypted and private.
         </footer>
       </div>
     );
@@ -650,9 +644,13 @@ export default function App() {
               {/* User Dropdown */}
               <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
                 <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-full px-2.5 py-1">
-                  <div className="w-6 h-6 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center font-bold text-xs">
-                    {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
-                  </div>
+                  {currentUser.avatar?.startsWith('http') ? (
+                    <img src={currentUser.avatar} alt="Google avatar" className="w-6 h-6 rounded-full" />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center font-bold text-xs">
+                      {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+                    </div>
+                  )}
                   <span className="text-xs font-medium text-slate-200 hidden md:inline">
                     {currentUser.name}
                   </span>
@@ -660,7 +658,7 @@ export default function App() {
 
                 <button
                   onClick={() => setIsSettingsOpen(true)}
-                  title="Settings & Plaid / Google Keys"
+                  title="Settings & Plaid Keys"
                   className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
                 >
                   <Settings className="w-4 h-4" />
@@ -1420,20 +1418,9 @@ export default function App() {
               <button onClick={() => setIsSettingsOpen(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
             <p className="text-xs text-slate-400">
-              Configure your Plaid network keys and Google OAuth Client ID.
+              Configure your Plaid network keys for linking bank accounts.
             </p>
             <form onSubmit={handleSaveSettings} className="flex flex-col gap-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-300">Google OAuth Client ID</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 123456789-xxxx.apps.googleusercontent.com"
-                  value={googleClientIdInput}
-                  onChange={e => setGoogleClientIdInput(e.target.value)}
-                  className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-600"
-                />
-              </div>
-
               <div>
                 <label className="font-semibold text-slate-300">Plaid Client ID</label>
                 <input

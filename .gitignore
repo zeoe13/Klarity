@@ -5,8 +5,10 @@ client/dist
 bin/
 *.exe
 .env
-server/.env
+.env*
+*.env*
+client/.env*
+server/.env*
 .DS_Store
 *.log
-
 .vercel
