@@ -34,7 +34,8 @@ import {
   Mail,
   User,
   Gamepad2,
-  Tv
+  Tv,
+  ChevronDown
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
@@ -273,6 +274,36 @@ function KlarityApp() {
   const [chatInput, setChatInput] = useState('');
   const [isAiTyping, setIsAiTyping] = useState(false);
   const chatEndRef = useRef(null);
+
+  // AI Provider & BYOK configuration
+  const [aiConfig, setAiConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_ai_config');
+      return saved ? JSON.parse(saved) : {
+        provider: 'gemini', // 'gemini' | 'openai' | 'deepseek' | 'custom'
+        apiKey: '',
+        modelName: '',
+        customBaseUrl: ''
+      };
+    } catch (e) {
+      return { provider: 'gemini', apiKey: '', modelName: '', customBaseUrl: '' };
+    }
+  });
+  const [showAiApiKey, setShowAiApiKey] = useState(false);
+
+  // User Dropdown Menu state & click-outside handling
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Fetch Settings
   const fetchSettings = async () => {
@@ -679,7 +710,14 @@ function KlarityApp() {
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg, userId: currentUser.id })
+        body: JSON.stringify({
+          message: userMsg,
+          userId: currentUser.id,
+          aiProvider: aiConfig.provider,
+          apiKey: aiConfig.apiKey,
+          modelName: aiConfig.modelName,
+          customBaseUrl: aiConfig.customBaseUrl
+        })
       });
       const json = await res.json();
       setChatMessages(prev => [...prev, { role: 'assistant', text: json.reply }]);
@@ -925,38 +963,96 @@ function KlarityApp() {
                 Add Card
               </button>
 
-              {/* User Dropdown */}
-              <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
-                <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-full px-2.5 py-1">
+              {/* Account Profile Button with Dropdown Menu */}
+              <div className="relative pl-2 border-l border-slate-800" ref={userMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-full px-3 py-1.5 transition-all cursor-pointer focus:outline-none"
+                  aria-expanded={isUserMenuOpen}
+                >
                   {currentUser.avatar?.startsWith('http') ? (
-                    <img src={currentUser.avatar} alt="Google avatar" className="w-5 h-5 rounded-full" />
+                    <img src={currentUser.avatar} alt="Avatar" className="w-5 h-5 rounded-full" />
                   ) : (
                     <div className="w-5 h-5 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center font-bold text-xs">
                       {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
                     </div>
                   )}
-                  <span className="text-xs font-medium text-slate-200 hidden md:inline">
+                  <span className="text-xs font-semibold text-slate-200 hidden md:inline">
                     {currentUser.name}
                   </span>
-                </div>
-
-                <button
-                  onClick={() => setActiveTab('settings')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-                    activeTab === 'settings'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                  }`}
-                >
-                  Settings
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
 
-                <button
-                  onClick={handleLogout}
-                  className="px-3 py-1.5 rounded-xl text-xs font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 cursor-pointer"
-                >
-                  Sign Out
-                </button>
+                {isUserMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-60 rounded-2xl bg-[#0c1427] border border-slate-800 shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                    {/* Header with user info */}
+                    <div className="px-4 py-2.5 border-b border-slate-800/80">
+                      <p className="text-xs font-bold text-white truncate">{currentUser.name}</p>
+                      <p className="text-[11px] text-slate-400 truncate mt-0.5">{currentUser.email || 'Verified Account'}</p>
+                    </div>
+
+                    <div className="py-1">
+                      {/* Profile option */}
+                      <button
+                        onClick={() => {
+                          setActiveTab('settings');
+                          setIsUserMenuOpen(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-xs text-slate-200 hover:bg-slate-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                      >
+                        <User className="w-4 h-4 text-blue-400 shrink-0" />
+                        <div>
+                          <div className="font-semibold">Profile</div>
+                          <div className="text-[10px] text-slate-400">Account details & authentication</div>
+                        </div>
+                      </button>
+
+                      {/* Cards option */}
+                      <button
+                        onClick={() => {
+                          setActiveTab('cards');
+                          setIsUserMenuOpen(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-xs text-slate-200 hover:bg-slate-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                      >
+                        <CreditCard className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <div>
+                          <div className="font-semibold">Cards</div>
+                          <div className="text-[10px] text-slate-400">Manage connected & manual cards</div>
+                        </div>
+                      </button>
+
+                      {/* Settings option */}
+                      <button
+                        onClick={() => {
+                          setActiveTab('settings');
+                          setIsUserMenuOpen(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-xs text-slate-200 hover:bg-slate-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                      >
+                        <Settings className="w-4 h-4 text-indigo-400 shrink-0" />
+                        <div>
+                          <div className="font-semibold">Settings</div>
+                          <div className="text-[10px] text-slate-400">AI provider, API keys & Plaid</div>
+                        </div>
+                      </button>
+                    </div>
+
+                    <div className="border-t border-slate-800/80 pt-1 mt-1">
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          handleLogout();
+                        }}
+                        className="w-full px-4 py-2 text-left text-xs text-rose-400 hover:bg-rose-500/10 flex items-center gap-2.5 transition-colors cursor-pointer"
+                      >
+                        <LogOut className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span className="font-semibold">Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -968,8 +1064,7 @@ function KlarityApp() {
               { id: 'cards', label: `My Cards (${creditCards.length})` },
               { id: 'bills', label: `Household Bills (${billsList.length})` },
               { id: 'transactions', label: `Transactions (${transactionsList.length})` },
-              { id: 'advisor', label: 'AI Advisor', badge: 'Live' },
-              { id: 'settings', label: 'Settings' }
+              { id: 'advisor', label: 'AI Advisor', badge: 'Live' }
             ].map(tab => {
               const isActive = activeTab === tab.id;
               return (
@@ -1672,7 +1767,116 @@ function KlarityApp() {
               <p className="text-xs text-slate-400 mt-1">Manage bank connections, linked credit cards, profile, and security</p>
             </div>
 
-            {/* 1. Plaid Banking Integration */}
+            {/* 1. AI Advisor Engine & Custom API Keys (BYOK) */}
+            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-6 flex flex-col gap-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Bot className="w-4 h-4 text-blue-400" />
+                    <span>AI Engine & API Keys</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Choose which AI powers Klarity (Gemini, ChatGPT, DeepSeek, or Custom) and optionally provide your own API key.
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                  {aiConfig.provider === 'gemini' ? 'Google Gemini' : aiConfig.provider === 'openai' ? 'OpenAI ChatGPT' : aiConfig.provider === 'deepseek' ? 'DeepSeek' : 'Custom Model'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <label className="font-semibold text-slate-300 block mb-1">AI Provider</label>
+                  <select
+                    value={aiConfig.provider}
+                    onChange={e => setAiConfig(prev => ({ ...prev, provider: e.target.value }))}
+                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    <option value="gemini">Google Gemini (Default)</option>
+                    <option value="openai">OpenAI (ChatGPT: GPT-4o, GPT-4o-mini)</option>
+                    <option value="deepseek">DeepSeek (deepseek-chat, deepseek-reasoner)</option>
+                    <option value="custom">Custom (OpenRouter, Groq, Ollama, etc.)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-semibold text-slate-300 block mb-1">
+                    Model Name <span className="text-slate-500 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={
+                      aiConfig.provider === 'gemini' ? 'gemini-2.5-flash' :
+                      aiConfig.provider === 'openai' ? 'gpt-4o-mini' :
+                      aiConfig.provider === 'deepseek' ? 'deepseek-chat' :
+                      'custom-model-id'
+                    }
+                    value={aiConfig.modelName}
+                    onChange={e => setAiConfig(prev => ({ ...prev, modelName: e.target.value }))}
+                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-semibold text-slate-300">
+                      Custom API Key <span className="text-slate-500 font-normal">(Optional — leave blank to use Klarity's default server AI)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowAiApiKey(!showAiApiKey)}
+                      className="text-[11px] text-blue-400 hover:text-blue-300 cursor-pointer"
+                    >
+                      {showAiApiKey ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  <input
+                    type={showAiApiKey ? 'text' : 'password'}
+                    placeholder={
+                      aiConfig.provider === 'gemini' ? 'AIzaSy...' :
+                      aiConfig.provider === 'openai' ? 'sk-...' :
+                      aiConfig.provider === 'deepseek' ? 'sk-...' :
+                      'Your custom API key'
+                    }
+                    value={aiConfig.apiKey}
+                    onChange={e => setAiConfig(prev => ({ ...prev, apiKey: e.target.value }))}
+                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                </div>
+
+                {aiConfig.provider === 'custom' && (
+                  <div className="sm:col-span-2">
+                    <label className="font-semibold text-slate-300 block mb-1">Custom API Base URL</label>
+                    <input
+                      type="text"
+                      placeholder="https://api.groq.com/openai/v1 or https://openrouter.ai/api/v1"
+                      value={aiConfig.customBaseUrl}
+                      onChange={e => setAiConfig(prev => ({ ...prev, customBaseUrl: e.target.value }))}
+                      className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 font-mono"
+                    />
+                  </div>
+                )}
+
+                <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                  <p className="text-[11px] text-slate-400">
+                    Your key is saved locally in your browser and used only for your own AI advisor inquiries.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.setItem('klarity_ai_config', JSON.stringify(aiConfig));
+                      setNotificationToast('AI Engine settings updated successfully!');
+                      setTimeout(() => setNotificationToast(''), 4000);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md shadow-blue-600/20 cursor-pointer transition-colors"
+                  >
+                    Save AI Settings
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Plaid Banking Integration */}
             <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-6 flex flex-col gap-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
                 <div>

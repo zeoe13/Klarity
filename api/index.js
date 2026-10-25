@@ -453,33 +453,173 @@ app.post('/api/bills/scan', async (req, res) => {
   });
 });
 
-// 9. AI Advisor Chat
+// 9. AI Advisor Chat (Supports Gemini, OpenAI / ChatGPT, DeepSeek, and Custom API Keys)
 app.post('/api/ai/chat', async (req, res) => {
-  const { message, userId } = req.body;
+  const { message, userId, aiProvider = 'gemini', apiKey, modelName, customBaseUrl } = req.body;
   const data = readData();
 
   const currentUser = (data.users || []).find(u => u.id === userId) || { name: 'User' };
   const userCards = (data.accounts || []).filter(a => a.ownerId === userId && a.type === 'credit');
   const userChecking = (data.accounts || []).filter(a => a.ownerId === userId && a.type === 'depository');
+  const userBills = data.bills || [];
   const sortedByApr = [...userCards].sort((a, b) => b.apr - a.apr);
 
+  const systemContext = `
+You are Klarity, the personal AI Financial Advisor for ${currentUser.name}.
+Actual Connected Finances for ${currentUser.name}:
+- Checking Accounts: ${userChecking.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)}`).join(' | ') || 'None connected'}
+- Credit Cards: ${userCards.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)} @ ${c.apr}% APR (Min: $${c.minPayment || 0})`).join(' | ') || 'None connected'}
+- Household Bills: ${userBills.map(b => `${b.name}: $${Number(b.expectedAmount).toFixed(2)} due ${b.nextDueDate || b.dueDate || 'Day ' + b.dueDay}`).join(' | ') || 'None added'}
+
+Provide concise, practical, empathetic debt-payoff and financial guidance using these exact numbers. Never request full credit card numbers or passwords.
+`.trim();
+
+  // Try external AI provider if configured
+  try {
+    // 1. OpenAI (ChatGPT)
+    if (aiProvider === 'openai') {
+      const key = apiKey || process.env.OPENAI_API_KEY;
+      if (key) {
+        const model = modelName || 'gpt-4o-mini';
+        const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${key}`
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: systemContext },
+              { role: 'user', content: message }
+            ],
+            temperature: 0.7
+          })
+        });
+        if (aiRes.ok) {
+          const aiJson = await aiRes.json();
+          const reply = aiJson.choices?.[0]?.message?.content;
+          if (reply) return res.json({ reply, provider: `OpenAI (${model})` });
+        } else {
+          const errData = await aiRes.json().catch(() => ({}));
+          console.warn('OpenAI error:', errData);
+        }
+      }
+    }
+
+    // 2. DeepSeek
+    if (aiProvider === 'deepseek') {
+      const key = apiKey || process.env.DEEPSEEK_API_KEY;
+      if (key) {
+        const model = modelName || 'deepseek-chat';
+        const aiRes = await fetch('https://api.deepseek.com/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${key}`
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: systemContext },
+              { role: 'user', content: message }
+            ],
+            temperature: 0.7
+          })
+        });
+        if (aiRes.ok) {
+          const aiJson = await aiRes.json();
+          const reply = aiJson.choices?.[0]?.message?.content;
+          if (reply) return res.json({ reply, provider: `DeepSeek (${model})` });
+        } else {
+          const errData = await aiRes.json().catch(() => ({}));
+          console.warn('DeepSeek error:', errData);
+        }
+      }
+    }
+
+    // 3. Custom OpenAI-Compatible Base URL
+    if (aiProvider === 'custom' && customBaseUrl) {
+      const key = apiKey || '';
+      const model = modelName || 'default';
+      const endpoint = customBaseUrl.replace(/\/$/, '') + '/chat/completions';
+      const aiRes = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(key ? { 'Authorization': `Bearer ${key}` } : {})
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemContext },
+            { role: 'user', content: message }
+          ]
+        })
+      });
+      if (aiRes.ok) {
+        const aiJson = await aiRes.json();
+        const reply = aiJson.choices?.[0]?.message?.content;
+        if (reply) return res.json({ reply, provider: 'Custom API' });
+      }
+    }
+
+    // 4. Google Gemini (Default or custom Gemini key)
+    const geminiKey = (aiProvider === 'gemini' && apiKey) || process.env.GEMINI_API_KEY;
+    if (geminiKey) {
+      const model = modelName || 'gemini-2.5-flash';
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+      const aiRes = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: `${systemContext}\n\nUser Question: ${message}` }]
+            }
+          ]
+        })
+      });
+      if (aiRes.ok) {
+        const aiJson = await aiRes.json();
+        const reply = aiJson.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (reply) return res.json({ reply, provider: `Google Gemini (${model})` });
+      } else {
+        const errData = await aiRes.json().catch(() => ({}));
+        console.warn('Gemini API error:', errData);
+      }
+    }
+  } catch (err) {
+    console.warn('AI call exception:', err);
+  }
+
+  // Built-in intelligent financial advisor fallback
   const msg = (message || '').toLowerCase();
   let reply = '';
 
   if (userCards.length === 0 && userChecking.length === 0) {
-    reply = `Hello ${currentUser.name}! You haven't connected any real bank accounts or credit cards yet. Click **"Connect Real Bank via Plaid"** or **"Add Card Manually"** to link your first card, and I'll immediately start tracking your balances, APRs, and payoff strategy!`;
-  } else if (msg.includes('pay off') || msg.includes('debt') || msg.includes('card')) {
+    reply = `Hello ${currentUser.name}! You haven't connected any real bank accounts or credit cards yet. Click **"Connect Bank"** or **"Add Card"** to link your first card, and I'll immediately start tracking your balances, APRs, and payoff strategy!`;
+  } else if (msg.includes('pay off') || msg.includes('debt') || msg.includes('card') || msg.includes('first')) {
     if (sortedByApr.length > 0) {
       const top = sortedByApr[0];
-      reply = `### 💡 Real Debt Payoff Strategy for ${currentUser.name}\n\n* **Priority #1:** Pay off **${top.institution} ${top.name}** first (Balance: $${top.balance.toFixed(2)} at **${top.apr}% APR**). Put extra payments toward this card while paying minimums on others.`;
+      reply = `### Debt Payoff Strategy for ${currentUser.name}\n\n* **Priority #1:** Pay off **${top.institution} ${top.name}** first (Balance: $${Number(top.balance).toFixed(2)} at **${top.apr}% APR**). Put extra payments toward this card while paying minimums on others to save maximum interest.`;
     } else {
-      reply = `You have no high-interest credit card debt active on your connected cards, ${currentUser.name}! 🎉`;
+      reply = `You have no high-interest credit card debt active on your connected cards, ${currentUser.name}!`;
+    }
+  } else if (msg.includes('bill') || msg.includes('due')) {
+    const upcoming = userBills.filter(b => b.status !== 'paid');
+    if (upcoming.length > 0) {
+      reply = `You have **${upcoming.length} upcoming bill(s)** due this cycle totaling **$${upcoming.reduce((s, b) => s + Number(b.expectedAmount), 0).toFixed(2)}**:\n\n` +
+        upcoming.map(b => `* **${b.name}**: $${Number(b.expectedAmount).toFixed(2)} (Due: ${b.nextDueDate || 'Day ' + b.dueDay})`).join('\n');
+    } else {
+      reply = `All your current monthly bills are marked as paid! Great job keeping on top of your utility bills.`;
     }
   } else {
-    reply = `Hello ${currentUser.name}! I am **Klarity**. I am monitoring your real connected accounts and household utility bills. Ask me what bills are due or how to optimize your spending.`;
+    reply = `Hello ${currentUser.name}! I am **Klarity**. I am monitoring your connected accounts, credit card interest rates, and household bills. Ask me what card to pay off first, what bills are due soon, or how to optimize your spending.`;
   }
 
-  res.json({ reply });
+  res.json({ reply, provider: 'Klarity Core Engine' });
 });
 
 module.exports = app;
