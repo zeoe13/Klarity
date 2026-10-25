@@ -1,52 +1,73 @@
 {
-  "familyMembers": [
+  "users": [
     {
-      "id": "m1",
+      "id": "u1",
+      "username": "robert",
+      "password": "password123",
       "name": "Robert (Dad)",
       "role": "Parent",
       "avatar": "👨‍💼",
       "color": "blue"
     },
     {
-      "id": "m2",
+      "id": "u2",
+      "username": "sarah",
+      "password": "password123",
       "name": "Sarah (Mom)",
       "role": "Parent",
       "avatar": "👩‍⚕️",
       "color": "purple"
     },
     {
-      "id": "m3",
+      "id": "u3",
+      "username": "alex",
+      "password": "password123",
       "name": "Alex (College)",
       "role": "Student (20)",
       "avatar": "🧑‍🎓",
       "color": "emerald"
     },
     {
-      "id": "m4",
+      "id": "u4",
+      "username": "maya",
+      "password": "password123",
       "name": "Maya (High School)",
       "role": "Teen (17)",
       "avatar": "👧",
       "color": "amber"
     },
     {
-      "id": "m5",
+      "id": "u5",
+      "username": "jordan",
+      "password": "password123",
       "name": "Jordan (Middle)",
       "role": "Kid (14)",
       "avatar": "👦",
       "color": "pink"
     },
     {
-      "id": "m6",
+      "id": "u6",
+      "username": "leo",
+      "password": "password123",
       "name": "Leo (Elementary)",
       "role": "Kid (10)",
       "avatar": "🧒",
       "color": "cyan"
+    },
+    {
+      "id": "u1792898618965",
+      "username": "emily",
+      "password": "password123",
+      "name": "Emily",
+      "role": "Teen",
+      "avatar": "??",
+      "color": "blue"
     }
   ],
   "accounts": [
     {
       "id": "acc-1",
-      "memberId": "m1",
+      "ownerId": "u1",
       "institution": "Chase",
       "name": "Freedom Unlimited",
       "type": "credit",
@@ -56,11 +77,12 @@
       "apr": 26.49,
       "minPayment": 65,
       "dueDate": "2026-11-14",
-      "color": "#1e40af"
+      "color": "#1e40af",
+      "isShared": false
     },
     {
       "id": "acc-2",
-      "memberId": "m2",
+      "ownerId": "u2",
       "institution": "Capital One",
       "name": "SavorOne Rewards",
       "type": "credit",
@@ -70,11 +92,12 @@
       "apr": 19.99,
       "minPayment": 35,
       "dueDate": "2026-11-20",
-      "color": "#991b1b"
+      "color": "#991b1b",
+      "isShared": false
     },
     {
       "id": "acc-3",
-      "memberId": "m1",
+      "ownerId": "u1",
       "institution": "Bank of America",
       "name": "Family Checking",
       "type": "depository",
@@ -84,11 +107,12 @@
       "apr": 0,
       "minPayment": 0,
       "dueDate": "",
-      "color": "#065f46"
+      "color": "#065f46",
+      "isShared": true
     },
     {
       "id": "acc-4",
-      "memberId": "m3",
+      "ownerId": "u3",
       "institution": "Discover",
       "name": "Student Chrome Card",
       "type": "credit",
@@ -98,13 +122,14 @@
       "apr": 17.24,
       "minPayment": 25,
       "dueDate": "2026-11-08",
-      "color": "#ea580c"
+      "color": "#ea580c",
+      "isShared": false
     },
     {
       "id": "acc-5",
-      "memberId": "m4",
+      "ownerId": "u4",
       "institution": "Chase",
-      "name": "High School Teen Checking",
+      "name": "Teen Debit Checking",
       "type": "depository",
       "mask": "6641",
       "balance": 215,
@@ -112,7 +137,8 @@
       "apr": 0,
       "minPayment": 0,
       "dueDate": "",
-      "color": "#4338ca"
+      "color": "#4338ca",
+      "isShared": false
     }
   ],
   "bills": [
@@ -126,9 +152,9 @@
       "nextDueDate": "2026-11-12",
       "frequency": "monthly",
       "status": "due_soon",
-      "assignedMemberId": "m1",
-      "autoPayCardId": "acc-1",
-      "notes": "Higher in winter/summer due to HVAC usage"
+      "assignedOwnerId": "u1",
+      "isHouseholdBill": true,
+      "notes": "Shared household electric & gas"
     },
     {
       "id": "bill-2",
@@ -139,10 +165,12 @@
       "dueDay": 16,
       "nextDueDate": "2026-11-16",
       "frequency": "monthly",
-      "status": "due_soon",
-      "assignedMemberId": "m1",
-      "autoPayCardId": "acc-3",
-      "notes": "City water, trash, and sewer combined"
+      "status": "paid",
+      "assignedOwnerId": "u1",
+      "isHouseholdBill": true,
+      "notes": "City water, trash, and sewer",
+      "lastPaidDate": "2026-10-25",
+      "lastPaidAmount": 74.2
     },
     {
       "id": "bill-3",
@@ -154,9 +182,9 @@
       "nextDueDate": "2026-11-22",
       "frequency": "monthly",
       "status": "upcoming",
-      "assignedMemberId": "m2",
-      "autoPayCardId": "acc-2",
-      "notes": "Promo discount active for 6 more months"
+      "assignedOwnerId": "u2",
+      "isHouseholdBill": true,
+      "notes": "Household internet"
     },
     {
       "id": "bill-4",
@@ -168,9 +196,9 @@
       "nextDueDate": "2026-11-28",
       "frequency": "monthly",
       "status": "upcoming",
-      "assignedMemberId": "m1",
-      "autoPayCardId": "acc-3",
-      "notes": "Covers all 6 family phones with autopay discount"
+      "assignedOwnerId": "u1",
+      "isHouseholdBill": true,
+      "notes": "6 lines for all members"
     },
     {
       "id": "bill-5",
@@ -182,9 +210,9 @@
       "nextDueDate": "2026-11-05",
       "frequency": "monthly",
       "status": "due_soon",
-      "assignedMemberId": "m2",
-      "autoPayCardId": "acc-2",
-      "notes": "Shared across all 6 family members"
+      "assignedOwnerId": "u2",
+      "isHouseholdBill": true,
+      "notes": "Shared across all 6 profiles"
     },
     {
       "id": "bill-6",
@@ -196,9 +224,9 @@
       "nextDueDate": "2026-11-19",
       "frequency": "yearly",
       "status": "upcoming",
-      "assignedMemberId": "m1",
-      "autoPayCardId": "acc-1",
-      "notes": "Yearly pass for Jordan and Leo"
+      "assignedOwnerId": "u1",
+      "isHouseholdBill": true,
+      "notes": "Pass for Jordan and Leo"
     },
     {
       "id": "bill-7",
@@ -210,29 +238,27 @@
       "nextDueDate": "2026-11-27",
       "frequency": "monthly",
       "status": "upcoming",
-      "assignedMemberId": "m3",
-      "autoPayCardId": "acc-4",
-      "notes": "Shared family tier with 6 profiles"
-    },
-    {
-      "id": "bill-1792893114036",
-      "name": "Pacific Gas and Electric (PG&E)",
-      "biller": "Pacific Gas and Electric (PG&E)",
-      "category": "Utilities",
-      "expectedAmount": 120,
-      "dueDay": 15,
-      "nextDueDate": "Oct 24, 2026",
-      "frequency": "monthly",
-      "status": "due_soon",
-      "assignedMemberId": "m1",
-      "notes": "Scanned from family statement"
+      "assignedOwnerId": "u3",
+      "isHouseholdBill": true,
+      "notes": "Family music subscription"
     }
   ],
   "transactions": [
     {
-      "id": "tx-101",
+      "id": "tx-1792898547466",
       "accountId": "acc-1",
       "memberId": "m1",
+      "date": "2026-10-25",
+      "name": "City of Fresno Utilities (Payment)",
+      "amount": 74.2,
+      "category": "Utilities",
+      "isRecurring": true,
+      "billId": "bill-2"
+    },
+    {
+      "id": "tx-101",
+      "accountId": "acc-1",
+      "ownerId": "u1",
       "date": "2026-10-23",
       "name": "PG&E *WEB ONLINE PMT",
       "amount": 252.18,
@@ -243,7 +269,7 @@
     {
       "id": "tx-102",
       "accountId": "acc-3",
-      "memberId": "m1",
+      "ownerId": "u1",
       "date": "2026-10-22",
       "name": "CITY OF FRESNO UTILITIES",
       "amount": 71.8,
@@ -254,7 +280,7 @@
     {
       "id": "tx-103",
       "accountId": "acc-2",
-      "memberId": "m2",
+      "ownerId": "u2",
       "date": "2026-10-21",
       "name": "TRADER JOE'S #144 FRESNO",
       "amount": 164.35,
@@ -264,7 +290,7 @@
     {
       "id": "tx-104",
       "accountId": "acc-2",
-      "memberId": "m2",
+      "ownerId": "u2",
       "date": "2026-10-20",
       "name": "XFINITY COMCAST AUTO-PAY",
       "amount": 90,
@@ -275,7 +301,7 @@
     {
       "id": "tx-105",
       "accountId": "acc-3",
-      "memberId": "m1",
+      "ownerId": "u1",
       "date": "2026-10-18",
       "name": "T-MOBILE *AUTOPAY",
       "amount": 185,
@@ -286,7 +312,7 @@
     {
       "id": "tx-106",
       "accountId": "acc-1",
-      "memberId": "m5",
+      "ownerId": "u5",
       "date": "2026-10-17",
       "name": "ROBLOX CORP ROBUX PACK",
       "amount": 19.99,
@@ -296,7 +322,7 @@
     {
       "id": "tx-107",
       "accountId": "acc-4",
-      "memberId": "m3",
+      "ownerId": "u3",
       "date": "2026-10-16",
       "name": "STEAM PURCHASE - HOLLOW KNIGHT",
       "amount": 14.99,
@@ -306,7 +332,7 @@
     {
       "id": "tx-108",
       "accountId": "acc-2",
-      "memberId": "m2",
+      "ownerId": "u2",
       "date": "2026-10-15",
       "name": "NETFLIX.COM",
       "amount": 22.99,
@@ -317,7 +343,7 @@
     {
       "id": "tx-109",
       "accountId": "acc-4",
-      "memberId": "m3",
+      "ownerId": "u3",
       "date": "2026-10-14",
       "name": "SPOTIFY USA",
       "amount": 19.99,
@@ -328,7 +354,7 @@
     {
       "id": "tx-110",
       "accountId": "acc-1",
-      "memberId": "m6",
+      "ownerId": "u6",
       "date": "2026-10-12",
       "name": "NINTENDO ESHOP - MINECRAFT DLC",
       "amount": 9.99,
@@ -338,7 +364,7 @@
     {
       "id": "tx-111",
       "accountId": "acc-2",
-      "memberId": "m2",
+      "ownerId": "u2",
       "date": "2026-10-10",
       "name": "COSTCO WHOLESALE FRESNO",
       "amount": 289.4,
@@ -348,7 +374,7 @@
     {
       "id": "tx-112",
       "accountId": "acc-5",
-      "memberId": "m4",
+      "ownerId": "u4",
       "date": "2026-10-09",
       "name": "IN-N-OUT BURGER FRESNO",
       "amount": 14.5,
@@ -358,7 +384,7 @@
     {
       "id": "tx-113",
       "accountId": "acc-1",
-      "memberId": "m1",
+      "ownerId": "u1",
       "date": "2026-10-05",
       "name": "CHEVRON GAS FRESNO",
       "amount": 62,

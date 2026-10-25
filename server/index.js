@@ -18,18 +18,17 @@ if (process.env.GEMINI_API_KEY) {
     const { GoogleGenAI } = require('@google/genai');
     aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   } catch (err) {
-    console.warn('Google GenAI initialization note:', err.message);
+    console.warn('Google GenAI note:', err.message);
   }
 }
 
-// Data helpers
 function readData() {
   try {
     const raw = fs.readFileSync(DATA_FILE, 'utf8');
     return JSON.parse(raw);
   } catch (err) {
     console.error('Error reading data.json:', err);
-    return { familyMembers: [], accounts: [], bills: [], transactions: [] };
+    return { users: [], accounts: [], bills: [], transactions: [] };
   }
 }
 
@@ -70,29 +69,118 @@ function autoCategorize(name) {
   return 'Other';
 }
 
-// ================= API ROUTES =================
+// ================= AUTH ROUTES =================
 
-// 1. Get complete dashboard data
-app.get('/api/data', (req, res) => {
+// Login
+app.post('/api/auth/login', (req, res) => {
+  const { username, password } = req.body;
   const data = readData();
 
-  // Calculate summary metrics
-  const totalChecking = data.accounts
+  const user = data.users.find(
+    u => u.username.toLowerCase() === (username || '').toLowerCase() && u.password === password
+  );
+
+  if (!user) {
+    return res.status(401).json({ error: 'Invalid username or password' });
+  }
+
+  // Return user info (omit password)
+  const { password: _, ...userProfile } = user;
+  res.json({ success: true, user: userProfile, token: `token-${user.id}` });
+});
+
+// Register new family member
+app.post('/api/auth/register', (req, res) => {
+  const { username, password, name, role, avatar } = req.body;
+  if (!username || !password || !name) {
+    return res.status(400).json({ error: 'Username, password, and name are required' });
+  }
+
+  const data = readData();
+  const existing = data.users.find(u => u.username.toLowerCase() === username.toLowerCase());
+  if (existing) {
+    return res.status(400).json({ error: 'Username already taken' });
+  }
+
+  const newUser = {
+    id: `u${Date.now()}`,
+    username: username.toLowerCase().trim(),
+    password,
+    name: name.trim(),
+    role: role || 'Member',
+    avatar: avatar || '👤',
+    color: 'blue'
+  };
+
+  data.users.push(newUser);
+  writeData(data);
+
+  const { password: _, ...userProfile } = newUser;
+  res.json({ success: true, user: userProfile, token: `token-${newUser.id}` });
+});
+
+// List all member profiles in the family vault
+app.get('/api/family/members', (req, res) => {
+  const data = readData();
+  const safeMembers = data.users.map(({ password: _, ...u }) => u);
+  res.json({ members: safeMembers });
+});
+
+// ================= DATA ROUTES (With Privacy Isolation) =================
+
+app.get('/api/data', (req, res) => {
+  const data = readData();
+  const currentUserId = req.query.userId || req.headers['x-user-id'] || 'u1';
+  const showHousehold = req.query.household === 'true';
+
+  const currentUser = data.users.find(u => u.id === currentUserId) || data.users[0];
+  const safeMembers = data.users.map(({ password: _, ...u }) => u);
+
+  // Filter accounts: show user's own cards, plus shared cards if requested
+  const visibleAccounts = data.accounts.filter(acc => {
+    if (showHousehold) return true;
+    return acc.ownerId === currentUserId || acc.isShared;
+  });
+
+  // Filter bills: household bills (PG&E, Fresno Water, Xfinity) + user's assigned bills
+  const visibleBills = data.bills.filter(bill => {
+    if (showHousehold) return true;
+    return bill.isHouseholdBill || bill.assignedOwnerId === currentUserId;
+  });
+
+  // Filter transactions
+  const visibleTransactions = data.transactions.filter(tx => {
+    if (showHousehold) return true;
+    return tx.ownerId === currentUserId || tx.isRecurring;
+  });
+
+  // Metrics calculation
+  const totalChecking = visibleAccounts
     .filter(a => a.type === 'depository')
     .reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
 
-  const totalCreditDebt = data.accounts
+  const totalCreditDebt = visibleAccounts
     .filter(a => a.type === 'credit')
     .reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
 
-  const totalMonthlyBills = data.bills
+  const totalMonthlyBills = visibleBills
     .reduce((sum, b) => {
       const amt = Number(b.expectedAmount) || 0;
       return sum + (b.frequency === 'yearly' ? amt / 12 : amt);
     }, 0);
 
   res.json({
-    ...data,
+    currentUser: {
+      id: currentUser.id,
+      name: currentUser.name,
+      username: currentUser.username,
+      role: currentUser.role,
+      avatar: currentUser.avatar
+    },
+    familyMembers: safeMembers,
+    accounts: visibleAccounts,
+    bills: visibleBills,
+    transactions: visibleTransactions,
     metrics: {
       totalChecking: Number(totalChecking.toFixed(2)),
       totalCreditDebt: Number(totalCreditDebt.toFixed(2)),
@@ -102,14 +190,14 @@ app.get('/api/data', (req, res) => {
   });
 });
 
-// 2. Add or Link an Account (Card/Bank)
+// Add card/bank owned by the logged-in user
 app.post('/api/accounts', (req, res) => {
-  const { memberId, institution, name, type, mask, balance, limit, apr, minPayment, dueDate } = req.body;
+  const { ownerId, institution, name, type, mask, balance, limit, apr, minPayment, dueDate, isShared } = req.body;
   const data = readData();
 
   const newAccount = {
     id: `acc-${Date.now()}`,
-    memberId: memberId || 'm1',
+    ownerId: ownerId || 'u1',
     institution: institution || 'Connected Bank',
     name: name || 'Account',
     type: type || 'credit',
@@ -119,7 +207,8 @@ app.post('/api/accounts', (req, res) => {
     apr: Number(apr) || 0,
     minPayment: Number(minPayment) || 0,
     dueDate: dueDate || '',
-    color: type === 'credit' ? '#1e40af' : '#065f46'
+    color: type === 'credit' ? '#1e40af' : '#065f46',
+    isShared: Boolean(isShared)
   };
 
   data.accounts.push(newAccount);
@@ -127,7 +216,7 @@ app.post('/api/accounts', (req, res) => {
   res.json({ success: true, account: newAccount });
 });
 
-// 3. Delete an Account
+// Delete card
 app.delete('/api/accounts/:id', (req, res) => {
   const data = readData();
   data.accounts = data.accounts.filter(a => a.id !== req.params.id);
@@ -135,9 +224,9 @@ app.delete('/api/accounts/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// 4. Add a Recurring / Utility Bill
+// Add Bill
 app.post('/api/bills', (req, res) => {
-  const { name, biller, category, expectedAmount, dueDay, frequency, assignedMemberId, notes, nextDueDate } = req.body;
+  const { name, biller, category, expectedAmount, dueDay, frequency, assignedOwnerId, notes, isHouseholdBill } = req.body;
   const data = readData();
 
   const newBill = {
@@ -147,10 +236,11 @@ app.post('/api/bills', (req, res) => {
     category: category || autoCategorize(name),
     expectedAmount: Number(expectedAmount) || 0,
     dueDay: Number(dueDay) || 1,
-    nextDueDate: nextDueDate || `2026-11-${String(dueDay || 1).padStart(2, '0')}`,
+    nextDueDate: `2026-11-${String(dueDay || 1).padStart(2, '0')}`,
     frequency: frequency || 'monthly',
     status: 'upcoming',
-    assignedMemberId: assignedMemberId || 'm1',
+    assignedOwnerId: assignedOwnerId || 'u1',
+    isHouseholdBill: isHouseholdBill !== false,
     notes: notes || ''
   };
 
@@ -159,7 +249,7 @@ app.post('/api/bills', (req, res) => {
   res.json({ success: true, bill: newBill });
 });
 
-// 5. Mark a Bill as Paid
+// Mark bill paid
 app.post('/api/bills/:id/pay', (req, res) => {
   const data = readData();
   const bill = data.bills.find(b => b.id === req.params.id);
@@ -169,11 +259,10 @@ app.post('/api/bills/:id/pay', (req, res) => {
   bill.lastPaidDate = new Date().toISOString().split('T')[0];
   bill.lastPaidAmount = bill.expectedAmount;
 
-  // Add corresponding payment transaction
   const paymentTx = {
     id: `tx-${Date.now()}`,
-    accountId: bill.autoPayCardId || data.accounts[0]?.id || 'acc-1',
-    memberId: bill.assignedMemberId || 'm1',
+    accountId: data.accounts[0]?.id || 'acc-1',
+    ownerId: bill.assignedOwnerId || 'u1',
     date: bill.lastPaidDate,
     name: `${bill.biller || bill.name} (Payment)`,
     amount: bill.expectedAmount,
@@ -187,9 +276,9 @@ app.post('/api/bills/:id/pay', (req, res) => {
   res.json({ success: true, bill, transaction: paymentTx });
 });
 
-// 6. Add a Transaction with auto-categorization
+// Log purchase for logged-in user
 app.post('/api/transactions', (req, res) => {
-  const { accountId, memberId, name, amount, date, category } = req.body;
+  const { accountId, ownerId, name, amount, date, category } = req.body;
   const data = readData();
 
   const detectedCategory = category || autoCategorize(name);
@@ -198,7 +287,7 @@ app.post('/api/transactions', (req, res) => {
   const newTx = {
     id: `tx-${Date.now()}`,
     accountId: accountId || (data.accounts[0] ? data.accounts[0].id : 'acc-1'),
-    memberId: memberId || 'm1',
+    ownerId: ownerId || 'u1',
     date: date || new Date().toISOString().split('T')[0],
     name: name || 'Purchase',
     amount: Number(amount) || 0,
@@ -211,49 +300,34 @@ app.post('/api/transactions', (req, res) => {
   res.json({ success: true, transaction: newTx });
 });
 
-// 7. Bill Ingestion & Scanner (Extracts biller, due date, amount from text/statement)
+// Scan e-bill
 app.post('/api/bills/scan', async (req, res) => {
-  const { billText } = req.body;
-  if (!billText) {
-    return res.status(400).json({ error: 'billText is required' });
-  }
+  const { billText, ownerId } = req.body;
+  if (!billText) return res.status(400).json({ error: 'billText is required' });
 
-  // Regex parsing heuristics
   let biller = 'Utility Provider';
   let category = 'Utilities';
-  let amount = 0;
-  let dueDay = 15;
+  let amount = 120.00;
   let nextDueDate = '2026-11-15';
 
   const t = billText.toLowerCase();
-
   if (t.includes('pg&e') || t.includes('pacific gas')) {
     biller = 'Pacific Gas and Electric (PG&E)';
-    category = 'Utilities';
   } else if (t.includes('fresno') || t.includes('city of fresno')) {
     biller = 'City of Fresno Utilities';
-    category = 'Utilities';
   } else if (t.includes('xfinity') || t.includes('comcast')) {
     biller = 'Xfinity Comcast';
-    category = 'Utilities';
   } else if (t.includes('t-mobile')) {
     biller = 'T-Mobile';
-    category = 'Utilities';
   }
 
-  // Amount extraction (handles $245.50 or 'Due: 245.50')
   const amountMatch = billText.match(/\$\s*([0-9]+(?:\.[0-9]{2})?)/) ||
                       billText.match(/(?:due|amount|total|charges)[:\s]+\$?([0-9]+(?:\.[0-9]{2})?)/i);
-  if (amountMatch) {
-    amount = parseFloat(amountMatch[1]);
-  }
+  if (amountMatch) amount = parseFloat(amountMatch[1]);
 
-  // Date extraction (handles 'Due: Nov 14, 2026' or 'by November 14, 2026' or 11/14/2026)
   const dateMatch = billText.match(/(?:due|by|date)[:\s]+([A-Za-z]+ \d{1,2},? \d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i) ||
                     billText.match(/(?:due on|by)\s+([A-Za-z]+ \d{1,2}(?:,? \d{4})?)/i);
-  if (dateMatch) {
-    nextDueDate = dateMatch[1];
-  }
+  if (dateMatch) nextDueDate = dateMatch[1];
 
   const data = readData();
   const newBill = {
@@ -261,13 +335,14 @@ app.post('/api/bills/scan', async (req, res) => {
     name: biller,
     biller,
     category,
-    expectedAmount: amount || 120.00,
-    dueDay,
+    expectedAmount: amount,
+    dueDay: 15,
     nextDueDate,
     frequency: 'monthly',
     status: 'due_soon',
-    assignedMemberId: 'm1',
-    notes: 'Scanned from family statement'
+    assignedOwnerId: ownerId || 'u1',
+    isHouseholdBill: true,
+    notes: 'Scanned statement'
   };
 
   data.bills.push(newBill);
@@ -280,25 +355,14 @@ app.post('/api/bills/scan', async (req, res) => {
   });
 });
 
-// 8. Plaid Integration Simulation & Live Ready
-app.post('/api/plaid/create-link-token', (req, res) => {
-  // If user has PLAID_CLIENT_ID & PLAID_SECRET in .env, can initialize real Plaid client
-  // For immediate development & demo, return a simulated link token
-  res.json({
-    link_token: `link-sandbox-${Date.now()}`,
-    expiration: new Date(Date.now() + 3600000).toISOString(),
-    is_sandbox: true
-  });
-});
-
+// Plaid simulation: link card to logged-in user
 app.post('/api/plaid/exchange-public-token', (req, res) => {
-  const { institution, accountName, memberId } = req.body;
+  const { institution, accountName, ownerId } = req.body;
   const data = readData();
 
-  // Add realistic linked account
   const newAccount = {
     id: `acc-plaid-${Date.now()}`,
-    memberId: memberId || 'm1',
+    ownerId: ownerId || 'u1',
     institution: institution || 'Chase Bank',
     name: accountName || 'Premier Sapphire Card',
     type: 'credit',
@@ -308,7 +372,8 @@ app.post('/api/plaid/exchange-public-token', (req, res) => {
     apr: 24.99,
     minPayment: 40.00,
     dueDate: '2026-11-18',
-    color: '#0284c7'
+    color: '#0284c7',
+    isShared: false
   };
 
   data.accounts.push(newAccount);
@@ -316,127 +381,71 @@ app.post('/api/plaid/exchange-public-token', (req, res) => {
   res.json({ success: true, account: newAccount });
 });
 
-// 9. AI Financial Advisor Chat (Gemini 2.5 + Smart Deterministic Fallback)
+// AI Advisor chat tailored to the logged-in user
 app.post('/api/ai/chat', async (req, res) => {
-  const { message, memberId } = req.body;
+  const { message, userId } = req.body;
   const data = readData();
 
-  // Prepare financial context
-  const member = memberId ? data.familyMembers.find(m => m.id === memberId) : null;
-  const creditCards = data.accounts.filter(a => a.type === 'credit');
-  const checkingAccounts = data.accounts.filter(a => a.type === 'depository');
-  const totalChecking = checkingAccounts.reduce((sum, a) => sum + a.balance, 0);
-  const totalDebt = creditCards.reduce((sum, a) => sum + a.balance, 0);
+  const currentUser = data.users.find(u => u.id === userId) || data.users[0];
+  const userCards = data.accounts.filter(a => a.ownerId === currentUser.id && a.type === 'credit');
+  const userChecking = data.accounts.filter(a => a.ownerId === currentUser.id && a.type === 'depository');
+  const totalChecking = userChecking.reduce((s, a) => s + a.balance, 0);
 
-  // Sort credit cards by APR descending (Avalanche)
-  const sortedByApr = [...creditCards].sort((a, b) => b.apr - a.apr);
-  // Sort credit cards by Balance ascending (Snowball)
-  const sortedByBalance = [...creditCards].sort((a, b) => a.balance - b.balance);
+  const sortedByApr = [...userCards].sort((a, b) => b.apr - a.apr);
 
-  // If Gemini API is configured, use official Google GenAI SDK
+  // Gemini API
   if (aiClient && process.env.GEMINI_API_KEY) {
     try {
       const prompt = `
-You are Klarity, the personal AI Financial Advisor for a family of 6.
-Here is the live household financial snapshot:
-- Family Members: ${data.familyMembers.map(m => `${m.name} (${m.role})`).join(', ')}
-- Checking / Cash on hand: $${totalChecking.toFixed(2)}
-- Total Credit Card Debt: $${totalDebt.toFixed(2)}
-- Credit Cards with APRs and Balances:
-  ${creditCards.map(c => `* ${c.institution} ${c.name} (${c.mask}): Balance $${c.balance}, APR ${c.apr}%, Min Payment $${c.minPayment}, Due Date ${c.dueDate || 'N/A'}`).join('\n  ')}
-- Household Bills & Utilities:
-  ${data.bills.map(b => `* ${b.name}: $${b.expectedAmount} due ${b.nextDueDate} (${b.status})`).join('\n  ')}
-- Recent Transactions (Past 2 weeks):
-  ${data.transactions.slice(0, 10).map(t => `* ${t.date} | ${t.name} | $${t.amount} | [${t.category}]`).join('\n  ')}
+You are Klarity, the personal AI Financial Advisor for a family.
+You are talking directly to: ${currentUser.name} (${currentUser.role}).
+Their personal financial snapshot:
+- Personal Checking: $${totalChecking.toFixed(2)}
+- Connected Credit Cards: ${userCards.map(c => `${c.institution} ${c.name}: $${c.balance} @ ${c.apr}% APR (Min $${c.minPayment})`).join(' | ')}
+- Household Utility Bills: ${data.bills.map(b => `${b.name}: $${b.expectedAmount} due ${b.nextDueDate}`).join(' | ')}
 
-Current User Persona viewing this: ${member ? member.name : 'Whole Family Overview'}
-User Question: "${message}"
-
-Give helpful, empathetic, concise, and mathematically sound financial guidance. If they ask what to pay off, compare the Avalanche method (highest APR first) and Snowball method (lowest balance first). If they ask about bills, mention upcoming PG&E, Fresno Water, Xfinity, or T-Mobile due dates. Keep formatting clean and actionable with bullet points.
+Question from ${currentUser.name}: "${message}"
+Give personalized, friendly, mathematically sound advice.
 `;
-
       const response = await aiClient.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt
       });
-
       return res.json({ reply: response.text });
     } catch (err) {
-      console.warn('Gemini API call failed, falling back to local advisor engine:', err.message);
+      console.warn('Gemini API call failed:', err.message);
     }
   }
 
-  // Built-in Financial Advisor Reasoning Engine
+  // Smart fallback tailored to the user
   const msg = (message || '').toLowerCase();
   let reply = '';
 
-  if (msg.includes('pay off') || msg.includes('debt') || msg.includes('avalanche') || msg.includes('snowball') || msg.includes('interest')) {
-    const highestAprCard = sortedByApr[0];
-    const lowestBalCard = sortedByBalance[0];
+  if (msg.includes('pay off') || msg.includes('debt') || msg.includes('card')) {
+    if (sortedByApr.length > 0) {
+      const top = sortedByApr[0];
+      reply = `### 💡 Personalized Debt Payoff for ${currentUser.name}
 
-    reply = `### 💡 Smart Debt Payoff Recommendation
+1. **Top Priority (Avalanche):** Pay off your **${top.institution} ${top.name}** first!
+   * **Balance:** $${top.balance.toFixed(2)}
+   * **Interest Rate:** **${top.apr}% APR** (Your highest cost debt)
+2. **Strategy:** Pay minimums on any other cards and put your extra savings toward the ${top.institution} card.`;
+    } else {
+      reply = `Great news, ${currentUser.name}! You currently have no high-interest credit card debt linked to your profile! 🎉`;
+    }
+  } else if (msg.includes('bill') || msg.includes('pg&e') || msg.includes('water') || msg.includes('fresno')) {
+    reply = `### 📅 Household Bills Overview for ${currentUser.name}
 
-Here is how your family can tackle your credit card balances:
-
-#### 1. The **Avalanche Method** (Saves the most money in interest)
-* **Priority #1:** Pay off **${highestAprCard.institution} ${highestAprCard.name}** first!
-  * **Current Balance:** $${highestAprCard.balance.toFixed(2)}
-  * **Interest Rate (APR):** **${highestAprCard.apr}%** (Your most expensive debt)
-* For all other cards, pay only their minimum monthly payments ($${sortedByApr.slice(1).map(c => `${c.institution}: $${c.minPayment}`).join(', ')}). Put every extra dollar into the ${highestAprCard.institution} card.
-
-#### 2. The **Snowball Method** (Fastest psychological wins)
-* If you want to eliminate an entire card quickly, pay off **${lowestBalCard.institution} ${lowestBalCard.name}** ($${lowestBalCard.balance.toFixed(2)} balance at ${lowestBalCard.apr}% APR).
-
-**Family Cash Flow Check:** You currently have **$${totalChecking.toFixed(2)}** in checking. You can safely allocate an extra $200–$400 toward your highest-interest card while maintaining an emergency cushion for upcoming utility bills.`;
-
-  } else if (msg.includes('bill') || msg.includes('pg&e') || msg.includes('water') || msg.includes('fresno') || msg.includes('due') || msg.includes('xfinity') || msg.includes('t-mobile')) {
-    const upcomingBills = data.bills.filter(b => b.status === 'due_soon' || b.status === 'upcoming');
-    const totalDue = upcomingBills.reduce((s, b) => s + b.expectedAmount, 0);
-
-    reply = `### 📅 Upcoming Household Bills Summary
-
-You have **${upcomingBills.length} bills** scheduled for this month totaling **$${totalDue.toFixed(2)}**:
-
-${upcomingBills.map(b => `* **${b.name}**: **$${b.expectedAmount.toFixed(2)}** — Due on **${b.nextDueDate}** (${b.status === 'due_soon' ? '⚠️ Due Soon' : 'Upcoming'})`).join('\n')}
-
-**Safety Check:** Your checking account balance is **$${totalChecking.toFixed(2)}**, which easily covers these upcoming payments ($${totalDue.toFixed(2)}) with a buffer of **$${(totalChecking - totalDue).toFixed(2)}** remaining.`;
-
-  } else if (msg.includes('subscription') || msg.includes('streaming') || msg.includes('game') || msg.includes('gaming') || msg.includes('kid')) {
-    const subs = data.bills.filter(b => b.category === 'Subscriptions' || b.category === 'Gaming');
-    const gamingTx = data.transactions.filter(t => t.category === 'Gaming');
-    const gamingTotal = gamingTx.reduce((s, t) => s + t.amount, 0);
-    const subTotal = subs.reduce((s, b) => s + b.expectedAmount, 0);
-
-    reply = `### 🎮 Family Subscriptions & Entertainment Breakdown
-
-* **Monthly Recurring Entertainment/Gaming:** **$${subTotal.toFixed(2)}/mo**
-  ${subs.map(s => `* ${s.name}: $${s.expectedAmount}`).join('\n  ')}
-
-* **Recent Gaming Purchases (Jordan, Leo, Alex):** **$${gamingTotal.toFixed(2)}** past 30 days
-  ${gamingTx.map(g => `* ${g.name} (${g.date}): $${g.amount}`).join('\n  ')}
-
-**Advisor Tip:** If you want to trim $40/month, review the Netflix 4K tier ($22.99) vs standard, and consider putting a $25/month allowance cap on Roblox and Steam purchases for the kids.`;
-
+Here are the upcoming household utility bills for this month:
+${data.bills.slice(0, 4).map(b => `* **${b.name}**: $${b.expectedAmount.toFixed(2)} due ${b.nextDueDate} (${b.status})`).join('\n')}`;
   } else {
-    reply = `### 📊 Family Financial Health Overview
-
-Hello! I have analyzed the financial data across all 6 family members:
-
-* **Cash on Hand:** **$${totalChecking.toFixed(2)}** in checking
-* **Credit Card Debt:** **$${totalDebt.toFixed(2)}** across ${creditCards.length} cards
-* **Average Monthly Bills:** **$${data.metrics?.totalMonthlyBills || 680.00}/month** (PG&E, Fresno Water, Xfinity, T-Mobile, Subscriptions)
-
-**What would you like help with today?**
-1. Ask: *"What credit card should I pay off first?"*
-2. Ask: *"What bills are due this week?"*
-3. Ask: *"How much are we spending on subscriptions and gaming?"*
-4. Ask: *"How can we lower our PG&E or utility bill?"*`;
+    reply = `Hello ${currentUser.name}! I am **Klarity**, your personal financial advisor. You have **${userCards.length} personal cards** connected. How can I help with your budget, bills, or payoff goals today?`;
   }
 
   res.json({ reply });
 });
 
-// Serve frontend in production/single-port mode if client/dist exists
+// Serve frontend in production/single-port mode
 const clientDistPath = path.join(__dirname, '../client/dist');
 if (fs.existsSync(clientDistPath)) {
   app.use(express.static(clientDistPath));
@@ -447,5 +456,5 @@ if (fs.existsSync(clientDistPath)) {
 }
 
 app.listen(PORT, () => {
-  console.log(`Family Finance Server running on http://localhost:${PORT}`);
+  console.log(`Klarity Server running on http://localhost:${PORT}`);
 });
