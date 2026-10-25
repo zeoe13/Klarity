@@ -32,7 +32,9 @@ import {
   ShieldCheck,
   Percent,
   Mail,
-  User
+  User,
+  Gamepad2,
+  Tv
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
@@ -213,7 +215,7 @@ function KlarityApp() {
     metrics: { totalChecking: 0, totalCreditDebt: 0, totalMonthlyBills: 0, netWorthEstimate: 0 }
   });
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('summary'); // summary | cards | bills | transactions | advisor
+  const [activeTab, setActiveTab] = useState('dashboard'); // dashboard | cards | bills | transactions | advisor | settings
   const [viewHousehold, setViewHousehold] = useState(false);
 
   // Settings & Plaid state
@@ -662,11 +664,13 @@ function KlarityApp() {
   };
 
   // AI Chat
-  const handleSendChatMessage = async (e) => {
-    e.preventDefault();
-    if (!chatInput.trim() || isAiTyping) return;
+  const handleSendChatMessage = async (eOrText) => {
+    if (eOrText && typeof eOrText === 'object' && eOrText.preventDefault) {
+      eOrText.preventDefault();
+    }
+    const userMsg = (typeof eOrText === 'string' ? eOrText : chatInput).trim();
+    if (!userMsg || isAiTyping) return;
 
-    const userMsg = chatInput.trim();
     setChatInput('');
     setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setIsAiTyping(true);
@@ -873,6 +877,9 @@ function KlarityApp() {
 
   const checkingAccounts = accountsList.filter(a => a.type === 'depository');
   const creditCards = accountsList.filter(a => a.type === 'credit');
+  const highestAprCard = (creditCards || [])
+    .filter(a => Number(a.balance) > 0)
+    .sort((a, b) => Number(b.apr || 0) - Number(a.apr || 0))[0];
 
   const filteredTransactions = transactionsList.filter(t => {
     const matchCategory = categoryFilter === 'all' ? true : t.category === categoryFilter;
@@ -957,7 +964,7 @@ function KlarityApp() {
           {/* Navigation Tabs */}
           <nav className="flex space-x-6 overflow-x-auto border-t border-slate-800/60 pt-2 text-xs font-semibold">
             {[
-              { id: 'summary', label: 'Summary' },
+              { id: 'dashboard', label: 'Dashboard' },
               { id: 'cards', label: `My Cards (${creditCards.length})` },
               { id: 'bills', label: `Household Bills (${billsList.length})` },
               { id: 'transactions', label: `Transactions (${transactionsList.length})` },
@@ -1006,153 +1013,335 @@ function KlarityApp() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 1: SUMMARY */}
+        {/* TAB 1: DASHBOARD */}
         {/* ========================================================================= */}
-        {activeTab === 'summary' && (
+        {activeTab === 'dashboard' && (
           <div className="flex flex-col gap-6">
-            {/* Stat Row */}
+            {/* Top Stat Banners */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
-                <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                  Connected Checking
+              <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+                <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
+                  <span>Available Cash (Checking)</span>
+                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+                    <DollarSign className="w-4 h-4" />
+                  </div>
                 </div>
-                <div className="text-2xl font-black text-white mt-3">
-                  ${(data?.metrics?.totalChecking || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <div className="mt-3">
+                  <div className="text-2xl font-black text-white">
+                    ${(data?.metrics?.totalChecking || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </div>
+                  <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1 font-medium">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>Ready for upcoming bills</span>
+                  </p>
                 </div>
-                <div className="text-[11px] text-slate-400 mt-1">From your linked banks</div>
               </div>
 
-              <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
-                <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                  Total Card Balances
+              <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+                <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
+                  <span>Credit Card Balances</span>
+                  <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
                 </div>
-                <div className="text-2xl font-black text-white mt-3">
-                  ${(data?.metrics?.totalCreditDebt || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <div className="mt-3">
+                  <div className="text-2xl font-black text-white">
+                    ${(data?.metrics?.totalCreditDebt || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">Across connected credit cards</p>
                 </div>
-                <div className="text-[11px] text-slate-400 mt-1">Across {creditCards.length} cards</div>
               </div>
 
-              <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
-                <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                  Monthly Bills
+              <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+                <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
+                  <span>Monthly Bills & Utilities</span>
+                  <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
+                    <Zap className="w-4 h-4" />
+                  </div>
                 </div>
-                <div className="text-2xl font-black text-white mt-3">
-                  ${(data?.metrics?.totalMonthlyBills || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <div className="mt-3">
+                  <div className="text-2xl font-black text-white">
+                    ${(data?.metrics?.totalMonthlyBills || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    <span className="text-xs font-normal text-slate-400">/mo</span>
+                  </div>
+                  <p className="text-xs text-amber-400 mt-1">PG&E, Fresno Water, Xfinity, T-Mobile</p>
                 </div>
-                <div className="text-[11px] text-slate-400 mt-1">Utilities & recurring expenses</div>
               </div>
 
-              <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
-                <div className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                  Estimated Net Available
+              <div className="bg-gradient-to-br from-indigo-950/90 to-slate-900 border border-indigo-800/40 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+                <div className="flex items-center justify-between text-indigo-300 text-xs font-semibold">
+                  <span>AI Payoff Priority</span>
+                  <Sparkles className="w-4 h-4 text-indigo-400" />
                 </div>
-                <div className="text-2xl font-black text-white mt-3">
-                  ${(data?.metrics?.netWorthEstimate || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </div>
-                <div className="text-[11px] text-slate-400 mt-1">Checking minus credit debt</div>
+                {highestAprCard ? (
+                  <div className="mt-2">
+                    <div className="text-sm font-bold text-white truncate">
+                      {highestAprCard.institution} {highestAprCard.name}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30">
+                        {highestAprCard.apr}% APR
+                      </span>
+                      <span className="text-xs text-slate-300">Bal: ${Number(highestAprCard.balance).toFixed(2)}</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setActiveTab('advisor');
+                        handleSendChatMessage('What should I pay off first and how much?');
+                      }}
+                      className="mt-3 text-xs text-indigo-300 hover:text-white font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <span>Ask AI Advisor how to pay</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-2">
+                    <p className="text-xs text-emerald-400 font-medium">Zero high-interest debt outstanding!</p>
+                    <p className="text-[11px] text-slate-400 mt-1">Your accounts are in great financial health.</p>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Quick Actions */}
+            {/* Quick Actions Bar */}
             <div className="flex flex-wrap gap-2 p-4 bg-[#0d1527] border border-slate-800 rounded-2xl items-center justify-between">
               <span className="text-xs font-bold text-slate-300">Quick Actions:</span>
               <div className="flex flex-wrap gap-2">
                 <button
+                  onClick={initiatePlaidLink}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white shadow-md shadow-emerald-600/20 cursor-pointer transition-colors"
+                >
+                  Connect Bank
+                </button>
+                <button
+                  onClick={() => setIsAddAccountOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer transition-colors"
+                >
+                  Add Card
+                </button>
+                <button
                   onClick={() => setIsAddBillOpen(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer transition-colors"
                 >
                   Add Utility Bill
                 </button>
                 <button
                   onClick={() => setIsScanBillOpen(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer transition-colors"
                 >
                   Scan Statement
                 </button>
                 <button
-                  onClick={() => setActiveTab('advisor')}
-                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/20 cursor-pointer"
-                >
-                  Ask AI Advisor
-                </button>
-                <button
                   onClick={() => setActiveTab('settings')}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer transition-colors"
                 >
                   Manage Settings
                 </button>
               </div>
             </div>
 
-            {/* Empty State vs Connected Accounts */}
-            {accountsList.length === 0 ? (
-              <div className="p-10 text-center bg-[#0d1527] border border-dashed border-slate-800 rounded-2xl flex flex-col items-center gap-4">
-                <div>
-                  <h3 className="text-base font-bold text-white">No Connected Cards or Accounts Yet</h3>
-                  <p className="text-xs text-slate-400 max-w-sm mt-1">
-                    Connect your real bank account through Plaid, or add your credit cards manually to start tracking your debt payoff.
-                  </p>
-                </div>
-                <div className="flex gap-3">
+            {/* Split Grid: Upcoming Bills & AI Advisor Quick Preview */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Upcoming Bills List */}
+              <div className="lg:col-span-2 bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-base font-bold text-white flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-amber-400" />
+                      <span>Upcoming Household Bills & Utilities</span>
+                    </h2>
+                    <p className="text-xs text-slate-400">Includes Fresno Water, PG&E, Telecom & Subscriptions</p>
+                  </div>
                   <button
-                    onClick={initiatePlaidLink}
-                    className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 cursor-pointer"
+                    onClick={() => setIsAddBillOpen(true)}
+                    className="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1 cursor-pointer"
                   >
-                    Connect Bank (Plaid)
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Bill</span>
                   </button>
-                  <button
-                    onClick={() => setIsAddAccountOpen(true)}
-                    className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 cursor-pointer"
-                  >
-                    Add Card Manually
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Checking */}
-                <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col gap-3">
-                  <h3 className="text-sm font-bold text-white">Checking & Depository ({checkingAccounts.length})</h3>
-                  {checkingAccounts.length === 0 ? (
-                    <p className="text-xs text-slate-500 py-3">No checking accounts connected yet.</p>
-                  ) : (
-                    checkingAccounts.map(acc => (
-                      <div key={acc.id} className="p-3.5 rounded-xl bg-[#090f1e] border border-slate-800 flex items-center justify-between">
-                        <div>
-                          <div className="text-xs font-bold text-white">{acc.institution} {acc.name}</div>
-                          <div className="text-[11px] text-slate-400">•••• {acc.mask}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-black text-white">${Number(acc.balance).toFixed(2)}</div>
-                          <span className="text-[10px] text-emerald-400 font-semibold">Available</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
                 </div>
 
-                {/* Cards */}
-                <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col gap-3">
-                  <h3 className="text-sm font-bold text-white">Credit Cards ({creditCards.length})</h3>
-                  {creditCards.length === 0 ? (
-                    <p className="text-xs text-slate-500 py-3">No credit cards added yet.</p>
-                  ) : (
-                    creditCards.map(card => (
-                      <div key={card.id} className="p-3.5 rounded-xl bg-[#090f1e] border border-slate-800 flex items-center justify-between">
-                        <div>
-                          <div className="text-xs font-bold text-white">{card.institution} {card.name}</div>
-                          <div className="text-[11px] text-slate-400">•••• {card.mask} | {card.apr}% APR</div>
+                {billsList.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-slate-500">
+                    No bills added yet. Scan a statement or add your monthly utility bills above.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-800/80">
+                    {billsList.slice(0, 5).map(bill => {
+                      const isDueSoon = bill.status === 'due_soon';
+                      return (
+                        <div key={bill.id} className="py-3.5 flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                                bill.category === 'Utilities'
+                                  ? 'bg-amber-500/10 text-amber-400'
+                                  : bill.category === 'Gaming'
+                                  ? 'bg-pink-500/10 text-pink-400'
+                                  : 'bg-purple-500/10 text-purple-400'
+                              }`}
+                            >
+                              {bill.category === 'Gaming' ? (
+                                <Gamepad2 className="w-4 h-4" />
+                              ) : bill.category === 'Subscriptions' ? (
+                                <Tv className="w-4 h-4" />
+                              ) : (
+                                <Zap className="w-4 h-4" />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-white truncate">{bill.name}</p>
+                              <p className="text-xs text-slate-400 flex items-center gap-2">
+                                <span>Due {bill.nextDueDate || bill.dueDate || `Day ${bill.dueDay}`}</span>
+                                <span className="bg-slate-800 px-1.5 py-0.5 rounded text-[10px] text-slate-300">
+                                  {bill.category}
+                                </span>
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 shrink-0">
+                            <div className="text-right">
+                              <div className="text-sm font-bold text-white">${Number(bill.expectedAmount).toFixed(2)}</div>
+                              <span
+                                className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                                  bill.status === 'paid'
+                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                    : isDueSoon
+                                    ? 'bg-red-500/20 text-red-300 animate-pulse'
+                                    : 'bg-slate-800 text-slate-400'
+                                }`}
+                              >
+                                {bill.status === 'paid' ? 'Paid' : isDueSoon ? 'Due Soon' : 'Upcoming'}
+                              </span>
+                            </div>
+                            {bill.status !== 'paid' && (
+                              <button
+                                onClick={() => handlePayBill(bill.id, bill.name, bill.expectedAmount)}
+                                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-300 transition-colors cursor-pointer"
+                                title="Mark as paid"
+                              >
+                                Mark Paid
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-sm font-black text-rose-400">${Number(card.balance).toFixed(2)}</div>
-                          <span className="text-[10px] text-slate-400">Balance</span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* AI Advisor Preview Card */}
+              <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-2 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20">
+                      <Bot className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Klarity AI Advisor</h3>
+                      <p className="text-xs text-slate-400">Real-time household analysis</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#070b14] border border-slate-800/80 rounded-xl p-3 text-xs text-slate-300 leading-relaxed mb-4">
+                    {highestAprCard ? (
+                      <span>
+                        I noticed your upcoming bills and connected credit debt. You can save money on interest by directing extra funds to <strong>{highestAprCard.institution} {highestAprCard.name}</strong> with <strong>{highestAprCard.apr}% APR</strong>.
+                      </span>
+                    ) : (
+                      <span>
+                        "I monitor your utility bills and credit cards to provide recommendations on cash flow, debt snowballing, and savings."
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs font-semibold text-slate-400 mb-2">Quick Inquiries:</p>
+                  <div className="flex flex-col gap-1.5">
+                    {[
+                      'What should I pay off first?',
+                      'Show bills due in the next 14 days',
+                      'How can I reduce expenses?'
+                    ].map((q, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setActiveTab('advisor');
+                          handleSendChatMessage(q);
+                        }}
+                        className="text-left text-xs px-3 py-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700/60 transition-colors flex items-center justify-between cursor-pointer"
+                      >
+                        <span>{q}</span>
+                        <ChevronRight className="w-3 h-3 text-slate-500 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setActiveTab('advisor')}
+                  className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-xs shadow-md shadow-blue-600/20 hover:opacity-95 transition-opacity cursor-pointer text-center"
+                >
+                  Open Full AI Advisor Chat
+                </button>
+              </div>
+            </div>
+
+            {/* Recent Purchases Feed */}
+            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-emerald-400" />
+                    <span>Recent Purchases & Auto-Categories</span>
+                  </h2>
+                  <p className="text-xs text-slate-400">Automatically categorized as Subscriptions, Gaming, Utilities, etc.</p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('transactions')}
+                  className="text-xs text-blue-400 hover:text-blue-300 font-medium cursor-pointer"
+                >
+                  View All ({transactionsList.length})
+                </button>
+              </div>
+
+              {transactionsList.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-500">
+                  No transactions recorded yet. Connect a bank or record purchases to view them here.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-800/80">
+                  {transactionsList.slice(0, 6).map(tx => (
+                    <div key={tx.id} className="py-3 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400">
+                          <Receipt className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-white">{tx.name}</p>
+                          <p className="text-xs text-slate-400 flex items-center gap-2">
+                            <span>{tx.date}</span>
+                            <span>•</span>
+                            <span>{tx.account || 'Account'}</span>
+                          </p>
                         </div>
                       </div>
-                    ))
-                  )}
+
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-white">
+                          ${Number(tx.amount).toFixed(2)}
+                        </div>
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                          {tx.category}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 
