@@ -337,7 +337,7 @@ app.post('/api/ai/chat', async (req, res) => {
   if (aiClient && process.env.GEMINI_API_KEY) {
     try {
       const prompt = `
-You are the personal AI Financial Advisor for a family of 6.
+You are Klarity, the personal AI Financial Advisor for a family of 6.
 Here is the live household financial snapshot:
 - Family Members: ${data.familyMembers.map(m => `${m.name} (${m.role})`).join(', ')}
 - Checking / Cash on hand: $${totalChecking.toFixed(2)}

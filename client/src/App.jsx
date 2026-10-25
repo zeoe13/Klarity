@@ -37,7 +37,7 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState([
     {
       role: 'assistant',
-      text: "👋 Hi! I'm your Family AI Financial Advisor. I monitor your connected cards, upcoming utility bills (like PG&E and Fresno Water), and family subscriptions. Ask me what card you should pay off first, or how much you're spending on gaming!"
+      text: "👋 Hi! I'm Klarity, your family's personal AI Financial Advisor. I monitor your connected cards, upcoming utility bills (like PG&E and Fresno Water), and household subscriptions. Ask me what card to pay off first, or how much you're spending on gaming!"
     }
   ]);
   const [chatInput, setChatInput] = useState('');
@@ -312,9 +312,9 @@ export default function App() {
               </div>
               <div>
                 <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                  FamFinance <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">Private Vault</span>
+                  Klarity <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">Family Vault</span>
                 </h1>
-                <p className="text-xs text-slate-400">Self-Hosted Family Finance & AI Advisor</p>
+                <p className="text-xs text-slate-400">Clear finances & AI guidance for your whole family</p>
               </div>
             </div>
 
@@ -597,7 +597,7 @@ export default function App() {
                       <Bot className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-white">Family AI Financial Advisor</h3>
+                      <h3 className="text-sm font-bold text-white">Klarity AI Advisor</h3>
                       <p className="text-xs text-slate-400">Real-time household analysis</p>
                     </div>
                   </div>
@@ -1034,7 +1034,7 @@ export default function App() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    Family AI Financial Advisor
+                    Klarity AI Advisor
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30">
                       Active
                     </span>

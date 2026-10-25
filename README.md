@@ -1,4 +1,4 @@
-# FamFinance 🛡️ — Family Cards, Bills & AI Advisor
+# Klarity 🛡️ — Clear Finances & AI Guidance for the Whole Family
 ### Deployed with **Vercel** + **Supabase** (100% Free Tier)
 
 A private, cloud-hosted financial management website built specifically for a **family of 6**, with credit/debit card tracking, utility bills (PG&E, Fresno Water, Xfinity, T-Mobile), purchase auto-categorization, and an AI Financial Advisor.

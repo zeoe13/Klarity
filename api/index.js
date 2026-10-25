@@ -640,7 +640,7 @@ app.post('/api/ai/chat', async (req, res) => {
       const { GoogleGenAI } = require('@google/genai');
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const prompt = `
-You are the personal AI Financial Advisor for a family of 6.
+You are Klarity, the personal AI Financial Advisor for a family of 6.
 Household finances:
 - Cash in checking: $${totalChecking.toFixed(2)}
 - Credit Cards: ${creditCards.map(c => `${c.institution} ${c.name}: Balance $${c.balance}, APR ${c.apr}%, Min $${c.minPayment}`).join(' | ')}
@@ -695,9 +695,9 @@ ${upcoming.map(b => `* **${b.name}**: **$${b.expectedAmount.toFixed(2)}** — Du
 **Safety Check:** Your checking balance ($${totalChecking.toFixed(2)}) easily covers these bills ($${totalDue.toFixed(2)}) with a buffer of **$${(totalChecking - totalDue).toFixed(2)}** remaining.`;
 
   } else {
-    reply = `### 📊 Family Financial Health Overview
+    reply = `### 📊 Klarity Financial Health Overview
 
-Hello! I have analyzed the financial records across all 6 family members:
+Hello! I'm **Klarity**, your family's financial advisor. I have analyzed the financial records across all 6 family members:
 * **Cash on Hand:** **$${totalChecking.toFixed(2)}** in checking
 * **Credit Card Debt:** **$${creditCards.reduce((s, c) => s + c.balance, 0).toFixed(2)}**
 * **Upcoming Bills:** PG&E ($268.40), Fresno Water ($74.20), Xfinity ($90.00), T-Mobile ($185.00)
