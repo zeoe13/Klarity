@@ -43,7 +43,8 @@ import {
   History,
   ArrowLeft,
   Layers,
-  Globe
+  Globe,
+  Maximize2
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
@@ -2202,7 +2203,17 @@ function KlarityApp() {
           <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col h-[650px] justify-between">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
-                <h2 className="font-serif-title text-xl font-bold text-slate-900">Advisor</h2>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('dashboard')}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
+                    title="Back to Overview"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                  <h2 className="font-serif-title text-xl font-bold text-slate-900">Advisor</h2>
+                </div>
                 <p className="text-xs text-slate-500">Reads your bills, cards and spending to answer questions.</p>
               </div>
               <div className="flex items-center gap-2">
@@ -2312,6 +2323,14 @@ function KlarityApp() {
               {aiMemory.length > 0 && (
                 <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-600"></span>
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('advisor')}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer"
+              title="Open full Advisor page"
+            >
+              <Maximize2 className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -2832,19 +2851,7 @@ function KlarityApp() {
                   </nav>
                 </div>
 
-                {/* Sign Out at bottom of left sidebar */}
-                <div className="hidden md:block pt-4 border-t border-slate-200/80">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsSettingsOpen(false);
-                      handleLogout();
-                    }}
-                    className="text-rose-600 hover:text-rose-700 font-semibold text-xs transition-colors cursor-pointer block py-1.5"
-                  >
-                    Sign out
-                  </button>
-                </div>
+
               </div>
 
               {/* Right Content Panel */}
