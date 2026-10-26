@@ -258,11 +258,30 @@ function KlarityApp() {
     cards: true,
     purchases: true
   });
-  const [settingsPlaidClientId, setSettingsPlaidClientId] = useState('');
+  const [settingsPlaidClientId, setSettingsPlaidClientId] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_plaid_client_id') || '';
+    } catch {
+      return '';
+    }
+  });
   const [settingsPlaidSecret, setSettingsPlaidSecret] = useState('');
-  const [settingsPlaidMaskedSecret, setSettingsPlaidMaskedSecret] = useState('');
-  const [settingsPlaidStatus, setSettingsPlaidStatus] = useState('not_connected');
+  const [settingsPlaidMaskedSecret, setSettingsPlaidMaskedSecret] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_plaid_masked_secret') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [settingsPlaidStatus, setSettingsPlaidStatus] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_plaid_status') || 'not_connected';
+    } catch {
+      return 'not_connected';
+    }
+  });
   const [settingsPlaidShowSecret, setSettingsPlaidShowSecret] = useState(false);
+  const [bankTab, setBankTab] = useState('connected'); // 'connected' | 'connect'
 
   // Plaid Link token state
   const [linkToken, setLinkToken] = useState(null);
@@ -626,9 +645,18 @@ function KlarityApp() {
           }
         }
         if (json.plaid) {
-          setSettingsPlaidClientId(json.plaid.clientId || '');
-          setSettingsPlaidMaskedSecret(json.plaid.maskedSecret || '');
-          setSettingsPlaidStatus(json.plaid.status || 'not_connected');
+          if (json.plaid.clientId) {
+            setSettingsPlaidClientId(json.plaid.clientId);
+            try { localStorage.setItem('klarity_plaid_client_id', json.plaid.clientId); } catch {}
+          }
+          if (json.plaid.maskedSecret) {
+            setSettingsPlaidMaskedSecret(json.plaid.maskedSecret);
+            try { localStorage.setItem('klarity_plaid_masked_secret', json.plaid.maskedSecret); } catch {}
+          }
+          if (json.plaid.status) {
+            setSettingsPlaidStatus(json.plaid.status);
+            try { localStorage.setItem('klarity_plaid_status', json.plaid.status); } catch {}
+          }
         }
       }
     } catch (err) {
@@ -730,6 +758,9 @@ function KlarityApp() {
   const handleSavePlaidCredentials = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     try {
+      if (settingsPlaidClientId) {
+        try { localStorage.setItem('klarity_plaid_client_id', settingsPlaidClientId); } catch {}
+      }
       const res = await fetch('/api/settings/plaid', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -743,11 +774,31 @@ function KlarityApp() {
         setSettingsPlaidMaskedSecret(json.maskedSecret);
         setSettingsPlaidStatus(json.status);
         setSettingsPlaidSecret('');
+        try {
+          if (json.clientId) localStorage.setItem('klarity_plaid_client_id', json.clientId);
+          if (json.maskedSecret) localStorage.setItem('klarity_plaid_masked_secret', json.maskedSecret);
+          if (json.status) localStorage.setItem('klarity_plaid_status', json.status);
+        } catch {}
         setNotificationToast('Plaid credentials saved securely server-side!');
         setTimeout(() => setNotificationToast(''), 3000);
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleDisconnectBank = async (itemId, institutionName) => {
+    if (!window.confirm(`Are you sure you want to disconnect ${institutionName || 'this bank'}? Its linked accounts and cards will be removed.`)) return;
+    try {
+      const res = await fetch(`/api/plaid/items/${itemId}`, { method: 'DELETE' });
+      if (res.ok) {
+        await fetchData();
+        await fetchSettings();
+        setNotificationToast(`${institutionName || 'Bank'} disconnected.`);
+        setTimeout(() => setNotificationToast(''), 3500);
+      }
+    } catch (err) {
+      console.error('Failed to disconnect bank:', err);
     }
   };
 
@@ -3101,111 +3152,289 @@ function KlarityApp() {
 
                   {/* TAB 3: BANK CONNECTION */}
                   {settingsActiveTab === 'plaid' && (
-                    <div key="settings-tab-plaid" className="flex flex-col gap-6">
-                      <div>
-                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Bank connection</h2>
-                        <p className="text-xs text-slate-500 mt-1">Connect and manage your bank accounts through Plaid.</p>
-                      </div>
-
-                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-5 bg-white shadow-2xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-500 font-medium">Connection status:</span>
-                          {settingsPlaidStatus === 'connected' ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              Connected
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                              No bank linked
-                            </span>
-                          )}
+                    <div key="settings-tab-plaid" className="flex flex-col gap-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-100">
+                        <div>
+                          <h2 className="font-serif-title text-2xl font-bold text-slate-900">Bank connection</h2>
+                          <p className="text-xs text-slate-500 mt-0.5">Manage connected banks and link new accounts.</p>
                         </div>
 
-                        {/* Plaid Link Connect Banner with Green Button */}
-                        <div className="p-4 rounded-xl bg-emerald-50/80 border border-emerald-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                              <Building2 className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <p className="text-xs font-bold text-slate-900">Connect Bank with Plaid</p>
-                              <p className="text-[11px] text-slate-500">Securely link your real accounts, balances, and cards.</p>
-                            </div>
-                          </div>
+                        {/* Top sub-tabs: Connected banks vs Connect a bank */}
+                        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl self-start sm:self-auto">
                           <button
                             type="button"
-                            onClick={initiatePlaidLink}
-                            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0"
+                            onClick={() => setBankTab('connected')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                              bankTab === 'connected'
+                                ? 'bg-white text-slate-900 shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
                           >
-                            <span>Add bank with Plaid</span>
-                            <ExternalLink className="w-3.5 h-3.5" />
+                            <Building2 className="w-3.5 h-3.5" />
+                            <span>Connected banks</span>
+                            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700">
+                              {(data?.accounts || []).filter(a => a.institution).length > 0
+                                ? new Set((data?.accounts || []).map(a => a.institution)).size
+                                : 0}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBankTab('connect')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                              bankTab === 'connect'
+                                ? 'bg-white text-slate-900 shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Connect a bank</span>
                           </button>
                         </div>
+                      </div>
 
-                        <form onSubmit={handleSavePlaidCredentials} className="flex flex-col gap-4">
-                          <div>
-                            <label className="text-xs font-medium text-slate-700 block mb-1.5">Plaid Client ID</label>
-                            <input
-                              type="text"
-                              value={settingsPlaidClientId}
-                              onChange={e => setSettingsPlaidClientId(e.target.value)}
-                              placeholder="Client ID"
-                              className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs"
-                            />
+                      {/* SUB-VIEW 1: CONNECTED BANKS */}
+                      {bankTab === 'connected' && (
+                        <div className="flex flex-col gap-4">
+                          {/* List of distinct connected institutions */}
+                          {(() => {
+                            const accounts = data?.accounts || [];
+                            const institutionsMap = {};
+                            accounts.forEach(acc => {
+                              const inst = acc.institution || 'Connected Bank';
+                              if (!institutionsMap[inst]) {
+                                institutionsMap[inst] = [];
+                              }
+                              institutionsMap[inst].push(acc);
+                            });
+                            const instList = Object.entries(institutionsMap);
+
+                            if (instList.length === 0) {
+                              return (
+                                <div className="border border-dashed border-slate-200 rounded-2xl p-8 text-center bg-slate-50/50 flex flex-col items-center justify-center">
+                                  <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 mb-3 shadow-2xs">
+                                    <Building2 className="w-6 h-6 stroke-1" />
+                                  </div>
+                                  <h3 className="text-sm font-bold text-slate-900">No banks connected yet</h3>
+                                  <p className="text-xs text-slate-500 mt-1 max-w-sm">
+                                    Link your bank via Plaid or add cards manually to start tracking balances and cash flow in real time.
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-4">
+                                    <button
+                                      type="button"
+                                      onClick={() => setBankTab('connect')}
+                                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      <span>Connect a bank</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setIsSettingsOpen(false);
+                                        setIsAddAccountOpen(true);
+                                      }}
+                                      className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                                    >
+                                      Add card manually
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="flex flex-col gap-3">
+                                {instList.map(([institutionName, accs]) => {
+                                  const totalBalance = accs.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+                                  const matchingPlaidItem = (settings?.plaidItems || []).find(pi => pi.institution === institutionName);
+                                  return (
+                                    <div
+                                      key={institutionName}
+                                      className="border border-slate-200 rounded-2xl p-4 bg-white shadow-2xs flex flex-col gap-3 hover:border-slate-300 transition-colors"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#1B4B91] font-bold text-sm shadow-2xs">
+                                            {institutionName.slice(0, 2).toUpperCase()}
+                                          </div>
+                                          <div>
+                                            <div className="flex items-center gap-2">
+                                              <h4 className="text-xs font-bold text-slate-900">{institutionName}</h4>
+                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                                Active
+                                              </span>
+                                            </div>
+                                            <p className="text-[11px] text-slate-500 mt-0.5">
+                                              {accs.length} linked {accs.length === 1 ? 'account' : 'accounts'} · Total ${totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </p>
+                                          </div>
+                                        </div>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            if (matchingPlaidItem) {
+                                              handleDisconnectBank(matchingPlaidItem.itemId, institutionName);
+                                            } else {
+                                              // Remove all accounts with this institution
+                                              if (window.confirm(`Disconnect all accounts from ${institutionName}?`)) {
+                                                accs.forEach(a => handleDeleteAccount(a.id, a.name));
+                                              }
+                                            }
+                                          }}
+                                          className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                          title={`Disconnect ${institutionName}`}
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      </div>
+
+                                      {/* Breakdown of individual accounts under this institution */}
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                                        {accs.map(acc => (
+                                          <div key={acc.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs">
+                                            <div className="min-w-0 pr-2">
+                                              <p className="font-semibold text-slate-800 truncate">{acc.name}</p>
+                                              <p className="text-[10px] text-slate-400 capitalize">
+                                                {acc.type === 'credit' ? 'Credit card' : 'Checking / Savings'} (•••• {acc.mask || '0000'})
+                                              </p>
+                                            </div>
+                                            <span className="font-bold text-slate-900 shrink-0">
+                                              ${Number(acc.balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+
+                                <div className="pt-2 flex items-center justify-between">
+                                  <p className="text-[11px] text-slate-500">
+                                    Want to connect another institution?
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => setBankTab('connect')}
+                                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>Connect another bank</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+
+                      {/* SUB-VIEW 2: CONNECT A BANK */}
+                      {bankTab === 'connect' && (
+                        <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-5 bg-white shadow-2xs">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-slate-500 font-medium">Connection status:</span>
+                            {settingsPlaidStatus === 'connected' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                Connected
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                                No bank linked
+                              </span>
+                            )}
                           </div>
 
-                          <div>
-                            <label className="text-xs font-medium text-slate-700 block mb-1.5">Plaid Secret</label>
-                            <div className="relative">
-                              <input
-                                type={settingsPlaidShowSecret ? 'text' : 'password'}
-                                value={settingsPlaidSecret}
-                                onChange={e => setSettingsPlaidSecret(e.target.value)}
-                                placeholder={settingsPlaidMaskedSecret ? `Saved: ${settingsPlaidMaskedSecret}` : 'Secret Key'}
-                                className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setSettingsPlaidShowSecret(!settingsPlaidShowSecret)}
-                                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
-                              >
-                                {settingsPlaidShowSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={initiatePlaidLink}
-                                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
-                              >
-                                <Building2 className="w-3.5 h-3.5" />
-                                <span>Connect bank (Plaid)</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setIsSettingsOpen(false);
-                                  setIsAddAccountOpen(true);
-                                }}
-                                className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                              >
-                                Add card manually
-                              </button>
+                          {/* Plaid Link Connect Banner with Green Button */}
+                          <div className="p-4 rounded-xl bg-emerald-50/80 border border-emerald-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                                <Building2 className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-slate-900">Connect Bank with Plaid</p>
+                                <p className="text-[11px] text-slate-500">Securely link your real accounts, balances, and cards.</p>
+                              </div>
                             </div>
                             <button
-                              type="submit"
-                              className="px-4 py-2 rounded-xl bg-[#1B4B91] hover:bg-[#153a70] text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                              type="button"
+                              onClick={initiatePlaidLink}
+                              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0"
                             >
-                              Save credentials
+                              <span>Add bank with Plaid</span>
+                              <ExternalLink className="w-3.5 h-3.5" />
                             </button>
                           </div>
-                        </form>
-                      </div>
+
+                          <form onSubmit={handleSavePlaidCredentials} className="flex flex-col gap-4">
+                            <div>
+                              <label className="text-xs font-medium text-slate-700 block mb-1.5">Plaid Client ID</label>
+                              <input
+                                type="text"
+                                value={settingsPlaidClientId}
+                                onChange={e => {
+                                  setSettingsPlaidClientId(e.target.value);
+                                  try { localStorage.setItem('klarity_plaid_client_id', e.target.value); } catch {}
+                                }}
+                                placeholder="Client ID"
+                                className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-xs font-medium text-slate-700 block mb-1.5">Plaid Secret</label>
+                              <div className="relative">
+                                <input
+                                  type={settingsPlaidShowSecret ? 'text' : 'password'}
+                                  value={settingsPlaidSecret}
+                                  onChange={e => setSettingsPlaidSecret(e.target.value)}
+                                  placeholder={settingsPlaidMaskedSecret ? `Saved: ${settingsPlaidMaskedSecret}` : 'Secret Key'}
+                                  className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setSettingsPlaidShowSecret(!settingsPlaidShowSecret)}
+                                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                                >
+                                  {settingsPlaidShowSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={initiatePlaidLink}
+                                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+                                >
+                                  <Building2 className="w-3.5 h-3.5" />
+                                  <span>Connect bank (Plaid)</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsSettingsOpen(false);
+                                    setIsAddAccountOpen(true);
+                                  }}
+                                  className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                                >
+                                  Add card manually
+                                </button>
+                              </div>
+                              <button
+                                type="submit"
+                                className="px-4 py-2 rounded-xl bg-[#1B4B91] hover:bg-[#153a70] text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                              >
+                                Save credentials
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+                      )}
                     </div>
                   )}
 

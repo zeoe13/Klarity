@@ -284,8 +284,15 @@ app.get('/api/settings', (req, res) => {
       clientId: plaid.clientId || '',
       hasSecret: Boolean(plaid.encryptedSecret),
       maskedSecret: plaid.encryptedSecret ? maskSecret(decrypt(plaid.encryptedSecret)) : '',
-      status: (plaid.clientId && plaid.encryptedSecret) ? (plaid.status || 'connected') : 'not_connected'
-    }
+      status: (plaid.clientId && plaid.encryptedSecret) ? (plaid.status || 'connected') : 'not_connected',
+      connectedItemsCount: (data.plaidItems || []).length
+    },
+    plaidItems: (data.plaidItems || []).map(item => ({
+      itemId: item.itemId,
+      institution: item.institution || 'Connected Bank',
+      connectedAt: item.connectedAt,
+      accounts: (data.accounts || []).filter(a => a.institution === item.institution)
+    }))
   });
 });
 
@@ -498,14 +505,46 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
 
     data.accounts = (data.accounts || []).filter(a => !addedAccounts.some(na => na.id === a.id)).concat(addedAccounts);
     data.plaidItems = data.plaidItems || [];
-    data.plaidItems.push({ itemId, accessToken, institution: metadata?.institution?.name });
+    data.plaidItems.push({
+      itemId,
+      accessToken,
+      institution: metadata?.institution?.name || 'Connected Bank',
+      institutionId: metadata?.institution?.institution_id,
+      accountsCount: addedAccounts.length,
+      connectedAt: new Date().toISOString()
+    });
     writeData(data);
 
-    res.json({ success: true, accounts: addedAccounts });
+    res.json({ success: true, accounts: addedAccounts, plaidItems: data.plaidItems });
   } catch (err) {
     console.error('Plaid exchange error:', err.response?.data || err.message);
     res.status(500).json({ error: err.response?.data?.error_message || err.message });
   }
+});
+
+// Plaid Items Management (List & Disconnect Bank)
+app.get('/api/plaid/items', (req, res) => {
+  const data = readData();
+  const items = (data.plaidItems || []).map(item => ({
+    itemId: item.itemId,
+    institution: item.institution || 'Connected Bank',
+    connectedAt: item.connectedAt,
+    accounts: (data.accounts || []).filter(a => a.institution === item.institution)
+  }));
+  res.json({ items });
+});
+
+app.delete('/api/plaid/items/:itemId', (req, res) => {
+  const { itemId } = req.params;
+  const data = readData();
+  const targetItem = (data.plaidItems || []).find(i => i.itemId === itemId);
+  if (targetItem) {
+    const instName = targetItem.institution;
+    data.accounts = (data.accounts || []).filter(a => a.institution !== instName);
+    data.plaidItems = data.plaidItems.filter(i => i.itemId !== itemId);
+    writeData(data);
+  }
+  res.json({ success: true });
 });
 
 // 4. Financial Data Overview
