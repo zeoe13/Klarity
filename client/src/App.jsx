@@ -1461,7 +1461,7 @@ function KlarityApp() {
       {/* ======================================================================= */}
       {/* 1. LEFT SIDEBAR (Overview, Bills, Subscriptions, Cards, Transactions, Advisor) */}
       {/* ======================================================================= */}
-      <aside className="w-52 shrink-0 border-r border-slate-200/80 bg-[#f8fafc] p-6 flex flex-col justify-between min-h-screen sticky top-0 hidden md:flex">
+      <aside className="w-56 shrink-0 border-r border-slate-200/80 bg-[#f8fafc] p-6 flex flex-col justify-between h-screen sticky top-0 hidden md:flex">
         <div>
           {/* Logo Brand */}
           <h1 className="font-serif-title text-2xl font-bold tracking-tight text-slate-900 cursor-pointer" onClick={() => setActiveTab('dashboard')}>
@@ -1518,7 +1518,7 @@ function KlarityApp() {
       {/* ======================================================================= */}
       {/* 2. CENTER MAIN CONTENT */}
       {/* ======================================================================= */}
-      <main className="flex-1 max-w-4xl p-6 sm:p-8 flex flex-col gap-6 overflow-y-auto">
+      <main className="flex-1 min-w-0 p-6 lg:p-8 flex flex-col gap-6 overflow-y-auto">
         {/* Mobile Header */}
         <div className="md:hidden flex items-center justify-between pb-3 border-b border-slate-200">
           <span className="font-serif-title text-xl font-bold text-slate-900">Klarity</span>
@@ -1588,7 +1588,7 @@ function KlarityApp() {
               <div>
                 <div className="text-xs text-slate-500 font-medium">Available cash</div>
                 <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-                  $${Number(availableCash).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ${Number(availableCash).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1">
                   <span className="text-emerald-700 font-bold">Covers</span>
@@ -1599,7 +1599,7 @@ function KlarityApp() {
               <div className="pt-4 md:pt-0 md:pl-6">
                 <div className="text-xs text-slate-500 font-medium">Card balances</div>
                 <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-                  $${Number(cardBalances).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ${Number(cardBalances).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-[11px] text-slate-500 mt-1.5">
                   Across {creditCards.length || 2} cards
@@ -1609,7 +1609,7 @@ function KlarityApp() {
               <div className="pt-4 md:pt-0 md:pl-6">
                 <div className="text-xs text-slate-500 font-medium">Due in 14 days</div>
                 <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-                  $${Number(billsDueIn14DaysSum).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ${Number(billsDueIn14DaysSum).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-[11px] text-slate-500 mt-1.5">
                   {billsDueIn14DaysCount} bills
@@ -1648,7 +1648,7 @@ function KlarityApp() {
                           In {bill.daysUntil || (bill.dueDay ? Math.max(1, bill.dueDay - 10) : 3)} days
                         </span>
                         <span className="text-xs font-bold text-slate-900 min-w-16 text-right">
-                          $${Number(bill.expectedAmount).toFixed(2)}
+                          ${Number(bill.expectedAmount).toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -1659,7 +1659,7 @@ function KlarityApp() {
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs mt-2">
                 <span className="text-slate-500">Monthly bills</span>
                 <span className="font-bold text-slate-900">
-                  $${Number(totalMonthlyBills).toFixed(2)}
+                  ${Number(totalMonthlyBills).toFixed(2)}
                 </span>
               </div>
             </div>
@@ -1689,7 +1689,7 @@ function KlarityApp() {
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-slate-900">
-                            $${Number(sub.amount).toFixed(2)}
+                            ${Number(sub.amount).toFixed(2)}
                           </span>
                           <button
                             type="button"
@@ -1708,7 +1708,7 @@ function KlarityApp() {
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs mt-2">
                   <span className="text-slate-500">Total per month</span>
                   <span className="font-bold text-slate-900">
-                    $${Number(totalMonthlySubscriptions).toFixed(2)}
+                    ${Number(totalMonthlySubscriptions).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -1751,7 +1751,7 @@ function KlarityApp() {
                           </div>
 
                           <div className="flex items-center justify-between text-[11px] opacity-90">
-                            <span>$${Number(card.balance).toFixed(2)} of $${Number(card.limit).toLocaleString()}</span>
+                            <span>${Number(card.balance).toFixed(2)} of ${Number(card.limit).toLocaleString()}</span>
                             <span className="font-semibold">APR {card.apr}%</span>
                           </div>
                         </div>
@@ -1879,7 +1879,7 @@ function KlarityApp() {
                     <p className="text-[11px] text-slate-400 mt-0.5">{bill.nextDueDate || `Due Day ${bill.dueDay} • Checking`}</p>
                   </div>
                   <div className="flex items-center gap-4">
-                    <span className="text-xs font-bold text-slate-900">$${Number(bill.expectedAmount).toFixed(2)}</span>
+                    <span className="text-xs font-bold text-slate-900">${Number(bill.expectedAmount).toFixed(2)}</span>
                     <button
                       type="button"
                       onClick={() => handlePayBill(bill.id, bill.name, bill.expectedAmount)}
@@ -1928,7 +1928,7 @@ function KlarityApp() {
                     <p className="text-[11px] text-slate-400 mt-0.5">{sub.renewalDate || 'Renews monthly'} • {sub.category}</p>
                   </div>
                   <div className="flex items-center gap-4">
-                    <span className="text-xs font-bold text-slate-900">$${Number(sub.amount).toFixed(2)}/mo</span>
+                    <span className="text-xs font-bold text-slate-900">${Number(sub.amount).toFixed(2)}/mo</span>
                     <button
                       type="button"
                       onClick={() => handleDeleteSubscription(sub.id, sub.name)}
@@ -1988,8 +1988,8 @@ function KlarityApp() {
 
                       <div className="mt-4">
                         <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                          <span>Balance: $${Number(card.balance).toFixed(2)}</span>
-                          <span>Limit: $${Number(card.limit).toLocaleString()}</span>
+                          <span>Balance: ${Number(card.balance).toFixed(2)}</span>
+                          <span>Limit: ${Number(card.limit).toLocaleString()}</span>
                         </div>
                         <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                           <div
@@ -2196,18 +2196,44 @@ function KlarityApp() {
       </main>
 
       {/* ======================================================================= */}
-      {/* 3. RIGHT SIDEBAR: ADVISOR (Exact match from screenshot) */}
+      {/* 3. RIGHT SIDEBAR: ADVISOR */}
       {/* ======================================================================= */}
-      <aside className="w-72 xl:w-80 shrink-0 border-l border-slate-200/80 bg-[#f8fafc] p-6 flex flex-col justify-between min-h-screen sticky top-0 hidden lg:flex">
-        <div>
-          {/* Header */}
-          <h2 className="text-sm font-bold text-slate-900">Advisor</h2>
-          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-            Reads your bills, cards and spending to answer questions.
-          </p>
+      <aside className="w-80 xl:w-88 shrink-0 border-l border-slate-200/80 bg-[#f8fafc] p-5 xl:p-6 flex flex-col h-screen sticky top-0 hidden lg:flex">
+        {/* Header with Quick Actions */}
+        <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200/70">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Advisor</h2>
+            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+              Reads your bills, cards and spending to answer questions.
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+            <button
+              type="button"
+              onClick={() => setIsPastChatsOpen(true)}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer"
+              title="Past Conversations"
+            >
+              <History className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsMemoryModalOpen(true)}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/60 transition-colors cursor-pointer relative"
+              title="Advisor Memory"
+            >
+              <Brain className="w-4 h-4" />
+              {aiMemory.length > 0 && (
+                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+              )}
+            </button>
+          </div>
+        </div>
 
-          {/* AI Message Bubble */}
-          <div className="bg-[#eff4f9] rounded-2xl p-4 text-xs text-slate-700 leading-relaxed border border-slate-200/60 mt-5 shadow-2xs">
+        {/* Scrollable Conversation Stream */}
+        <div className="flex-1 overflow-y-auto py-3 space-y-3 min-h-0 pr-0.5">
+          {/* Initial Advisor Insight Bubble */}
+          <div className="bg-[#eff4f9] rounded-2xl p-4 text-xs text-slate-700 leading-relaxed border border-slate-200/60 shadow-2xs">
             {highestAprCard ? (
               <span>
                 Your cash covers everything due this month. The {highestAprCard.name} has the highest rate at {highestAprCard.apr}%, so extra payments there save the most interest.
@@ -2218,45 +2244,88 @@ function KlarityApp() {
               </span>
             )}
           </div>
+
+          {/* Active Chat Messages in Sidebar */}
+          {chatMessages.filter((_, idx) => idx > 0).map((msg, i) => (
+            <div
+              key={i}
+              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[90%] rounded-2xl p-3 text-xs leading-relaxed ${
+                  msg.role === 'user'
+                    ? 'bg-[#18457c] text-white shadow-2xs'
+                    : 'bg-[#eff4f9] text-slate-800 border border-slate-200/60 shadow-2xs'
+                }`}
+              >
+                {msg.text}
+              </div>
+            </div>
+          ))}
+
+          {isAiTyping && (
+            <div className="flex justify-start">
+              <div className="bg-[#eff4f9] border border-slate-200/60 rounded-2xl px-3.5 py-2.5 text-xs text-slate-500 flex items-center gap-1.5 shadow-2xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:0.2s]"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:0.4s]"></span>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Suggestion Pills & Input at bottom */}
-        <div className="flex flex-col gap-2 mt-auto pt-6">
+        {/* Bottom Actions: Suggestions + Chat Input Form */}
+        <div className="pt-3 border-t border-slate-200/70 flex flex-col gap-2 shrink-0">
           <button
             type="button"
             onClick={() => handleSendChatMessage('What should I pay off first?')}
-            className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-2 rounded-full shadow-2xs transition-colors cursor-pointer"
+            className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
           >
             What should I pay off first?
           </button>
           <button
             type="button"
             onClick={() => handleSendChatMessage("What's due in 14 days?")}
-            className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-2 rounded-full shadow-2xs transition-colors cursor-pointer"
+            className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
           >
             What's due in 14 days?
           </button>
           <button
             type="button"
             onClick={() => handleSendChatMessage('Where can I cut subscriptions?')}
-            className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-2 rounded-full shadow-2xs transition-colors cursor-pointer"
+            className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
           >
             Where can I cut subscriptions?
           </button>
 
-          {/* Chat Form */}
-          <form onSubmit={handleSendChatMessage} className="flex items-center gap-2 mt-2">
+          {/* Chat Form with Scan/Upload button */}
+          <form onSubmit={handleSendChatMessage} className="flex items-center gap-2 mt-1">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              className="hidden"
+              accept=".pdf,.png,.jpg,.jpeg,.txt,.csv"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-500 hover:text-slate-800 transition-colors shadow-2xs cursor-pointer shrink-0"
+              title="Upload & Scan Bill/PDF"
+            >
+              <Paperclip className="w-4 h-4" />
+            </button>
             <input
               type="text"
               placeholder="Ask about your money"
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
-              className="flex-1 bg-white border border-slate-200/90 rounded-xl px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs"
+              className="flex-1 min-w-0 bg-white border border-slate-200/90 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs"
             />
             <button
               type="submit"
               disabled={isAiTyping || !chatInput.trim()}
-              className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0"
             >
               Send
             </button>
