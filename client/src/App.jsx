@@ -42,7 +42,8 @@ import {
   X,
   History,
   ArrowLeft,
-  Layers
+  Layers,
+  Globe
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
@@ -2281,7 +2282,13 @@ function KlarityApp() {
         {/* Header with Quick Actions */}
         <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200/70">
           <div>
-            <h2 className="text-sm font-bold text-slate-900">Advisor</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-slate-900">Advisor</h2>
+              <span className="inline-flex items-center gap-1 text-[10px] text-blue-700 bg-blue-50 border border-blue-200/80 px-2 py-0.5 rounded-full font-medium">
+                <Globe className="w-2.5 h-2.5 text-blue-600" />
+                Live web
+              </span>
+            </div>
             <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
               Reads your bills, cards and spending to answer questions.
             </p>
@@ -2377,6 +2384,13 @@ function KlarityApp() {
 
         {/* Bottom Actions: Suggestions + Chat Input Form */}
         <div className="pt-3 border-t border-slate-200/70 flex flex-col gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => handleSendChatMessage('What are the best 0% APR balance transfer cards right now?')}
+            className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer truncate"
+          >
+            Best 0% APR balance transfer cards?
+          </button>
           <button
             type="button"
             onClick={() => handleSendChatMessage('What should I pay off first?')}

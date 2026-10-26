@@ -737,6 +737,47 @@ app.post('/api/bills/scan', async (req, res) => {
   res.json({ success: true, summary: { biller, amount: newBill.expectedAmount, nextDueDate: dueDate } });
 });
 
+
+// Live Web Search Helper for Market Research & Real-Time Card/Bank Offers
+async function performWebSearch(query) {
+  try {
+    const res = await fetch('https://lite.duckduckgo.com/lite/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      body: `q=${encodeURIComponent(query)}`
+    });
+    if (!res.ok) return '';
+    const html = await res.text();
+    const tdRe = /<td[^>]*>([\s\S]*?)<\/td>/g;
+    let matches = [];
+    let m;
+    while ((m = tdRe.exec(html)) !== null && matches.length < 12) {
+      const text = m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+      if (text.length > 35 && !text.includes('DuckDuckGo') && !text.includes('Sponsored link')) {
+        matches.push(text);
+      }
+    }
+    return matches.slice(0, 5).map(item => `- ${item}`).join('\n');
+  } catch (err) {
+    console.warn('Web search lookup note:', err.message);
+    return '';
+  }
+}
+
+function shouldPerformWebSearch(message) {
+  const m = (message || '').toLowerCase();
+  const searchKeywords = [
+    'card', 'offer', 'apr', 'transfer', 'rate', 'recommend', 'compare', 'deal', 
+    'best', 'zero', '0%', '0 apr', 'signup', 'bonus', 'bank', 'savings', 
+    'high yield', 'hysa', 'loan', 'promo', 'current', 'today', 'market', 
+    'utility', 'rebate', 'tax', 'cost', 'alternative', 'cheaper', 'funds'
+  ];
+  return searchKeywords.some(k => m.includes(k));
+}
+
 // 10. AI Advisor Chat with Navigation Capabilities & User Key Encryption
 app.post('/api/ai/chat', async (req, res) => {
   const { message, userId, userMemory = [] } = req.body;
@@ -769,6 +810,15 @@ app.post('/api/ai/chat', async (req, res) => {
     ? `\n\nUser Financial Preferences & Memory:\n${userMemory.map(m => `- ${m}`).join('\n')}`
     : '';
 
+  // Perform real-time web search if the user asks about credit card offers, 0% APR, balance transfers, or market rates
+  let liveWebSearchContext = '';
+  if (shouldPerformWebSearch(message)) {
+    const webResults = await performWebSearch(message);
+    if (webResults) {
+      liveWebSearchContext = `\n\nLive Web Search Results (Real-Time Market Data):\n${webResults}\nUse these live web findings to recommend specific current cards (e.g. Citi Simplicity, Wells Fargo Reflect, Chase Freedom, Discover it, etc.), exact 0% APR intro periods (e.g. 18-21 months), transfer fee percentages, and requirements.`;
+    }
+  }
+
   const systemContext = `
 You are Klarity, the personal AI Financial Advisor for ${currentUser.name}.
 Actual Connected Finances for ${currentUser.name} (strictly respecting permissions):
@@ -776,7 +826,7 @@ Actual Connected Finances for ${currentUser.name} (strictly respecting permissio
 - Credit Cards (${permissions.cards ? 'Permitted' : 'Access Restricted'}): ${userCards.length > 0 ? userCards.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)} @ ${c.apr}% APR (Min: $${c.minPayment || 0})`).join(' | ') : 'None connected'}
 - Upcoming Bills (${permissions.bills ? 'Permitted' : 'Access Restricted'}): ${userBills.length > 0 ? userBills.map(b => `${b.name}: $${Number(b.expectedAmount).toFixed(2)} due ${b.nextDueDate || b.dueDate || 'Day ' + b.dueDay}`).join(' | ') : 'None scheduled'}
 - Subscriptions (${permissions.subscriptions ? 'Permitted' : 'Access Restricted'}): ${userSubscriptions.length > 0 ? userSubscriptions.map(s => `${s.name}: $${Number(s.amount).toFixed(2)}/mo`).join(' | ') : 'None added'}
-- Recent Purchases (${permissions.purchases ? 'Permitted' : 'Access Restricted'}): ${userTransactions.length > 0 ? userTransactions.map(t => `${t.name}: $${Math.abs(Number(t.amount)).toFixed(2)} on ${t.date}`).join(' | ') : 'None recorded'}${memoryContext}
+- Recent Purchases (${permissions.purchases ? 'Permitted' : 'Access Restricted'}): ${userTransactions.length > 0 ? userTransactions.map(t => `${t.name}: ${Math.abs(Number(t.amount)).toFixed(2)} on ${t.date}`).join(' | ') : 'None recorded'}${memoryContext}${liveWebSearchContext}
 
 Rules:
 1. Provide concise, clear, and empathetic financial guidance based strictly on real numbers.
@@ -838,15 +888,31 @@ Rules:
       }
     } else if (provider === 'gemini') {
       const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${rawApiKey}`;
-      const aiRes = await fetch(geminiUrl, {
+      const geminiPayload = {
+        contents: [
+          { role: 'user', parts: [{ text: `${systemContext}\n\nUser Question: ${message}` }] }
+        ]
+      };
+      // Enable native Google Search Grounding for live web queries
+      if (shouldPerformWebSearch(message)) {
+        geminiPayload.tools = [{ googleSearch: {} }];
+      }
+
+      let aiRes = await fetch(geminiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            { role: 'user', parts: [{ text: `${systemContext}\n\nUser Question: ${message}` }] }
-          ]
-        })
+        body: JSON.stringify(geminiPayload)
       });
+
+      // Fallback without googleSearch tool if model doesn't support grounding
+      if (!aiRes.ok && geminiPayload.tools) {
+        delete geminiPayload.tools;
+        aiRes = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(geminiPayload)
+        });
+      }
       if (aiRes.ok) {
         const aiJson = await aiRes.json();
         reply = aiJson.candidates?.[0]?.content?.parts?.[0]?.text;
