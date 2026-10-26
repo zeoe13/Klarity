@@ -254,9 +254,11 @@ function KlarityApp() {
   });
   const [settingsAiModel, setSettingsAiModel] = useState(() => {
     try {
-      return localStorage.getItem('klarity_ai_model') || 'gemini-2.0-flash';
+      const saved = localStorage.getItem('klarity_ai_model');
+      if (saved && saved !== 'gemini-2.0-flash') return saved;
+      return 'gemini-2.5-flash';
     } catch {
-      return 'gemini-2.0-flash';
+      return 'gemini-2.5-flash';
     }
   });
   const [settingsAiApiKey, setSettingsAiApiKey] = useState(() => {
@@ -698,7 +700,7 @@ function KlarityApp() {
     setSettingsAiProvider(newProvider);
     if (newProvider === 'anthropic') setSettingsAiModel('claude-3-7-sonnet-20250219');
     else if (newProvider === 'openai') setSettingsAiModel('gpt-4o');
-    else if (newProvider === 'gemini') setSettingsAiModel('gemini-2.0-flash');
+    else if (newProvider === 'gemini') setSettingsAiModel('gemini-2.5-flash');
   };
 
   const handleSaveProfile = async () => {
@@ -1347,7 +1349,11 @@ function KlarityApp() {
     try {
       const cachedApiKey = settingsAiApiKey.trim() || localStorage.getItem('klarity_ai_api_key') || '';
       const cachedProvider = settingsAiProvider || localStorage.getItem('klarity_ai_provider') || 'gemini';
-      const cachedModel = settingsAiModel || localStorage.getItem('klarity_ai_model') || 'gemini-2.0-flash';
+      let cachedModel = settingsAiModel || localStorage.getItem('klarity_ai_model') || 'gemini-2.5-flash';
+      if (cachedModel === 'gemini-2.0-flash') {
+        cachedModel = 'gemini-2.5-flash';
+        try { localStorage.setItem('klarity_ai_model', 'gemini-2.5-flash'); } catch {}
+      }
 
       const res = await fetch('/api/ai/chat', {
         method: 'POST',

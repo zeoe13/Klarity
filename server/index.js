@@ -381,7 +381,7 @@ app.post('/api/settings/ai-key/test-and-save', async (req, res) => {
   if (!data.settings) data.settings = {};
   data.settings.ai = {
     provider,
-    model: model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.0-flash'),
+    model: model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.5-flash'),
     encryptedKey: encrypt(keyToTest),
     status: 'connected',
     dataPermissions: dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true }
@@ -830,7 +830,7 @@ app.post('/api/ai/chat', async (req, res) => {
     if (!data.settings) data.settings = {};
     data.settings.ai = {
       provider: clientProvider || 'gemini',
-      model: clientModel || 'gemini-2.0-flash',
+      model: clientModel || 'gemini-2.5-flash',
       encryptedKey: encrypt(clientApiKey),
       status: 'connected',
       dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true }
@@ -847,7 +847,10 @@ app.post('/api/ai/chat', async (req, res) => {
 
   const permissions = aiConfig.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true };
   const provider = clientProvider || aiConfig.provider || 'gemini';
-  const model = clientModel || aiConfig.model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.0-flash');
+  let model = clientModel || aiConfig.model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.5-flash');
+  if (model === 'gemini-2.0-flash') {
+    model = 'gemini-2.5-flash';
+  }
 
   const currentUser = (data.users || []).find(u => u.id === userId) || data.users?.[0] || { name: 'Ziyad' };
 
@@ -944,40 +947,53 @@ Rules:
         reply = `OpenAI API error: ${errJson?.error?.message || aiRes.statusText}`;
       }
     } else if (provider === 'gemini') {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${rawApiKey}`;
-      const geminiPayload = {
-        contents: [
-          { role: 'user', parts: [{ text: `${systemContext}\n\nUser Question: ${message}` }] }
-        ]
-      };
-      // Enable native Google Search Grounding for live web queries
-      if (shouldPerformWebSearch(message)) {
-        geminiPayload.tools = [{ googleSearch: {} }];
-      }
+      const candidateModels = [model, 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+      let succeeded = false;
 
-      let aiRes = await fetch(geminiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(geminiPayload)
-      });
+      for (const curModel of candidateModels) {
+        if (succeeded) break;
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:generateContent?key=${rawApiKey}`;
+        const geminiPayload = {
+          contents: [
+            { role: 'user', parts: [{ text: `${systemContext}\n\nUser Question: ${message}` }] }
+          ]
+        };
+        if (shouldPerformWebSearch(message)) {
+          geminiPayload.tools = [{ googleSearch: {} }];
+        }
 
-      // Fallback without googleSearch tool if model doesn't support grounding
-      if (!aiRes.ok && geminiPayload.tools) {
-        delete geminiPayload.tools;
-        aiRes = await fetch(geminiUrl, {
+        let aiRes = await fetch(geminiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(geminiPayload)
         });
+
+        if (!aiRes.ok && geminiPayload.tools) {
+          delete geminiPayload.tools;
+          aiRes = await fetch(geminiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(geminiPayload)
+          });
+        }
+
+        if (aiRes.ok) {
+          const aiJson = await aiRes.json();
+          reply = aiJson.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (reply) {
+            succeeded = true;
+            break;
+          }
+        } else {
+          const errJson = await aiRes.json().catch(() => ({}));
+          // If model is not found/deprecated, try the next candidate model
+          if (aiRes.status === 404 || errJson?.error?.message?.includes('not found') || errJson?.error?.message?.includes('no longer available')) {
+            continue;
+          }
+          reply = `Gemini API error: ${errJson?.error?.message || aiRes.statusText}`;
+          break;
+        }
       }
-      if (aiRes.ok) {
-        const aiJson = await aiRes.json();
-        reply = aiJson.candidates?.[0]?.content?.parts?.[0]?.text;
-      } else {
-        const errJson = await aiRes.json().catch(() => ({}));
-        reply = `Gemini API error: ${errJson?.error?.message || aiRes.statusText}`;
-      }
-    }
 
     if (!reply) {
       reply = "I was unable to retrieve a response from your AI provider. Please verify your API key and model settings in Settings.";
