@@ -947,11 +947,38 @@ Rules:
         reply = `OpenAI API error: ${errJson?.error?.message || aiRes.statusText}`;
       }
     } else if (provider === 'gemini') {
-      const candidateModels = [model, 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
-      let succeeded = false;
+      // Query the API for all active available models for this user's key dynamically
+      let activeGeminiModels = [];
+      try {
+        const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${rawApiKey}`);
+        if (listRes.ok) {
+          const listJson = await listRes.json();
+          const supported = (listJson.models || [])
+            .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+            .map(m => m.name.replace(/^models\//, ''));
+          if (supported.length > 0) {
+            activeGeminiModels = supported;
+          }
+        }
+      } catch (e) {
+        console.warn('Could not dynamically fetch models list:', e.message);
+      }
 
+      // Prioritized list: dynamic models first, then standard current models (gemini-3.8-flash, gemini-3.7-flash, gemini-3.5-flash)
+      const candidateModels = [
+        ...new Set([
+          ...(model ? [model] : []),
+          ...activeGeminiModels,
+          'gemini-3.8-flash',
+          'gemini-3.7-flash',
+          'gemini-3.5-flash',
+          'gemini-4-argon',
+          'gemini-2.5-flash'
+        ])
+      ];
+
+      let lastGeminiError = '';
       for (const curModel of candidateModels) {
-        if (succeeded) break;
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:generateContent?key=${rawApiKey}`;
         const geminiPayload = {
           contents: [
@@ -980,19 +1007,22 @@ Rules:
         if (aiRes.ok) {
           const aiJson = await aiRes.json();
           reply = aiJson.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (reply) {
-            succeeded = true;
-            break;
-          }
+          if (reply) break;
         } else {
           const errJson = await aiRes.json().catch(() => ({}));
-          // If model is not found/deprecated, try the next candidate model
-          if (aiRes.status === 404 || errJson?.error?.message?.includes('not found') || errJson?.error?.message?.includes('no longer available')) {
+          const errMsg = errJson?.error?.message || `HTTP ${aiRes.status}`;
+          lastGeminiError = errMsg;
+          // If model is discontinued or not found, proceed to next model in list
+          if (aiRes.status === 404 || errMsg.includes('not found') || errMsg.includes('no longer available')) {
             continue;
           }
-          reply = `Gemini API error: ${errJson?.error?.message || aiRes.statusText}`;
+          reply = `Gemini API error: ${errMsg}`;
           break;
         }
+      }
+
+      if (!reply && lastGeminiError) {
+        reply = `Gemini API error: ${lastGeminiError}`;
       }
     }
 
