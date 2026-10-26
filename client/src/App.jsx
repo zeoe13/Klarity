@@ -3123,6 +3123,27 @@ function KlarityApp() {
                           )}
                         </div>
 
+                        {/* Plaid Link Connect Banner with Green Button */}
+                        <div className="p-4 rounded-xl bg-emerald-50/80 border border-emerald-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                              <Building2 className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-900">Connect Bank with Plaid</p>
+                              <p className="text-[11px] text-slate-500">Securely link your real accounts, balances, and cards.</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={initiatePlaidLink}
+                            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0"
+                          >
+                            <span>Add bank with Plaid</span>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
                         <form onSubmit={handleSavePlaidCredentials} className="flex flex-col gap-4">
                           <div>
                             <label className="text-xs font-medium text-slate-700 block mb-1.5">Plaid Client ID</label>
@@ -3160,9 +3181,10 @@ function KlarityApp() {
                               <button
                                 type="button"
                                 onClick={initiatePlaidLink}
-                                className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
                               >
-                                Connect bank
+                                <Building2 className="w-3.5 h-3.5" />
+                                <span>Connect bank (Plaid)</span>
                               </button>
                               <button
                                 type="button"
