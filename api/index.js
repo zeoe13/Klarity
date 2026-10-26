@@ -68,7 +68,7 @@ const initialSeedData = {
   settings: {
     ai: {
       provider: "gemini",
-      model: "gemini-2.5-flash",
+      model: "gemini-3.8-flash",
       encryptedKey: "",
       status: "not_connected",
       dataPermissions: {
@@ -260,7 +260,7 @@ app.get('/api/settings', (req, res) => {
   const user = data.users?.[0] || { name: 'Ziyad Elmahi', email: 'zeoe13@gmail.com' };
   const ai = data.settings?.ai || {
     provider: 'gemini',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.8-flash',
     encryptedKey: '',
     status: 'not_connected',
     dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true }
@@ -381,7 +381,7 @@ app.post('/api/settings/ai-key/test-and-save', async (req, res) => {
   if (!data.settings) data.settings = {};
   data.settings.ai = {
     provider,
-    model: model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.5-flash'),
+    model: model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-3.8-flash'),
     encryptedKey: encrypt(keyToTest),
     status: 'connected',
     dataPermissions: dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true }
@@ -830,7 +830,7 @@ app.post('/api/ai/chat', async (req, res) => {
     if (!data.settings) data.settings = {};
     data.settings.ai = {
       provider: clientProvider || 'gemini',
-      model: clientModel || 'gemini-2.5-flash',
+      model: clientModel || 'gemini-3.8-flash',
       encryptedKey: encrypt(clientApiKey),
       status: 'connected',
       dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true }
@@ -847,10 +847,10 @@ app.post('/api/ai/chat', async (req, res) => {
 
   const permissions = aiConfig.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true };
   const provider = clientProvider || aiConfig.provider || 'gemini';
-  let model = clientModel || aiConfig.model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.5-flash');
-  // Auto-upgrade deprecated gemini-2.0-flash to gemini-2.5-flash / gemini-1.5-flash
-  if (model === 'gemini-2.0-flash') {
-    model = 'gemini-2.5-flash';
+  let model = clientModel || aiConfig.model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-3.8-flash');
+  // Auto-upgrade any old/preview/tts/deprecated gemini names
+  if (model.includes('2.0') || model.includes('tts') || model.includes('audio') || model.includes('image') || model === 'gemini-2.5-flash') {
+    model = 'gemini-3.8-flash';
   }
 
   const currentUser = (data.users || []).find(u => u.id === userId) || data.users?.[0] || { name: 'Ziyad' };
@@ -948,7 +948,7 @@ Rules:
         reply = `OpenAI API error: ${errJson?.error?.message || aiRes.statusText}`;
       }
     } else if (provider === 'gemini') {
-      // Query the API for all active available models for this user's key dynamically
+      // Query the API for all active available text models for this user's key dynamically
       let activeGeminiModels = [];
       try {
         const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${rawApiKey}`);
@@ -956,6 +956,11 @@ Rules:
           const listJson = await listRes.json();
           const supported = (listJson.models || [])
             .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+            // Filter OUT TTS/Audio/Image/Live specific models that do not output text
+            .filter(m => {
+              const n = m.name.toLowerCase();
+              return !n.includes('tts') && !n.includes('audio') && !n.includes('image') && !n.includes('transcribe') && !n.includes('translate');
+            })
             .map(m => m.name.replace(/^models\//, ''));
           if (supported.length > 0) {
             activeGeminiModels = supported;
@@ -965,16 +970,15 @@ Rules:
         console.warn('Could not dynamically fetch models list:', e.message);
       }
 
-      // Prioritized list: dynamic models first, then standard current models (gemini-3.8-flash, gemini-3.7-flash, gemini-3.5-flash)
+      // Prioritized list: stable Gemini 3 text models first
       const candidateModels = [
         ...new Set([
-          ...(model ? [model] : []),
-          ...activeGeminiModels,
           'gemini-3.8-flash',
-          'gemini-3.7-flash',
-          'gemini-3.5-flash',
-          'gemini-4-argon',
-          'gemini-2.5-flash'
+          'gemini-3.6-flash',
+          'gemini-3.5-flash-lite',
+          'gemini-3.1-flash-lite',
+          ...(model && !model.includes('tts') && !model.includes('audio') && !model.includes('image') ? [model] : []),
+          ...activeGeminiModels
         ])
       ];
 

@@ -255,10 +255,10 @@ function KlarityApp() {
   const [settingsAiModel, setSettingsAiModel] = useState(() => {
     try {
       const saved = localStorage.getItem('klarity_ai_model');
-      if (saved && saved !== 'gemini-2.0-flash') return saved;
-      return 'gemini-2.5-flash';
+      if (saved && !saved.includes('2.0') && !saved.includes('2.5') && !saved.includes('tts')) return saved;
+      return 'gemini-3.8-flash';
     } catch {
-      return 'gemini-2.5-flash';
+      return 'gemini-3.8-flash';
     }
   });
   const [settingsAiApiKey, setSettingsAiApiKey] = useState(() => {
@@ -669,8 +669,8 @@ function KlarityApp() {
         }
         if (json.ai) {
           let prov = json.ai.provider || localStorage.getItem('klarity_ai_provider') || 'gemini';
-          let mod = json.ai.model || localStorage.getItem('klarity_ai_model') || 'gemini-2.5-flash';
-          if (mod === 'gemini-2.0-flash') mod = 'gemini-2.5-flash';
+          let mod = json.ai.model || localStorage.getItem('klarity_ai_model') || 'gemini-3.8-flash';
+          if (mod.includes('2.0') || mod.includes('2.5') || mod.includes('tts')) mod = 'gemini-3.8-flash';
 
           setSettingsAiProvider(prov);
           setSettingsAiModel(mod);
@@ -704,7 +704,7 @@ function KlarityApp() {
     setSettingsAiProvider(newProvider);
     if (newProvider === 'anthropic') setSettingsAiModel('claude-3-7-sonnet-20250219');
     else if (newProvider === 'openai') setSettingsAiModel('gpt-4o');
-    else if (newProvider === 'gemini') setSettingsAiModel('gemini-2.5-flash');
+    else if (newProvider === 'gemini') setSettingsAiModel('gemini-3.8-flash');
   };
 
   const handleSaveProfile = async () => {
@@ -1353,10 +1353,10 @@ function KlarityApp() {
     try {
       const cachedApiKey = settingsAiApiKey.trim() || localStorage.getItem('klarity_ai_api_key') || '';
       const cachedProvider = settingsAiProvider || localStorage.getItem('klarity_ai_provider') || 'gemini';
-      let cachedModel = settingsAiModel || localStorage.getItem('klarity_ai_model') || 'gemini-2.5-flash';
-      if (cachedModel === 'gemini-2.0-flash') {
-        cachedModel = 'gemini-2.5-flash';
-        try { localStorage.setItem('klarity_ai_model', 'gemini-2.5-flash'); } catch {}
+      let cachedModel = settingsAiModel || localStorage.getItem('klarity_ai_model') || 'gemini-3.8-flash';
+      if (cachedModel.includes('2.0') || cachedModel.includes('2.5') || cachedModel.includes('tts')) {
+        cachedModel = 'gemini-3.8-flash';
+        try { localStorage.setItem('klarity_ai_model', 'gemini-3.8-flash'); } catch {}
       }
 
       const res = await fetch('/api/ai/chat', {
