@@ -668,10 +668,14 @@ function KlarityApp() {
           setSettingsDisplayName(json.user.name);
         }
         if (json.ai) {
-          setSettingsAiProvider(json.ai.provider || 'anthropic');
-          setSettingsAiModel(json.ai.model || 'claude-3-7-sonnet-20250219');
-          setSettingsAiMaskedKey(json.ai.maskedKey || '');
-          setSettingsAiStatus(json.ai.status || 'not_connected');
+          let prov = json.ai.provider || localStorage.getItem('klarity_ai_provider') || 'gemini';
+          let mod = json.ai.model || localStorage.getItem('klarity_ai_model') || 'gemini-2.5-flash';
+          if (mod === 'gemini-2.0-flash') mod = 'gemini-2.5-flash';
+
+          setSettingsAiProvider(prov);
+          setSettingsAiModel(mod);
+          setSettingsAiMaskedKey(json.ai.maskedKey || localStorage.getItem('klarity_ai_masked_key') || '');
+          setSettingsAiStatus(json.ai.status || localStorage.getItem('klarity_ai_status') || 'not_connected');
           if (json.ai.dataPermissions) {
             setSettingsAiPermissions(json.ai.dataPermissions);
           }

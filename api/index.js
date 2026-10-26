@@ -67,8 +67,8 @@ const initialSeedData = {
   plaidItems: [],
   settings: {
     ai: {
-      provider: "anthropic",
-      model: "claude-3-7-sonnet-20250219",
+      provider: "gemini",
+      model: "gemini-2.5-flash",
       encryptedKey: "",
       status: "not_connected",
       dataPermissions: {
@@ -259,8 +259,8 @@ app.get('/api/settings', (req, res) => {
   const data = readData();
   const user = data.users?.[0] || { name: 'Ziyad Elmahi', email: 'zeoe13@gmail.com' };
   const ai = data.settings?.ai || {
-    provider: 'anthropic',
-    model: 'claude-3-7-sonnet-20250219',
+    provider: 'gemini',
+    model: 'gemini-2.5-flash',
     encryptedKey: '',
     status: 'not_connected',
     dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true }
