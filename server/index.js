@@ -823,7 +823,7 @@ function shouldPerformWebSearch(message) {
 
 // 10. AI Advisor Chat with Navigation Capabilities & User Key Encryption
 app.post('/api/ai/chat', async (req, res) => {
-  const { message, userId, userMemory = [], clientApiKey, clientProvider, clientModel } = req.body;
+  const { message, userId, userMemory = [], clientApiKey, clientProvider, clientModel, imageBase64, imageMimeType } = req.body;
   const data = readData();
 
   const aiConfig = data.settings?.ai || {};
@@ -989,14 +989,21 @@ Rules:
       let lastGeminiError = '';
       for (const curModel of candidateModels) {
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${curModel}:generateContent?key=${rawApiKey}`;
+        const parts = [{ text: `${systemContext}\n\nUser Question: ${message || 'Please analyze this document or image.'}` }];
+        if (imageBase64) {
+          parts.push({
+            inlineData: {
+              mimeType: imageMimeType || 'image/jpeg',
+              data: imageBase64
+            }
+          });
+        }
         const geminiPayload = {
-          contents: [
-            { role: 'user', parts: [{ text: `${systemContext}\n\nUser Question: ${message}` }] }
-          ]
+          contents: [{ role: 'user', parts }]
         };
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
 
         let aiRes = await fetch(geminiUrl, {
           method: 'POST',

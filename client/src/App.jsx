@@ -454,6 +454,7 @@ function KlarityApp() {
     ];
   });
   const [chatInput, setChatInput] = useState('');
+  const [chatImage, setChatImage] = useState(null); // { base64, mimeType, previewUrl, name }
   const [isAiTyping, setIsAiTyping] = useState(false);
   const chatEndRef = useRef(null);
 
@@ -489,6 +490,7 @@ function KlarityApp() {
   const [isUploadMenuOpen, setIsUploadMenuOpen] = useState(false);
   const uploadMenuRef = useRef(null);
   const fileInputRef = useRef(null);
+  const fullAdvisorFileInputRef = useRef(null);
 
   // User Dropdown Menu state & click-outside handling
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -1346,9 +1348,11 @@ function KlarityApp() {
       eOrText.preventDefault();
     }
     const userMsg = (typeof eOrText === 'string' ? eOrText : chatInput).trim();
-    if (!userMsg || isAiTyping) return;
+    if ((!userMsg && !chatImage) || isAiTyping) return;
 
+    const currentImg = chatImage;
     setChatInput('');
+    setChatImage(null);
 
     // Instant client-side intent navigation (e.g. "Show me my subscriptions")
     const lower = userMsg.toLowerCase();
@@ -1367,7 +1371,13 @@ function KlarityApp() {
       setIsSettingsOpen(true);
     }
 
-    const userUpdatedMessages = [...chatMessages, { role: 'user', text: userMsg }];
+    const newDisplayMsg = {
+      role: 'user',
+      text: userMsg || (currentImg ? 'Uploaded an image for analysis' : ''),
+      image: currentImg ? currentImg.previewUrl : null
+    };
+
+    const userUpdatedMessages = [...chatMessages, newDisplayMsg];
     updateActiveSession(userUpdatedMessages);
     setIsAiTyping(true);
 
@@ -1389,7 +1399,9 @@ function KlarityApp() {
           userMemory: aiMemory,
           clientApiKey: cachedApiKey,
           clientProvider: cachedProvider,
-          clientModel: cachedModel
+          clientModel: cachedModel,
+          imageBase64: currentImg?.base64,
+          imageMimeType: currentImg?.mimeType
         })
       });
 
@@ -2408,13 +2420,16 @@ function KlarityApp() {
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed ${
+                    className={`max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed flex flex-col gap-2 ${
                       msg.role === 'user'
                         ? 'bg-[#18457c] text-white shadow-2xs'
                         : 'bg-[#eff4f9] text-slate-800 border border-slate-200/60 shadow-2xs'
                     }`}
                   >
-                    {msg.text}
+                    {msg.image && (
+                      <img src={msg.image} alt="Uploaded attachment" className="max-h-48 rounded-lg object-contain bg-black/10 self-start" />
+                    )}
+                    {msg.text && <div>{msg.text}</div>}
                   </div>
                 </div>
               ))}
@@ -2428,19 +2443,132 @@ function KlarityApp() {
               <div ref={chatEndRef} />
             </div>
 
+            {/* Quick Suggestions (hidden while typing or if image attached) */}
+            {!chatInput && !chatImage && (
+              <div className="flex flex-wrap gap-2 pb-2">
+                <button
+                  type="button"
+                  onClick={() => handleSendChatMessage('What are the best 0% APR balance transfer cards right now?')}
+                  className="bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
+                >
+                  Best 0% APR balance transfer cards?
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendChatMessage('What should I pay off first?')}
+                  className="bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
+                >
+                  What should I pay off first?
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendChatMessage("What's due in 14 days?")}
+                  className="bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
+                >
+                  What's due in 14 days?
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendChatMessage('Where can I cut subscriptions?')}
+                  className="bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
+                >
+                  Where can I cut subscriptions?
+                </button>
+              </div>
+            )}
+
+            {/* Image Preview Thumbnail if attached or pasted */}
+            {chatImage && (
+              <div className="flex items-center gap-2 p-2 mb-2 bg-slate-100/80 rounded-xl border border-slate-200 w-fit max-w-full">
+                <img src={chatImage.previewUrl} alt="Attachment" className="w-12 h-12 rounded-lg object-cover border border-slate-300" />
+                <div className="min-w-0 pr-2">
+                  <p className="text-xs font-semibold text-slate-800 truncate max-w-[200px]">{chatImage.name || 'Pasted image'}</p>
+                  <p className="text-[11px] text-slate-500">Ready to analyze with multimodal AI</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setChatImage(null)}
+                  className="p-1 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                  title="Remove image"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             {/* Chat Input */}
-            <form onSubmit={handleSendChatMessage} className="flex items-center gap-2 pt-3 border-t border-slate-100">
+            <form onSubmit={handleSendChatMessage} className="flex items-end gap-2 pt-3 border-t border-slate-100">
               <input
-                type="text"
-                placeholder="Ask about your money..."
+                type="file"
+                ref={fullAdvisorFileInputRef}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (loadEvt) => {
+                    const base64 = loadEvt.target.result.split(',')[1];
+                    setChatImage({
+                      base64,
+                      mimeType: file.type || 'image/jpeg',
+                      previewUrl: loadEvt.target.result,
+                      name: file.name
+                    });
+                  };
+                  reader.readAsDataURL(file);
+                  e.target.value = '';
+                }}
+                className="hidden"
+                accept="image/*,.pdf"
+              />
+              <button
+                type="button"
+                onClick={() => fullAdvisorFileInputRef.current?.click()}
+                className="p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-800 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5"
+                title="Attach or Paste Image/Bill"
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
+              <textarea
+                rows={1}
+                placeholder="Ask about your money... (Shift+Enter for newline, or paste screenshot)"
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if ((chatInput.trim() || chatImage) && !isAiTyping) {
+                      handleSendChatMessage();
+                    }
+                  }
+                }}
+                onPaste={e => {
+                  const items = e.clipboardData?.items;
+                  if (items) {
+                    for (let i = 0; i < items.length; i++) {
+                      if (items[i].type.indexOf('image') !== -1) {
+                        const blob = items[i].getAsFile();
+                        const reader = new FileReader();
+                        reader.onload = (evt) => {
+                          const base64 = evt.target.result.split(',')[1];
+                          setChatImage({
+                            base64,
+                            mimeType: blob.type || 'image/png',
+                            previewUrl: evt.target.result,
+                            name: 'Pasted Screenshot'
+                          });
+                        };
+                        reader.readAsDataURL(blob);
+                        break;
+                      }
+                    }
+                  }
+                }}
+                className="flex-1 min-w-0 max-h-36 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 shadow-2xs resize-none"
               />
               <button
                 type="submit"
-                disabled={isAiTyping || !chatInput.trim()}
-                className="px-5 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer"
+                disabled={isAiTyping || (!chatInput.trim() && !chatImage)}
+                className="px-5 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5"
               >
                 Send
               </button>
@@ -2560,13 +2688,16 @@ function KlarityApp() {
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[90%] rounded-2xl p-3 text-xs leading-relaxed ${
+                className={`max-w-[90%] rounded-2xl p-3 text-xs leading-relaxed flex flex-col gap-2 ${
                   msg.role === 'user'
                     ? 'bg-[#18457c] text-white shadow-2xs'
                     : 'bg-[#eff4f9] text-slate-800 border border-slate-200/60 shadow-2xs'
                 }`}
               >
-                {msg.text}
+                {msg.image && (
+                  <img src={msg.image} alt="Uploaded attachment" className="max-h-36 rounded-lg object-contain bg-black/10" />
+                )}
+                {msg.text && <div>{msg.text}</div>}
               </div>
             </div>
           ))}
@@ -2582,65 +2713,133 @@ function KlarityApp() {
           )}
         </div>
 
-        {/* Bottom Actions: Suggestions + Chat Input Form */}
+        {/* Bottom Actions: Suggestions (hidden while typing or if closed) + Chat Input Form */}
         <div className="pt-3 border-t border-slate-200/70 flex flex-col gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => handleSendChatMessage('What are the best 0% APR balance transfer cards right now?')}
-            className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer truncate"
-          >
-            Best 0% APR balance transfer cards?
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSendChatMessage('What should I pay off first?')}
-            className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
-          >
-            What should I pay off first?
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSendChatMessage("What's due in 14 days?")}
-            className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
-          >
-            What's due in 14 days?
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSendChatMessage('Where can I cut subscriptions?')}
-            className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
-          >
-            Where can I cut subscriptions?
-          </button>
+          {/* Hide premade suggestion pills when user is typing text or has an image attached */}
+          {!chatInput && !chatImage && (
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleSendChatMessage('What are the best 0% APR balance transfer cards right now?')}
+                className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer truncate"
+              >
+                Best 0% APR balance transfer cards?
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSendChatMessage('What should I pay off first?')}
+                className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
+              >
+                What should I pay off first?
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSendChatMessage("What's due in 14 days?")}
+                className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
+              >
+                What's due in 14 days?
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSendChatMessage('Where can I cut subscriptions?')}
+                className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
+              >
+                Where can I cut subscriptions?
+              </button>
+            </div>
+          )}
 
-          {/* Chat Form with Scan/Upload button */}
-          <form onSubmit={handleSendChatMessage} className="flex items-center gap-2 mt-1">
+          {/* Image Preview Thumbnail if attached or pasted */}
+          {chatImage && (
+            <div className="flex items-center gap-2 p-2 bg-slate-100/80 rounded-xl border border-slate-200 w-fit max-w-full">
+              <img src={chatImage.previewUrl} alt="Attachment" className="w-10 h-10 rounded-lg object-cover border border-slate-300" />
+              <div className="min-w-0 pr-1">
+                <p className="text-[11px] font-semibold text-slate-800 truncate max-w-[140px]">{chatImage.name || 'Pasted image'}</p>
+                <p className="text-[10px] text-slate-500">Ready to analyze</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChatImage(null)}
+                className="p-1 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Chat Form with Scan/Upload button and multiline Textarea */}
+          <form onSubmit={handleSendChatMessage} className="flex items-end gap-2 mt-1">
             <input
               type="file"
               ref={fileInputRef}
-              onChange={handleFileUpload}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (loadEvt) => {
+                  const base64 = loadEvt.target.result.split(',')[1];
+                  setChatImage({
+                    base64,
+                    mimeType: file.type || 'image/jpeg',
+                    previewUrl: loadEvt.target.result,
+                    name: file.name
+                  });
+                };
+                reader.readAsDataURL(file);
+                e.target.value = '';
+              }}
               className="hidden"
-              accept=".pdf,.png,.jpg,.jpeg,.txt,.csv"
+              accept="image/*,.pdf"
             />
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="p-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-500 hover:text-slate-800 transition-colors shadow-2xs cursor-pointer shrink-0"
-              title="Upload & Scan Bill/PDF"
+              className="p-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-500 hover:text-slate-800 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5"
+              title="Attach or Paste Image/Bill"
             >
               <Paperclip className="w-4 h-4" />
             </button>
-            <input
-              type="text"
-              placeholder="Ask about your money"
+            <textarea
+              rows={1}
+              placeholder="Ask anything... (Shift+Enter for newline)"
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
-              className="flex-1 min-w-0 bg-white border border-slate-200/90 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs"
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if ((chatInput.trim() || chatImage) && !isAiTyping) {
+                    handleSendChatMessage();
+                  }
+                }
+              }}
+              onPaste={e => {
+                const items = e.clipboardData?.items;
+                if (items) {
+                  for (let i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf('image') !== -1) {
+                      const blob = items[i].getAsFile();
+                      const reader = new FileReader();
+                      reader.onload = (evt) => {
+                        const base64 = evt.target.result.split(',')[1];
+                        setChatImage({
+                          base64,
+                          mimeType: blob.type || 'image/png',
+                          previewUrl: evt.target.result,
+                          name: 'Pasted Screenshot'
+                        });
+                      };
+                      reader.readAsDataURL(blob);
+                      break;
+                    }
+                  }
+                }
+              }}
+              className="flex-1 min-w-0 max-h-32 bg-white border border-slate-200/90 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs resize-none"
             />
             <button
               type="submit"
-              disabled={isAiTyping || !chatInput.trim()}
-              className="px-3.5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0"
+              disabled={isAiTyping || (!chatInput.trim() && !chatImage)}
+              className="px-3.5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5"
             >
               Send
             </button>
