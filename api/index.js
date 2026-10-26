@@ -112,10 +112,10 @@ function writeData(data) {
 }
 
 // Plaid Client Helper
-function getPlaidClient() {
+function getPlaidClient(overrideClientId, overrideSecret) {
   const data = readData();
-  const clientId = process.env.PLAID_CLIENT_ID || data.settings?.plaid?.clientId;
-  const secret = process.env.PLAID_SECRET || (data.settings?.plaid?.encryptedSecret ? decrypt(data.settings.plaid.encryptedSecret) : '');
+  const clientId = overrideClientId || process.env.PLAID_CLIENT_ID || data.settings?.plaid?.clientId;
+  const secret = overrideSecret || process.env.PLAID_SECRET || (data.settings?.plaid?.encryptedSecret ? decrypt(data.settings.plaid.encryptedSecret) : '');
   const env = process.env.PLAID_ENV || data.settings?.plaidEnv || 'sandbox';
 
   if (!clientId || !secret) return null;
@@ -445,8 +445,8 @@ app.post('/api/settings/plaid', (req, res) => {
 
 // 3. Plaid Link & Webhook Endpoints
 app.post('/api/plaid/create-link-token', async (req, res) => {
-  const { userId } = req.body;
-  const plaidClient = getPlaidClient();
+  const { userId, clientPlaidId, clientPlaidSecret } = req.body;
+  const plaidClient = getPlaidClient(clientPlaidId, clientPlaidSecret);
 
   if (!plaidClient) {
     return res.status(400).json({
@@ -471,8 +471,8 @@ app.post('/api/plaid/create-link-token', async (req, res) => {
 });
 
 app.post('/api/plaid/exchange-public-token', async (req, res) => {
-  const { public_token, metadata, userId } = req.body;
-  const plaidClient = getPlaidClient();
+  const { public_token, metadata, userId, clientPlaidId, clientPlaidSecret } = req.body;
+  const plaidClient = getPlaidClient(clientPlaidId, clientPlaidSecret);
 
   if (!plaidClient) {
     return res.status(400).json({ error: 'Plaid keys not configured' });

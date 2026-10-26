@@ -688,18 +688,19 @@ function KlarityApp() {
           }
         }
         if (json.plaid) {
-          if (json.plaid.clientId) {
-            setSettingsPlaidClientId(json.plaid.clientId);
-            try { localStorage.setItem('klarity_plaid_client_id', json.plaid.clientId); } catch {}
-          }
-          if (json.plaid.maskedSecret) {
-            setSettingsPlaidMaskedSecret(json.plaid.maskedSecret);
-            try { localStorage.setItem('klarity_plaid_masked_secret', json.plaid.maskedSecret); } catch {}
-          }
-          if (json.plaid.status) {
-            setSettingsPlaidStatus(json.plaid.status);
-            try { localStorage.setItem('klarity_plaid_status', json.plaid.status); } catch {}
-          }
+          const storedClientId = localStorage.getItem('klarity_plaid_client_id') || '';
+          const storedMaskedSecret = localStorage.getItem('klarity_plaid_masked_secret') || '';
+          const storedSecret = localStorage.getItem('klarity_plaid_secret') || '';
+          const storedStatus = localStorage.getItem('klarity_plaid_status') || 'not_connected';
+
+          const finalClientId = json.plaid.clientId || storedClientId;
+          const finalMasked = json.plaid.maskedSecret || storedMaskedSecret;
+          const finalStatus = (json.plaid.status === 'connected' || storedStatus === 'connected' || Boolean(storedClientId)) ? 'connected' : 'not_connected';
+
+          if (finalClientId) setSettingsPlaidClientId(finalClientId);
+          if (finalMasked) setSettingsPlaidMaskedSecret(finalMasked);
+          if (storedSecret) setSettingsPlaidSecret(storedSecret);
+          setSettingsPlaidStatus(finalStatus);
         }
       }
     } catch (err) {
@@ -832,7 +833,8 @@ function KlarityApp() {
         try {
           if (json.clientId) localStorage.setItem('klarity_plaid_client_id', json.clientId);
           if (json.maskedSecret) localStorage.setItem('klarity_plaid_masked_secret', json.maskedSecret);
-          if (json.status) localStorage.setItem('klarity_plaid_status', json.status);
+          if (settingsPlaidSecret) localStorage.setItem('klarity_plaid_secret', settingsPlaidSecret);
+          localStorage.setItem('klarity_plaid_status', json.status || 'connected');
         } catch {}
         setNotificationToast('Plaid credentials saved securely server-side!');
         setTimeout(() => setNotificationToast(''), 3000);
@@ -1059,10 +1061,17 @@ function KlarityApp() {
     setIsConnectingPlaid(true);
     setPlaidError('');
     try {
+      const storedClientId = settingsPlaidClientId || localStorage.getItem('klarity_plaid_client_id') || '';
+      const storedSecret = settingsPlaidSecret || localStorage.getItem('klarity_plaid_secret') || '';
+
       const res = await fetch('/api/plaid/create-link-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id })
+        body: JSON.stringify({
+          userId: currentUser.id,
+          clientPlaidId: storedClientId,
+          clientPlaidSecret: storedSecret
+        })
       });
       const json = await res.json();
 
@@ -1089,13 +1098,18 @@ function KlarityApp() {
       token,
       onSuccess: async (public_token, metadata) => {
         try {
+          const storedClientId = settingsPlaidClientId || localStorage.getItem('klarity_plaid_client_id') || '';
+          const storedSecret = settingsPlaidSecret || localStorage.getItem('klarity_plaid_secret') || '';
+
           await fetch('/api/plaid/exchange-public-token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               public_token,
               metadata,
-              userId: currentUser.id
+              userId: currentUser.id,
+              clientPlaidId: storedClientId,
+              clientPlaidSecret: storedSecret
             })
           });
           setLinkToken(null);
