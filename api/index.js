@@ -12,14 +12,169 @@ app.use(express.json());
 // In Vercel serverless environment, local filesystem root is read-only; use /tmp or memory
 const DATA_FILE = process.env.VERCEL ? '/tmp/klarity_data.json' : path.join(__dirname, '../server/data.json');
 
-// Memory store fallback
-let memoryData = {
-  users: [],
-  accounts: [],
-  bills: [],
-  transactions: [],
-  settings: {}
+// Default initial seed data matching UI
+const initialSeedData = {
+  users: [
+    {
+      id: "u-ziyad",
+      email: "ziyad@klarity.app",
+      name: "Ziyad Elmahi",
+      avatar: "",
+      role: "Primary Member"
+    }
+  ],
+  accounts: [
+    {
+      id: "acc-checking",
+      ownerId: "u-ziyad",
+      institution: "Checking",
+      name: "Checking Account",
+      type: "depository",
+      balance: 4218.36,
+      limit: 0,
+      apr: 0,
+      mask: "8912"
+    },
+    {
+      id: "acc-everyday",
+      ownerId: "u-ziyad",
+      institution: "Bank",
+      name: "Everyday Rewards",
+      type: "credit",
+      balance: 1102.20,
+      limit: 5000,
+      apr: 21.9,
+      mask: "4417"
+    },
+    {
+      id: "acc-travel",
+      ownerId: "u-ziyad",
+      institution: "Bank",
+      name: "Travel Card",
+      type: "credit",
+      balance: 662.00,
+      limit: 2000,
+      apr: 24.4,
+      mask: "9082"
+    }
+  ],
+  bills: [
+    {
+      id: "bill-pge",
+      assignedOwnerId: "u-ziyad",
+      name: "PG&E Electric",
+      biller: "PG&E",
+      category: "Utilities",
+      expectedAmount: 128.40,
+      dueDay: "28",
+      nextDueDate: "Due Oct 28 • Checking",
+      daysUntil: 3,
+      status: "due_soon"
+    },
+    {
+      id: "bill-rent",
+      assignedOwnerId: "u-ziyad",
+      name: "Rent",
+      biller: "Property Management",
+      category: "Housing",
+      expectedAmount: 650.00,
+      dueDay: "1",
+      nextDueDate: "Due Nov 1 • Checking",
+      daysUntil: 7,
+      status: "upcoming"
+    },
+    {
+      id: "bill-water",
+      assignedOwnerId: "u-ziyad",
+      name: "Water Service",
+      biller: "Fresno Water",
+      category: "Utilities",
+      expectedAmount: 63.75,
+      dueDay: "6",
+      nextDueDate: "Due Nov 6 • Checking",
+      daysUntil: 12,
+      status: "upcoming"
+    }
+  ],
+  subscriptions: [
+    {
+      id: "sub-netflix",
+      ownerId: "u-ziyad",
+      name: "Netflix",
+      amount: 15.49,
+      billingCycle: "monthly",
+      renewalDate: "Renews Nov 3",
+      category: "Streaming"
+    },
+    {
+      id: "sub-spotify",
+      ownerId: "u-ziyad",
+      name: "Spotify",
+      amount: 11.99,
+      billingCycle: "monthly",
+      renewalDate: "Renews Nov 9",
+      category: "Music"
+    },
+    {
+      id: "sub-icloud",
+      ownerId: "u-ziyad",
+      name: "iCloud",
+      amount: 2.99,
+      billingCycle: "monthly",
+      renewalDate: "Renews Nov 14",
+      category: "Cloud Storage"
+    },
+    {
+      id: "sub-chatgpt",
+      ownerId: "u-ziyad",
+      name: "ChatGPT Plus",
+      amount: 20.00,
+      billingCycle: "monthly",
+      renewalDate: "Renews Nov 20",
+      category: "AI & Software"
+    }
+  ],
+  transactions: [
+    {
+      id: "tx-1",
+      ownerId: "u-ziyad",
+      name: "Trader Joe's",
+      amount: 54.12,
+      category: "Groceries",
+      date: "Oct 24",
+      account: "Everyday Rewards",
+      type: "debit"
+    },
+    {
+      id: "tx-2",
+      ownerId: "u-ziyad",
+      name: "Shell",
+      amount: 41.80,
+      category: "Transportation",
+      date: "Oct 23",
+      account: "Everyday Rewards",
+      type: "debit"
+    },
+    {
+      id: "tx-3",
+      ownerId: "u-ziyad",
+      name: "Paycheck deposit",
+      amount: -1850.00,
+      category: "Income",
+      date: "Oct 22",
+      account: "Checking",
+      type: "credit"
+    }
+  ],
+  settings: {
+    plaidClientId: "",
+    plaidSecret: "",
+    plaidEnv: "sandbox",
+    googleClientId: ""
+  }
 };
+
+let memoryData = JSON.parse(JSON.stringify(initialSeedData));
 
 function readData() {
   try {

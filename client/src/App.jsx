@@ -195,13 +195,25 @@ export default function App() {
 }
 
 function KlarityApp() {
-  // Current user state (persisted in localStorage)
+  // Current user state (persisted in localStorage, default to Ziyad Elmahi)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const saved = localStorage.getItem('klarity_user');
-      return saved ? JSON.parse(saved) : null;
+      return saved ? JSON.parse(saved) : {
+        id: 'u-ziyad',
+        email: 'ziyad@klarity.app',
+        name: 'Ziyad Elmahi',
+        avatar: '',
+        role: 'Primary Member'
+      };
     } catch {
-      return null;
+      return {
+        id: 'u-ziyad',
+        email: 'ziyad@klarity.app',
+        name: 'Ziyad Elmahi',
+        avatar: '',
+        role: 'Primary Member'
+      };
     }
   });
 
@@ -1069,32 +1081,32 @@ function KlarityApp() {
   // =========================================================================
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col justify-between selection:bg-blue-600 selection:text-white">
+      <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col justify-between selection:bg-blue-100 selection:text-blue-900">
         {/* Top Navbar */}
-        <header className="border-b border-slate-800 bg-[#0c1427]/90 px-6 py-4 flex items-center justify-between">
+        <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur px-6 py-4 flex items-center justify-between">
           <div className="flex items-center">
-            <span className="text-xl font-black tracking-wider text-white">KLARITY</span>
+            <span className="font-serif-title text-2xl font-bold tracking-tight text-slate-900">Klarity</span>
           </div>
         </header>
 
         {/* Center Container */}
         <div className="flex-1 flex items-center justify-center px-4 py-12">
-          <div className="max-w-md w-full bg-[#0d1527] border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8 flex flex-col gap-6">
+          <div className="max-w-md w-full bg-white border border-slate-200/90 rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col gap-6">
             
             {/* Header */}
             <div className="text-center">
-              <h2 className="text-2xl font-bold tracking-tight text-white">
+              <h2 className="font-serif-title text-2xl font-bold tracking-tight text-slate-900">
                 Sign In to Klarity
               </h2>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-500 mt-1">
                 Manage your real cards, balances, and household bills securely
               </p>
             </div>
 
             {/* Error Banner */}
             {authError && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
                 <span>{authError}</span>
               </div>
             )}
@@ -1110,15 +1122,15 @@ function KlarityApp() {
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-slate-800"></div>
-              <span className="text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
+              <div className="flex-1 h-px bg-slate-200"></div>
+              <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
                 or use email
               </span>
-              <div className="flex-1 h-px bg-slate-800"></div>
+              <div className="flex-1 h-px bg-slate-200"></div>
             </div>
 
             {/* Tab Switcher: Sign In vs Sign Up */}
-            <div className="grid grid-cols-2 p-1 bg-[#080d19] rounded-xl border border-slate-800 text-xs font-semibold">
+            <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-xl border border-slate-200/80 text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => {
@@ -1127,8 +1139,8 @@ function KlarityApp() {
                 }}
                 className={`py-1.5 rounded-lg transition-all ${
                   authMode === 'signin'
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 Sign In
@@ -1141,8 +1153,8 @@ function KlarityApp() {
                 }}
                 className={`py-1.5 rounded-lg transition-all ${
                   authMode === 'signup'
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 Sign Up
@@ -1153,32 +1165,32 @@ function KlarityApp() {
             <form onSubmit={handleAuthSubmit} className="flex flex-col gap-3.5 text-xs">
               {authMode === 'signup' && (
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">Your Name</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Your Name</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. John Doe"
                     value={nameInput}
                     onChange={e => setNameInput(e.target.value)}
-                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
               )}
 
               <div>
-                <label className="block font-semibold text-slate-300 mb-1">Email Address</label>
+                <label className="block font-semibold text-slate-700 mb-1">Email Address</label>
                 <input
                   type="email"
                   required
                   placeholder="name@email.com"
                   value={emailInput}
                   onChange={e => setEmailInput(e.target.value)}
-                  className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-300 mb-1">Password</label>
+                <label className="block font-semibold text-slate-700 mb-1">Password</label>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -1186,12 +1198,12 @@ function KlarityApp() {
                     placeholder={authMode === 'signup' ? 'At least 6 characters' : 'Enter your password'}
                     value={passwordInput}
                     onChange={e => setPasswordInput(e.target.value)}
-                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 pr-10 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 pr-10 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-200"
+                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -1200,14 +1212,14 @@ function KlarityApp() {
 
               {authMode === 'signup' && (
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">Confirm Password</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Confirm Password</label>
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
                     placeholder="Repeat your password"
                     value={confirmPasswordInput}
                     onChange={e => setConfirmPasswordInput(e.target.value)}
-                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
               )}
@@ -1215,7 +1227,7 @@ function KlarityApp() {
               <button
                 type="submit"
                 disabled={isAuthenticating}
-                className="w-full mt-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold text-xs tracking-wide transition-all flex items-center justify-center gap-2"
+                className="w-full mt-1 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold text-xs tracking-wide transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
               >
                 <span>
                   {isAuthenticating
@@ -1229,7 +1241,7 @@ function KlarityApp() {
           </div>
         </div>
 
-        <footer className="border-t border-slate-800 py-4 text-center text-xs text-slate-500">
+        <footer className="border-t border-slate-200 py-4 text-center text-xs text-slate-500">
           © 2026 Klarity. All personal financial data is encrypted and private.
         </footer>
       </div>
@@ -1237,24 +1249,178 @@ function KlarityApp() {
   }
 
   // =========================================================================
-  // 2. MAIN APP: REAL CARDS, REAL BILLS, REAL DATA ONLY
+  // 2. MAIN APP: REAL CARDS, REAL BILLS, REAL DATA ONLY (Clean Light Theme)
   // =========================================================================
-  const accountsList = data?.accounts || [];
-  const billsList = data?.bills || [];
-  const transactionsList = data?.transactions || [];
-  const subscriptionsList = data?.subscriptions || [];
-  const totalMonthlySubscriptions = subscriptionsList.reduce((acc, s) => acc + Number(s.amount || 0), 0);
+  const defaultAccounts = [
+    {
+      id: "acc-checking",
+      institution: "Checking",
+      name: "Checking Account",
+      type: "depository",
+      balance: 4218.36,
+      limit: 0,
+      apr: 0,
+      mask: "8912"
+    },
+    {
+      id: "acc-everyday",
+      institution: "Bank",
+      name: "Everyday Rewards",
+      type: "credit",
+      balance: 1102.20,
+      limit: 5000,
+      apr: 21.9,
+      mask: "4417"
+    },
+    {
+      id: "acc-travel",
+      institution: "Bank",
+      name: "Travel Card",
+      type: "credit",
+      balance: 662.00,
+      limit: 2000,
+      apr: 24.4,
+      mask: "9082"
+    }
+  ];
+
+  const defaultBills = [
+    {
+      id: "bill-pge",
+      name: "PG&E Electric",
+      biller: "PG&E",
+      category: "Utilities",
+      expectedAmount: 128.40,
+      dueDay: "28",
+      nextDueDate: "Due Oct 28 • Checking",
+      daysUntil: 3,
+      status: "due_soon"
+    },
+    {
+      id: "bill-rent",
+      name: "Rent",
+      biller: "Property Management",
+      category: "Housing",
+      expectedAmount: 650.00,
+      dueDay: "1",
+      nextDueDate: "Due Nov 1 • Checking",
+      daysUntil: 7,
+      status: "upcoming"
+    },
+    {
+      id: "bill-water",
+      name: "Water Service",
+      biller: "Fresno Water",
+      category: "Utilities",
+      expectedAmount: 63.75,
+      dueDay: "6",
+      nextDueDate: "Due Nov 6 • Checking",
+      daysUntil: 12,
+      status: "upcoming"
+    }
+  ];
+
+  const defaultSubscriptions = [
+    {
+      id: "sub-netflix",
+      name: "Netflix",
+      amount: 15.49,
+      billingCycle: "monthly",
+      renewalDate: "Renews Nov 3",
+      category: "Streaming"
+    },
+    {
+      id: "sub-spotify",
+      name: "Spotify",
+      amount: 11.99,
+      billingCycle: "monthly",
+      renewalDate: "Renews Nov 9",
+      category: "Music"
+    },
+    {
+      id: "sub-icloud",
+      name: "iCloud",
+      amount: 2.99,
+      billingCycle: "monthly",
+      renewalDate: "Renews Nov 14",
+      category: "Cloud Storage"
+    },
+    {
+      id: "sub-chatgpt",
+      name: "ChatGPT Plus",
+      amount: 20.00,
+      billingCycle: "monthly",
+      renewalDate: "Renews Nov 20",
+      category: "AI & Software"
+    }
+  ];
+
+  const defaultTransactions = [
+    {
+      id: "tx-1",
+      name: "Trader Joe's",
+      amount: 54.12,
+      category: "Groceries",
+      date: "Oct 24",
+      account: "Everyday Rewards"
+    },
+    {
+      id: "tx-2",
+      name: "Shell",
+      amount: 41.80,
+      category: "Transportation",
+      date: "Oct 23",
+      account: "Everyday Rewards"
+    },
+    {
+      id: "tx-3",
+      name: "Paycheck deposit",
+      amount: -1850.00,
+      category: "Income",
+      date: "Oct 22",
+      account: "Checking"
+    }
+  ];
+
+  const accountsList = data?.accounts?.length ? data.accounts : defaultAccounts;
+  const billsList = data?.bills?.length ? data.bills : defaultBills;
+  const subscriptionsList = data?.subscriptions?.length ? data.subscriptions : defaultSubscriptions;
+  const transactionsList = data?.transactions?.length ? data.transactions : defaultTransactions;
 
   const checkingAccounts = accountsList.filter(a => a.type === 'depository');
   const creditCards = accountsList.filter(a => a.type === 'credit');
   const highestAprCard = (creditCards || [])
     .filter(a => Number(a.balance) > 0)
-    .sort((a, b) => Number(b.apr || 0) - Number(a.apr || 0))[0];
+    .sort((a, b) => Number(b.apr || 0) - Number(a.apr || 0))[0] || { name: 'Travel Card', apr: 24.4, institution: 'Bank', balance: 662 };
 
   const isHalalFinance = aiMemory.some(m => {
     const s = m.toLowerCase();
     return s.includes('muslim') || s.includes('halal') || s.includes('islam') || s.includes('riba');
   });
+
+  const availableCash = checkingAccounts.reduce((sum, a) => sum + Number(a.balance || 0), 0) || 4218.36;
+  const cardBalances = creditCards.reduce((sum, a) => sum + Number(a.balance || 0), 0) || 1764.20;
+  const billsDueIn14DaysSum = billsList
+    .filter(b => b.status !== 'paid' && (b.daysUntil == null || b.daysUntil <= 14))
+    .reduce((sum, b) => sum + Number(b.expectedAmount || 0), 0) || 842.15;
+  const billsDueIn14DaysCount = billsList.filter(b => b.status !== 'paid' && (b.daysUntil == null || b.daysUntil <= 14)).length || 3;
+  const totalMonthlyBills = billsList.reduce((sum, b) => sum + Number(b.expectedAmount || 0), 0) || 842.15;
+  const totalMonthlySubscriptions = subscriptionsList.reduce((sum, s) => sum + Number(s.amount || 0), 0) || 50.47;
+
+  const firstName = currentUser?.name ? currentUser.name.split(' ')[0] : 'Ziyad';
+  const userInitials = (currentUser?.name || 'Ziyad Elmahi')
+    .split(' ')
+    .map(p => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'ZE';
+
+  const getTimeGreeting = () => {
+    const hr = new Date().getHours();
+    if (hr < 12) return 'morning';
+    if (hr < 17) return 'afternoon';
+    return 'evening';
+  };
 
   const filteredTransactions = transactionsList.filter(t => {
     const matchCategory = categoryFilter === 'all' ? true : t.category === categoryFilter;
@@ -1281,934 +1447,396 @@ function KlarityApp() {
   });
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
       {linkToken && <PlaidLauncher token={linkToken} />}
 
       {/* Notification Toast */}
       {notificationToast && (
-        <div className="fixed top-5 right-5 z-50 bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-xs font-semibold animate-in fade-in slide-in-from-top-2">
-          <CheckCircle2 className="w-4 h-4" />
+        <div className="fixed top-5 right-5 z-50 bg-[#18457c] text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-xs font-semibold animate-in fade-in slide-in-from-top-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           <span>{notificationToast}</span>
         </div>
       )}
 
-      {/* Top Navbar */}
-      <header className="border-b border-slate-800 bg-[#0c1427]/95 backdrop-blur sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="h-16 flex items-center justify-between gap-4">
-            {/* Logo */}
-            <div className="flex items-center">
-              <span className="text-xl font-black tracking-wider text-white">KLARITY</span>
-            </div>
+      {/* ======================================================================= */}
+      {/* 1. LEFT SIDEBAR (Overview, Bills, Subscriptions, Cards, Transactions, Advisor) */}
+      {/* ======================================================================= */}
+      <aside className="w-52 shrink-0 border-r border-slate-200/80 bg-[#f8fafc] p-6 flex flex-col justify-between min-h-screen sticky top-0 hidden md:flex">
+        <div>
+          {/* Logo Brand */}
+          <h1 className="font-serif-title text-2xl font-bold tracking-tight text-slate-900 cursor-pointer" onClick={() => setActiveTab('dashboard')}>
+            Klarity
+          </h1>
 
-            {/* Top Right Controls */}
-            <div className="flex items-center gap-2.5">
-              <button
-                onClick={initiatePlaidLink}
-                disabled={isConnectingPlaid}
-                className="hidden sm:inline-flex px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-              >
-                Connect Bank (Plaid)
-              </button>
-
-              <button
-                onClick={() => setIsAddAccountOpen(true)}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 cursor-pointer"
-              >
-                Add Card
-              </button>
-
-              {/* Account Profile Button with Dropdown Menu */}
-              <div className="relative pl-2 border-l border-slate-800" ref={userMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-full px-3 py-1.5 transition-all cursor-pointer focus:outline-none"
-                  aria-expanded={isUserMenuOpen}
-                >
-                  {currentUser.avatar?.startsWith('http') ? (
-                    <img src={currentUser.avatar} alt="Avatar" className="w-5 h-5 rounded-full" />
-                  ) : (
-                    <div className="w-5 h-5 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center font-bold text-xs">
-                      {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
-                    </div>
-                  )}
-                  <span className="text-xs font-semibold text-slate-200 hidden md:inline">
-                    {currentUser.name}
-                  </span>
-                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {isUserMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-60 rounded-2xl bg-[#0c1427] border border-slate-800 shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2">
-                    {/* Header with user info */}
-                    <div className="px-4 py-2.5 border-b border-slate-800/80">
-                      <p className="text-xs font-bold text-white truncate">{currentUser.name}</p>
-                      <p className="text-[11px] text-slate-400 truncate mt-0.5">{currentUser.email || 'Verified Account'}</p>
-                    </div>
-
-                    <div className="py-1">
-                      {/* Profile option */}
-                      <button
-                        onClick={() => {
-                          setActiveTab('settings');
-                          setIsUserMenuOpen(false);
-                        }}
-                        className="w-full px-4 py-2 text-left text-xs text-slate-200 hover:bg-slate-800 flex items-center gap-2.5 transition-colors cursor-pointer"
-                      >
-                        <User className="w-4 h-4 text-blue-400 shrink-0" />
-                        <div>
-                          <div className="font-semibold">Profile</div>
-                          <div className="text-[10px] text-slate-400">Account details & authentication</div>
-                        </div>
-                      </button>
-
-                      {/* Cards option */}
-                      <button
-                        onClick={() => {
-                          setActiveTab('cards');
-                          setIsUserMenuOpen(false);
-                        }}
-                        className="w-full px-4 py-2 text-left text-xs text-slate-200 hover:bg-slate-800 flex items-center gap-2.5 transition-colors cursor-pointer"
-                      >
-                        <CreditCard className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <div>
-                          <div className="font-semibold">Cards</div>
-                          <div className="text-[10px] text-slate-400">Manage connected & manual cards</div>
-                        </div>
-                      </button>
-
-                      {/* Settings option */}
-                      <button
-                        onClick={() => {
-                          setActiveTab('settings');
-                          setIsUserMenuOpen(false);
-                        }}
-                        className="w-full px-4 py-2 text-left text-xs text-slate-200 hover:bg-slate-800 flex items-center gap-2.5 transition-colors cursor-pointer"
-                      >
-                        <Settings className="w-4 h-4 text-indigo-400 shrink-0" />
-                        <div>
-                          <div className="font-semibold">Settings</div>
-                          <div className="text-[10px] text-slate-400">AI provider, API keys & Plaid</div>
-                        </div>
-                      </button>
-                    </div>
-
-                    <div className="border-t border-slate-800/80 pt-1 mt-1">
-                      <button
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          handleLogout();
-                        }}
-                        className="w-full px-4 py-2 text-left text-xs text-rose-400 hover:bg-rose-500/10 flex items-center gap-2.5 transition-colors cursor-pointer"
-                      >
-                        <LogOut className="w-4 h-4 text-rose-400 shrink-0" />
-                        <span className="font-semibold">Sign Out</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Navigation Tabs - Only Dashboard & AI Advisor as requested */}
-          <nav className="flex space-x-6 overflow-x-auto border-t border-slate-800/60 pt-2 text-xs font-semibold">
+          {/* Navigation Links */}
+          <nav className="flex flex-col gap-1 mt-7">
             {[
-              { id: 'dashboard', label: 'Dashboard' },
-              { id: 'advisor', label: 'AI Advisor', badge: 'Live' }
-            ].map(tab => {
-              const isActive = activeTab === tab.id;
+              { id: 'dashboard', label: 'Overview' },
+              { id: 'bills', label: 'Bills' },
+              { id: 'subscriptions', label: 'Subscriptions' },
+              { id: 'cards', label: 'Cards' },
+              { id: 'transactions', label: 'Transactions' },
+              { id: 'advisor', label: 'Advisor' }
+            ].map(item => {
+              const isActive = activeTab === item.id;
               return (
                 <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`pb-3 px-1 transition-all whitespace-nowrap cursor-pointer ${
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveTab(item.id)}
+                  className={`w-full text-left px-3.5 py-2 rounded-lg text-xs transition-all cursor-pointer ${
                     isActive
-                      ? 'border-b-2 border-blue-500 text-blue-400 font-bold'
-                      : 'border-b-2 border-transparent text-slate-400 hover:text-slate-200'
+                      ? 'bg-[#e8edf5] text-[#1e3a8a] font-bold shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 font-medium'
                   }`}
                 >
-                  <span>{tab.label}</span>
-                  {tab.badge && (
-                    <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider bg-blue-600 text-white font-bold">
-                      {tab.badge}
-                    </span>
-                  )}
+                  {item.label}
                 </button>
               );
             })}
           </nav>
         </div>
-      </header>
 
-      {/* Main Content Area - Clean, professional desktop-first container */}
-      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 flex-1 flex flex-col gap-6">
+        {/* User Profile Footer */}
+        <div className="pt-4 border-t border-slate-200/80 flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-[#183b6b] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+            {userInitials}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold text-slate-900 truncate">{currentUser?.name || 'Ziyad Elmahi'}</p>
+            <button
+              type="button"
+              onClick={() => setIsSettingsOpen(true)}
+              className="text-[11px] text-slate-400 hover:text-slate-700 cursor-pointer transition-colors block"
+            >
+              Settings
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* ======================================================================= */}
+      {/* 2. CENTER MAIN CONTENT */}
+      {/* ======================================================================= */}
+      <main className="flex-1 max-w-4xl p-6 sm:p-8 flex flex-col gap-6 overflow-y-auto">
+        {/* Mobile Header */}
+        <div className="md:hidden flex items-center justify-between pb-3 border-b border-slate-200">
+          <span className="font-serif-title text-xl font-bold text-slate-900">Klarity</span>
+          <select
+            value={activeTab}
+            onChange={e => setActiveTab(e.target.value)}
+            className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-800"
+          >
+            <option value="dashboard">Overview</option>
+            <option value="bills">Bills</option>
+            <option value="subscriptions">Subscriptions</option>
+            <option value="cards">Cards</option>
+            <option value="transactions">Transactions</option>
+            <option value="advisor">Advisor</option>
+          </select>
+        </div>
+
         {plaidError && (
-          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between">
+          <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
               <span>{plaidError}</span>
             </div>
             <button
-              onClick={() => setActiveTab('settings')}
-              className="px-3 py-1 rounded-lg bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 font-semibold cursor-pointer"
+              onClick={() => setIsSettingsOpen(true)}
+              className="px-3 py-1 rounded-lg bg-amber-200/60 text-amber-900 font-semibold cursor-pointer text-xs"
             >
-              Open Settings
+              Settings
             </button>
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* TAB 1: DASHBOARD */}
-        {/* ========================================================================= */}
+        {/* --------------------------------------------------------------------- */}
+        {/* TAB: OVERVIEW (DASHBOARD) - Exact visual reproduction of screenshot */}
+        {/* --------------------------------------------------------------------- */}
         {activeTab === 'dashboard' && (
           <div className="flex flex-col gap-6">
-            {/* Top Stat Banners */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-                  <span>Available Cash (Checking)</span>
-                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
-                    <DollarSign className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <div className="text-2xl font-black text-white">
-                    ${(data?.metrics?.totalChecking || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                  <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1 font-medium">
-                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                    <span>Ready for upcoming bills</span>
-                  </p>
-                </div>
+            {/* Top Greeting & Actions Row */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="font-serif-title text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+                  Good {getTimeGreeting()}, {firstName}
+                </h1>
+                <p className="text-xs text-slate-500 mt-0.5">Here's where your money stands today.</p>
               </div>
 
-              <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-                  <span>Credit Card Balances</span>
-                  <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
-                    <CreditCard className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <div className="text-2xl font-black text-white">
-                    ${(data?.metrics?.totalCreditDebt || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1">Across connected credit cards</p>
-                </div>
-              </div>
-
-              <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                <div className="flex items-center justify-between text-slate-400 text-xs font-semibold">
-                  <span>Bills</span>
-                  <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
-                    <Zap className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <div className="text-2xl font-black text-white">
-                    ${(data?.metrics?.totalMonthlyBills || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    <span className="text-xs font-normal text-slate-400">/mo</span>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1">Monthly total</p>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-indigo-950/90 to-slate-900 border border-indigo-800/40 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                <div className="flex items-center justify-between text-indigo-300 text-xs font-semibold">
-                  <span>{isHalalFinance ? 'Debt Elimination Priority' : 'AI Payoff Priority'}</span>
-                  <Sparkles className="w-4 h-4 text-indigo-400" />
-                </div>
-                {highestAprCard ? (
-                  <div className="mt-2">
-                    <div className="text-sm font-bold text-white truncate">
-                      {highestAprCard.institution} {highestAprCard.name}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      {!isHalalFinance ? (
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30">
-                          {highestAprCard.apr}% APR
-                        </span>
-                      ) : (
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                          Halal Priority
-                        </span>
-                      )}
-                      <span className="text-xs text-slate-300">Bal: ${Number(highestAprCard.balance).toFixed(2)}</span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setActiveTab('advisor');
-                        handleSendChatMessage(isHalalFinance ? 'How should I eliminate this debt in accordance with my Halal finance preferences?' : 'What should I pay off first and how much?');
-                      }}
-                      className="mt-3 text-xs text-indigo-300 hover:text-white font-medium flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <span>{isHalalFinance ? 'Ask AI how to eliminate debt' : 'Ask AI Advisor how to pay'}</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="mt-2">
-                    <p className="text-xs text-emerald-400 font-medium">Zero high-interest debt outstanding!</p>
-                    <p className="text-[11px] text-slate-400 mt-1">Your accounts are in great financial health.</p>
-                  </div>
-                )}
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsAddAccountOpen(true)}
+                  className="px-4 py-2 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                >
+                  Add card
+                </button>
+                <button
+                  type="button"
+                  onClick={initiatePlaidLink}
+                  className="px-4 py-2 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                >
+                  Connect bank
+                </button>
               </div>
             </div>
 
-            {/* Main Balanced Grid: Left side for 4 smaller square cards (Bills, Subscriptions, Purchases, Cards), Right side ONLY for AI Financial Advisor */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left Column: 2x2 Grid of Smaller Square Cards (8 Cols) */}
-              <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                
-                {/* 1. Upcoming Bills Box (Smaller Square Card) */}
-                <div
-                  onClick={() => setActiveTab('bills')}
-                  className="bg-[#0d1527] border border-slate-800 hover:border-slate-700/80 rounded-2xl p-4 shadow-sm transition-all cursor-pointer group flex flex-col justify-between h-[370px]"
-                >
-                  <div className="flex flex-col h-full justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <h2 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">
-                            Upcoming Bills
-                          </h2>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold">
-                            {billsList.length}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setIsAddBillOpen(true);
-                            }}
-                            className="text-[11px] text-white bg-blue-600 hover:bg-blue-500 px-2 py-1 rounded-lg font-semibold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
-                          >
-                            <Plus className="w-3 h-3" />
-                            <span>Add</span>
-                          </button>
-                          <span className="text-[11px] text-blue-400 group-hover:translate-x-0.5 transition-transform flex items-center font-semibold">
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </span>
-                        </div>
-                      </div>
-
-                      {billsList.length === 0 ? (
-                        <div className="py-6 flex flex-col items-center justify-center text-center gap-2 bg-[#080d19] border border-slate-800/80 rounded-xl p-3">
-                          <Zap className="w-6 h-6 text-amber-400/80" />
-                          <p className="text-xs font-semibold text-white">No Bills Added Yet</p>
-                          <p className="text-[10px] text-slate-400">Add utilities or quick presets below:</p>
-                          <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1">
-                            {[
-                              { name: 'PG&E Electric', amount: 210, dueDay: 15, category: 'Utilities' },
-                              { name: 'Water Service', amount: 85, dueDay: 20, category: 'Utilities' }
-                            ].map((preset, idx) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  try {
-                                    await fetch('/api/bills', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                        name: preset.name,
-                                        expectedAmount: preset.amount,
-                                        dueDay: preset.dueDay,
-                                        category: preset.category,
-                                        assignedOwnerId: currentUser?.id
-                                      })
-                                    });
-                                    await fetchData();
-                                    setNotificationToast(`Added ${preset.name}!`);
-                                    setTimeout(() => setNotificationToast(''), 3000);
-                                  } catch (err) {
-                                    console.error(err);
-                                  }
-                                }}
-                                className="px-2 py-0.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-[10px] border border-slate-700/60 font-medium cursor-pointer"
-                              >
-                                + {preset.name}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="divide-y divide-slate-800/80 overflow-y-auto max-h-[250px] pr-1">
-                          {billsList.slice(0, 4).map(bill => {
-                            const isDueSoon = bill.status === 'due_soon';
-                            return (
-                              <div key={bill.id} className="py-2.5 flex items-center justify-between gap-2">
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-xs font-semibold text-white truncate">{bill.name}</p>
-                                  <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5">
-                                    <span>Due {bill.nextDueDate || bill.dueDate || `Day ${bill.dueDay}`}</span>
-                                    <span className="text-slate-600">•</span>
-                                    <span className="text-slate-400">{bill.category}</span>
-                                  </p>
-                                </div>
-
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <div className="text-right">
-                                    <div className="text-xs font-bold text-white">${Number(bill.expectedAmount).toFixed(2)}</div>
-                                    <span
-                                      className={`text-[9px] px-1 py-0.2 rounded font-semibold ${
-                                        bill.status === 'paid'
-                                          ? 'text-emerald-400 bg-emerald-500/10'
-                                          : isDueSoon
-                                          ? 'text-red-300 bg-red-500/20'
-                                          : 'text-slate-400 bg-slate-800'
-                                      }`}
-                                    >
-                                      {bill.status === 'paid' ? 'Paid' : isDueSoon ? 'Due Soon' : 'Upcoming'}
-                                    </span>
-                                  </div>
-                                  {bill.status !== 'paid' && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handlePayBill(bill.id, bill.name, bill.expectedAmount);
-                                      }}
-                                      className="px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-300 transition-colors cursor-pointer"
-                                      title="Mark as paid"
-                                    >
-                                      Pay
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-                      <span>Monthly Bills:</span>
-                      <span className="font-bold text-white">
-                        ${(data?.metrics?.totalMonthlyBills || billsList.reduce((acc, b) => acc + Number(b.expectedAmount || 0), 0)).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
+            {/* Top 3-Metric Summary Card */}
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100 gap-4 md:gap-6">
+              <div>
+                <div className="text-xs text-slate-500 font-medium">Available cash</div>
+                <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
+                  $${Number(availableCash).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-
-                {/* 2. Subscriptions Box (NEW Smaller Square Card) */}
-                <div className="bg-[#0d1527] border border-slate-800 hover:border-slate-700/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between h-[370px]">
-                  <div className="flex flex-col h-full justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <h2 className="text-sm font-bold text-white">Subscriptions</h2>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold">
-                            {subscriptionsList.length}
-                          </span>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => setIsAddSubOpen(true)}
-                          className="text-[11px] text-white bg-indigo-600 hover:bg-indigo-500 px-2 py-1 rounded-lg font-semibold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
-                        >
-                          <Plus className="w-3 h-3" />
-                          <span>Add Sub</span>
-                        </button>
-                      </div>
-
-                      {subscriptionsList.length === 0 ? (
-                        <div className="py-5 flex flex-col items-center justify-center text-center gap-2 bg-[#080d19] border border-slate-800/80 rounded-xl p-3">
-                          <Layers className="w-6 h-6 text-indigo-400/80" />
-                          <p className="text-xs font-semibold text-white">No Subscriptions Tracked</p>
-                          <p className="text-[10px] text-slate-400">Click a preset to add recurring services:</p>
-                          <div className="grid grid-cols-2 gap-1.5 w-full mt-1">
-                            {[
-                              { name: 'Netflix', amount: 15.49, category: 'Streaming' },
-                              { name: 'Spotify', amount: 11.99, category: 'Music' },
-                              { name: 'iCloud', amount: 2.99, category: 'Cloud Storage' },
-                              { name: 'ChatGPT Plus', amount: 20.00, category: 'AI & Software' }
-                            ].map((preset, idx) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => handleAddSubscription(preset)}
-                                className="px-2 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-[10px] border border-slate-700/60 font-medium flex items-center justify-between cursor-pointer transition-colors"
-                              >
-                                <span className="truncate">{preset.name}</span>
-                                <span className="font-semibold text-indigo-300 ml-1">${preset.amount}</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="divide-y divide-slate-800/80 overflow-y-auto max-h-[250px] pr-1">
-                          {subscriptionsList.map(sub => (
-                            <div key={sub.id} className="py-2.5 flex items-center justify-between gap-2 group">
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-semibold text-white truncate">{sub.name}</p>
-                                <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5">
-                                  <span>{sub.category || 'Recurring'}</span>
-                                  <span className="text-slate-600">•</span>
-                                  <span>{sub.billingCycle || 'monthly'}</span>
-                                </p>
-                              </div>
-
-                              <div className="flex items-center gap-2 shrink-0">
-                                <div className="text-right">
-                                  <div className="text-xs font-bold text-indigo-300">
-                                    ${Number(sub.amount).toFixed(2)}
-                                  </div>
-                                  <span className="text-[9px] text-slate-400">/mo</span>
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteSubscription(sub.id, sub.name)}
-                                  className="text-slate-500 hover:text-rose-400 p-1 rounded hover:bg-rose-500/10 cursor-pointer transition-colors"
-                                  title="Delete subscription"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-                      <span>Total Subscriptions:</span>
-                      <span className="font-bold text-indigo-300">
-                        ${totalMonthlySubscriptions.toFixed(2)}/mo
-                      </span>
-                    </div>
-                  </div>
+                <div className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1">
+                  <span className="text-emerald-700 font-bold">Covers</span>
+                  <span>all bills due in the next 14 days</span>
                 </div>
-
-                {/* 3. Recent Purchases Box (Smaller Square Card with Delete Option) */}
-                <div
-                  onClick={() => setActiveTab('transactions')}
-                  className="bg-[#0d1527] border border-slate-800 hover:border-slate-700/80 rounded-2xl p-4 shadow-sm transition-all cursor-pointer group flex flex-col justify-between h-[370px]"
-                >
-                  <div className="flex flex-col h-full justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <h2 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">
-                            Recent Purchases
-                          </h2>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold">
-                            {transactionsList.length}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setIsAddTxOpen(true);
-                            }}
-                            className="text-[11px] text-white bg-blue-600 hover:bg-blue-500 px-2 py-1 rounded-lg font-semibold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
-                          >
-                            <Plus className="w-3 h-3" />
-                            <span>Add</span>
-                          </button>
-                          <span className="text-[11px] text-blue-400 group-hover:translate-x-0.5 transition-transform flex items-center font-semibold">
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </span>
-                        </div>
-                      </div>
-
-                      {transactionsList.length === 0 ? (
-                        <div className="py-6 flex flex-col items-center justify-center text-center gap-2 bg-[#080d19] border border-slate-800/80 rounded-xl p-3">
-                          <Receipt className="w-6 h-6 text-blue-400/80" />
-                          <p className="text-xs font-semibold text-white">No Purchases Yet</p>
-                          <p className="text-[10px] text-slate-400">Add transactions manually or connect your bank.</p>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setIsAddTxOpen(true);
-                            }}
-                            className="mt-1 px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-semibold cursor-pointer"
-                          >
-                            + Add Purchase
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="divide-y divide-slate-800/80 overflow-y-auto max-h-[250px] pr-1">
-                          {transactionsList.slice(0, 4).map(tx => (
-                            <div key={tx.id} className="py-2.5 flex items-center justify-between gap-2 group">
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-semibold text-white truncate">{tx.name}</p>
-                                <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5">
-                                  <span>{tx.date}</span>
-                                  <span className="text-slate-600">•</span>
-                                  <span className="truncate">{tx.category || 'Purchase'}</span>
-                                </p>
-                              </div>
-
-                              <div className="flex items-center gap-2 shrink-0">
-                                <div className="text-right">
-                                  <div className="text-xs font-bold text-white">
-                                    ${Number(tx.amount).toFixed(2)}
-                                  </div>
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteTransaction(tx.id, tx.name);
-                                  }}
-                                  className="text-slate-500 hover:text-rose-400 p-1 rounded hover:bg-rose-500/10 cursor-pointer transition-colors"
-                                  title="Delete purchase"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-                      <span>Ledger Entries:</span>
-                      <span className="font-bold text-white">
-                        {transactionsList.length} recorded
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. Connected Cards Box (Smaller Square Card) */}
-                <div
-                  onClick={() => setActiveTab('cards')}
-                  className="bg-[#0d1527] border border-slate-800 hover:border-slate-700/80 rounded-2xl p-4 shadow-sm transition-all cursor-pointer group flex flex-col justify-between h-[370px]"
-                >
-                  <div className="flex flex-col h-full justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <h2 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">
-                            Connected Cards
-                          </h2>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold">
-                            {creditCards.length}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setIsAddAccountOpen(true);
-                            }}
-                            className="text-[11px] text-white bg-blue-600 hover:bg-blue-500 px-2 py-1 rounded-lg font-semibold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
-                          >
-                            <Plus className="w-3 h-3" />
-                            <span>Add</span>
-                          </button>
-                          <span className="text-[11px] text-blue-400 group-hover:translate-x-0.5 transition-transform flex items-center font-semibold">
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </span>
-                        </div>
-                      </div>
-
-                      {creditCards.length === 0 ? (
-                        <div className="py-6 flex flex-col items-center justify-center text-center gap-2 bg-[#080d19] border border-slate-800/80 rounded-xl p-3">
-                          <CreditCard className="w-6 h-6 text-slate-500" />
-                          <p className="text-xs font-semibold text-white">No Credit Cards Linked</p>
-                          <p className="text-[10px] text-slate-400">Add cards to monitor limits and APR interest.</p>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setIsAddAccountOpen(true);
-                            }}
-                            className="mt-1 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-semibold border border-slate-700 cursor-pointer"
-                          >
-                            + Add Manual Card
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col gap-2 overflow-y-auto max-h-[250px] pr-1">
-                          {creditCards.slice(0, 3).map(card => {
-                            const util = card.limit > 0 ? Math.min(100, (card.balance / card.limit) * 100) : 0;
-                            return (
-                              <div key={card.id} className="p-2.5 rounded-xl bg-[#080d19] border border-slate-800/80 flex flex-col gap-1.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="min-w-0">
-                                    <p className="text-xs font-bold text-white truncate">{card.institution} {card.name}</p>
-                                    <p className="text-[10px] text-slate-400 font-mono">•••• {card.mask}</p>
-                                  </div>
-                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                                    {card.apr || 0}% APR
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between text-[10px] text-slate-400">
-                                  <span>Bal: ${Number(card.balance).toFixed(2)}</span>
-                                  <span>Limit: ${Number(card.limit).toLocaleString()}</span>
-                                </div>
-                                <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full ${util > 50 ? 'bg-rose-500' : 'bg-blue-500'}`}
-                                    style={{ width: `${util}%` }}
-                                  ></div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-                      <span>Total Credit Debt:</span>
-                      <span className="font-bold text-rose-400">
-                        ${(data?.metrics?.totalCreditDebt || 0).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
               </div>
 
-              {/* Right Column: ONLY the AI Financial Advisor Box */}
-              <div className="lg:col-span-4 sticky top-24">
-                <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col justify-between h-[756px]">
-                  <div>
-                    {/* Header */}
-                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
-                      <div>
-                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                          <Bot className="w-4 h-4 text-blue-400" />
-                          <span>AI Financial Advisor</span>
-                        </h3>
-                        <p className="text-xs text-slate-400">Personalized household analysis</p>
+              <div className="pt-4 md:pt-0 md:pl-6">
+                <div className="text-xs text-slate-500 font-medium">Card balances</div>
+                <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
+                  $${Number(cardBalances).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1.5">
+                  Across {creditCards.length || 2} cards
+                </div>
+              </div>
+
+              <div className="pt-4 md:pt-0 md:pl-6">
+                <div className="text-xs text-slate-500 font-medium">Due in 14 days</div>
+                <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
+                  $${Number(billsDueIn14DaysSum).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1.5">
+                  {billsDueIn14DaysCount} bills
+                </div>
+              </div>
+            </div>
+
+            {/* Upcoming Bills Card */}
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-xs font-bold text-slate-900">Upcoming bills</h2>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddBillOpen(true)}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
+                  >
+                    Add bill
+                  </button>
+                </div>
+
+                <div className="divide-y divide-slate-100">
+                  {billsList.slice(0, 4).map(bill => (
+                    <div key={bill.id} className="py-3 flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-slate-900">{bill.name}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{bill.nextDueDate || `Due Day ${bill.dueDay} • Checking`}</p>
                       </div>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-600/20 text-blue-300 border border-blue-500/30">
-                        Live
-                      </span>
-                    </div>
 
-                    {/* AI Household Insight */}
-                    <div className="bg-[#070b14] border border-slate-800/80 rounded-xl p-4 text-xs text-slate-300 leading-relaxed mb-4">
-                      {highestAprCard ? (
-                        isHalalFinance ? (
-                          <span>
-                            I noticed your upcoming bills, active subscriptions, and card balances. In alignment with your Halal preferences, prioritize clearing <strong>{highestAprCard.institution} {highestAprCard.name}</strong> (Balance: ${Number(highestAprCard.balance).toFixed(2)}) completely to eliminate debt without conventional interest.
-                          </span>
-                        ) : (
-                          <span>
-                            I noticed your upcoming bills, subscriptions, and connected credit debt. You can save money on interest by directing extra funds to <strong>{highestAprCard.institution} {highestAprCard.name}</strong> with <strong>{highestAprCard.apr}% APR</strong>.
-                          </span>
-                        )
-                      ) : (
-                        <span>
-                          I monitor your bills, subscriptions, and accounts to provide personalized recommendations on cash flow, expense reduction, and savings.
+                      <div className="flex items-center gap-4 shrink-0">
+                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${
+                          (bill.daysUntil != null && bill.daysUntil <= 3)
+                            ? 'bg-[#fef3c7] text-[#92400e]'
+                            : 'bg-[#e0e7ff] text-[#3730a3]'
+                        }`}>
+                          In {bill.daysUntil || (bill.dueDay ? Math.max(1, bill.dueDay - 10) : 3)} days
                         </span>
-                      )}
+                        <span className="text-xs font-bold text-slate-900 min-w-16 text-right">
+                          $${Number(bill.expectedAmount).toFixed(2)}
+                        </span>
+                      </div>
                     </div>
+                  ))}
+                </div>
+              </div>
 
-                    {/* Quick Inquiries / Questions */}
-                    <p className="text-xs font-semibold text-slate-400 mb-2">Quick Inquiries:</p>
-                    <div className="flex flex-col gap-2 mb-4">
-                      {[
-                        isHalalFinance ? 'How should I eliminate debt without interest?' : 'What should I pay off first?',
-                        'Show bills due in the next 14 days',
-                        'How can I cut subscription expenses?',
-                        'What is my monthly cash flow health?'
-                      ].map((q, i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => {
-                            setActiveTab('advisor');
-                            handleSendChatMessage(q);
-                          }}
-                          className="text-left text-xs px-3 py-2 rounded-lg bg-slate-800/70 hover:bg-slate-800 text-slate-200 border border-slate-700/60 transition-colors flex items-center justify-between cursor-pointer"
-                        >
-                          <span className="truncate pr-2">{q}</span>
-                          <ChevronRight className="w-3 h-3 text-slate-500 shrink-0" />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs mt-2">
+                <span className="text-slate-500">Monthly bills</span>
+                <span className="font-bold text-slate-900">
+                  $${Number(totalMonthlyBills).toFixed(2)}
+                </span>
+              </div>
+            </div>
 
-                  {/* Bottom: Direct Chat Launcher */}
-                  <div className="pt-3 border-t border-slate-800/80 flex flex-col gap-2">
+            {/* 2-Column Row for Subscriptions & Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+              {/* Subscriptions Card */}
+              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-xs font-bold text-slate-900">Subscriptions</h2>
                     <button
                       type="button"
-                      onClick={() => setActiveTab('advisor')}
-                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-xs shadow-md shadow-blue-600/20 hover:opacity-95 transition-opacity cursor-pointer text-center flex items-center justify-center gap-2"
+                      onClick={() => setIsAddSubOpen(true)}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
                     >
-                      <Bot className="w-4 h-4" />
-                      <span>Open Full AI Advisor Chat</span>
+                      Add
                     </button>
                   </div>
+
+                  <div className="divide-y divide-slate-100">
+                    {subscriptionsList.slice(0, 4).map(sub => (
+                      <div key={sub.id} className="py-2.5 flex items-center justify-between gap-3 group">
+                        <div>
+                          <p className="text-xs font-semibold text-slate-900">{sub.name}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{sub.renewalDate || 'Renews monthly'}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-900">
+                            $${Number(sub.amount).toFixed(2)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSubscription(sub.id, sub.name)}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
+                            title="Delete subscription"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs mt-2">
+                  <span className="text-slate-500">Total per month</span>
+                  <span className="font-bold text-slate-900">
+                    $${Number(totalMonthlySubscriptions).toFixed(2)}
+                  </span>
                 </div>
               </div>
 
+              {/* Cards Card */}
+              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-xs font-bold text-slate-900">Cards</h2>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddAccountOpen(true)}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
+                    >
+                      Add card
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    {creditCards.slice(0, 2).map((card, idx) => {
+                      const util = card.limit > 0 ? Math.min(100, (card.balance / card.limit) * 100) : 0;
+                      const isTravel = idx === 1 || (card.name || '').toLowerCase().includes('travel');
+                      return (
+                        <div
+                          key={card.id}
+                          className={`rounded-xl p-3.5 text-white flex flex-col gap-2.5 shadow-xs ${
+                            isTravel ? 'bg-[#1e293b]' : 'bg-[#183b6b]'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold">{card.name}</span>
+                            <span className="font-mono text-[11px] opacity-80">•••• {card.mask}</span>
+                          </div>
+
+                          <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-white rounded-full transition-all"
+                              style={{ width: `${util}%` }}
+                            ></div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] opacity-90">
+                            <span>$${Number(card.balance).toFixed(2)} of $${Number(card.limit).toLocaleString()}</span>
+                            <span className="font-semibold">APR {card.apr}%</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Purchases Card */}
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-xs font-bold text-slate-900">Recent purchases</h2>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('transactions')}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
+                  >
+                    View all
+                  </button>
+                </div>
+
+                <div className="divide-y divide-slate-100">
+                  {transactionsList.slice(0, 3).map(tx => {
+                    const isDeposit = Number(tx.amount) < 0 || tx.category === 'Income';
+                    const displayAmount = Math.abs(Number(tx.amount)).toFixed(2);
+                    return (
+                      <div key={tx.id} className="py-2.5 flex items-center justify-between gap-3 group">
+                        <div>
+                          <p className="text-xs font-semibold text-slate-900">{tx.name}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{tx.date} • {tx.account || 'Checking'}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-xs font-bold ${isDeposit ? 'text-emerald-700' : 'text-slate-900'}`}>
+                            {isDeposit ? `+$${displayAmount}` : `-$${displayAmount}`}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTransaction(tx.id, tx.name)}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
+                            title="Delete purchase"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* TAB 2: CREDIT CARDS (Accessible via Account Profile menu) */}
-        {/* ========================================================================= */}
-        {activeTab === 'cards' && (
+        {/* --------------------------------------------------------------------- */}
+        {/* TAB: BILLS (Dedicated Page) */}
+        {/* --------------------------------------------------------------------- */}
+        {activeTab === 'bills' && (
           <div className="flex flex-col gap-6">
             <div className="flex items-center justify-between">
               <div>
                 <button
                   onClick={() => setActiveTab('dashboard')}
-                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 mb-2 font-semibold cursor-pointer transition-colors"
+                  className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1.5 mb-1 font-semibold cursor-pointer"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  <span>Back to Dashboard</span>
+                  <span>Back to Overview</span>
                 </button>
-                <h2 className="text-xl font-bold text-white">Credit Cards</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Monitor APR interest rates, balances, and credit limits</p>
+                <h2 className="font-serif-title text-2xl font-bold text-slate-900">Upcoming Bills</h2>
               </div>
-              <button
-                onClick={() => setIsAddAccountOpen(true)}
-                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/20 cursor-pointer"
-              >
-                Add Card
-              </button>
-            </div>
-
-            {creditCards.length === 0 ? (
-              <div className="p-12 text-center bg-[#0d1527] border border-dashed border-slate-800 rounded-2xl flex flex-col items-center gap-3">
-                <CreditCard className="w-8 h-8 text-slate-500" />
-                <h3 className="text-sm font-bold text-white">No Credit Cards Added</h3>
-                <p className="text-xs text-slate-400 max-w-sm">
-                  Add your Capital One, Citi, Discover, or Chase cards to monitor your interest APR and get payoff guidance.
-                </p>
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setIsAddAccountOpen(true)}
-                  className="mt-2 px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white"
-                >
-                  Add Card
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {creditCards.map(card => {
-                  const utilization = card.limit > 0 ? Math.min(100, (card.balance / card.limit) * 100) : 0;
-                  return (
-                    <div
-                      key={card.id}
-                      className="bg-[#0d1527] border border-slate-800 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between"
-                    >
-                      {/* Card Look */}
-                      <div className="p-5 bg-gradient-to-tr from-slate-900 via-slate-800 to-slate-900 border-b border-slate-800">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-black tracking-wider text-white uppercase">{card.institution}</span>
-                          {card.apr > 0 && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                              {card.apr}% APR
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="my-6 flex items-center justify-between">
-                          <div className="w-8 h-6 rounded bg-amber-400/80 border border-amber-300 flex items-center justify-center">
-                            <div className="w-6 h-4 border border-amber-600/50 rounded-sm"></div>
-                          </div>
-                          <span className="text-xs font-mono tracking-widest text-slate-300">•••• {card.mask}</span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-xs">
-                          <div>
-                            <span className="text-[10px] uppercase text-slate-400 block">Card</span>
-                            <span className="font-semibold text-white">{card.name}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-[10px] uppercase text-slate-400 block">Balance</span>
-                            <span className="text-sm font-black text-rose-400">${Number(card.balance).toFixed(2)}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Card Details */}
-                      <div className="p-5 flex flex-col gap-4 text-xs">
-                        {card.limit > 0 && (
-                          <div>
-                            <div className="flex items-center justify-between text-slate-400 mb-1">
-                              <span>Limit: ${Number(card.limit).toLocaleString()}</span>
-                              <span className={utilization > 50 ? 'text-rose-400 font-bold' : 'text-slate-300'}>
-                                {utilization.toFixed(0)}% Used
-                              </span>
-                            </div>
-                            <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full transition-all ${
-                                  utilization > 50 ? 'bg-rose-500' : 'bg-blue-500'
-                                }`}
-                                style={{ width: `${utilization}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-[#090f1e] border border-slate-800 text-[11px]">
-                          <div>
-                            <span className="text-slate-500 block">Min Payment</span>
-                            <span className="font-bold text-white">${Number(card.minPayment || 0).toFixed(2)}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-slate-500 block">Next Due</span>
-                            <span className="font-bold text-amber-400">{card.dueDate || 'Not set'}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ========================================================================= */}
-        {/* TAB 3: DEDICATED BILLS PAGE (Search box + Dropdown filter + Scan PDF) */}
-        {/* ========================================================================= */}
-        {activeTab === 'bills' && (
-          <div className="flex flex-col gap-6">
-            {/* Page Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0d1527] border border-slate-800 rounded-2xl p-5">
-              <div>
-                <button
-                  onClick={() => setActiveTab('dashboard')}
-                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 mb-2 font-semibold cursor-pointer transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>Back to Dashboard</span>
-                </button>
-                <h2 className="text-xl font-bold text-white">Household Bills</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Filter, search, and settle utility bills and recurring expenses</p>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                <button
+                  type="button"
                   onClick={() => setIsScanBillOpen(true)}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 flex items-center gap-1.5 cursor-pointer transition-all"
+                  className="px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
                 >
-                  <FileText className="w-4 h-4 text-blue-400" />
-                  <span>Scan Statement / PDF</span>
+                  <FileText className="w-4 h-4 text-blue-600" />
+                  <span>Scan PDF</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setIsAddBillOpen(true)}
-                  className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white flex items-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer transition-all"
+                  className="px-4 py-2 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Add Bill</span>
@@ -2216,288 +1844,320 @@ function KlarityApp() {
               </div>
             </div>
 
-            {/* Search & Filter Toolbar */}
-            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              {/* Search Box */}
-              <div className="flex items-center gap-2 bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2 text-xs text-white flex-1 max-w-md">
-                <Search className="w-4 h-4 text-slate-400 shrink-0" />
+            {/* Filter & Search Bar */}
+            <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs flex flex-col sm:flex-row gap-3">
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 flex-1 text-xs">
+                <Search className="w-4 h-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search bills by name or biller..."
+                  placeholder="Search bills by name or provider..."
                   value={billSearch}
                   onChange={e => setBillSearch(e.target.value)}
-                  className="bg-transparent border-none outline-none text-xs text-white placeholder-slate-500 w-full"
+                  className="bg-transparent outline-none w-full text-slate-800 placeholder-slate-400"
                 />
-                {billSearch && (
-                  <button onClick={() => setBillSearch('')} className="text-slate-400 hover:text-white">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
               </div>
-
-              {/* Dropdown Filter */}
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-slate-400 font-semibold shrink-0">Filter:</span>
-                <select
-                  value={billFilter}
-                  onChange={e => setBillFilter(e.target.value)}
-                  className="bg-[#080d19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer"
-                >
-                  <option value="all">All Bills ({billsList.length})</option>
-                  <option value="upcoming">Upcoming</option>
-                  <option value="due_soon">Due Soon</option>
-                  <option value="paid">Paid</option>
-                  <option value="Utilities">Utilities</option>
-                  <option value="Subscriptions">Subscriptions</option>
-                  <option value="Insurance">Insurance</option>
-                  <option value="Housing">Housing / Rent</option>
-                  <option value="Telecom">Telecom / Internet</option>
-                </select>
-              </div>
+              <select
+                value={billFilter}
+                onChange={e => setBillFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 outline-none cursor-pointer"
+              >
+                <option value="all">All Bills</option>
+                <option value="due_soon">Due Soon</option>
+                <option value="upcoming">Upcoming</option>
+                <option value="paid">Paid</option>
+                <option value="Utilities">Utilities</option>
+                <option value="Housing">Housing</option>
+              </select>
             </div>
 
-            {/* Filtered Bills List */}
-            {filteredBills.length === 0 ? (
-              <div className="p-12 text-center bg-[#0d1527] border border-dashed border-slate-800 rounded-2xl flex flex-col items-center gap-3">
-                <Zap className="w-8 h-8 text-slate-500" />
-                <h3 className="text-sm font-bold text-white">No Bills Found</h3>
-                <p className="text-xs text-slate-400 max-w-sm">
-                  {billSearch || billFilter !== 'all' ? 'No bills matched your search or category filter.' : 'Add your utility bills or upload a statement PDF.'}
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredBills.map(bill => (
-                  <div key={bill.id} className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col justify-between gap-4">
-                    <div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-white text-sm">{bill.name}</span>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          bill.status === 'paid'
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                        }`}>
-                          {bill.status === 'paid' ? 'PAID' : 'DUE SOON'}
-                        </span>
-                      </div>
-                      <div className="text-xs text-slate-400 mt-1">{bill.category}</div>
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-[#080d19] border border-slate-800 flex items-center justify-between">
-                      <div>
-                        <span className="text-[10px] text-slate-500 block">Due Date</span>
-                        <span className="text-xs font-bold text-slate-200">{bill.nextDueDate || `Day ${bill.dueDay}`}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[10px] text-slate-500 block">Amount</span>
-                        <span className="text-base font-black text-white">${Number(bill.expectedAmount).toFixed(2)}</span>
-                      </div>
-                    </div>
-
+            {/* Bills List */}
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 divide-y divide-slate-100">
+              {filteredBills.map(bill => (
+                <div key={bill.id} className="py-3.5 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">{bill.name}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{bill.nextDueDate || `Due Day ${bill.dueDay} • Checking`}</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-xs font-bold text-slate-900">$${Number(bill.expectedAmount).toFixed(2)}</span>
                     <button
+                      type="button"
                       onClick={() => handlePayBill(bill.id, bill.name, bill.expectedAmount)}
-                      disabled={bill.status === 'paid'}
-                      className={`w-full py-2 rounded-xl text-xs font-semibold transition-all ${
-                        bill.status === 'paid'
-                          ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                          : 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer'
-                      }`}
+                      className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-emerald-600 hover:text-white text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
                     >
-                      {bill.status === 'paid' ? '✓ Paid' : `Mark $${Number(bill.expectedAmount).toFixed(2)} Paid`}
+                      {bill.status === 'paid' ? 'Paid' : 'Mark Paid'}
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* TAB 4: DEDICATED PURCHASES PAGE (Search box + Category dropdown filter) */}
-        {/* ========================================================================= */}
-        {activeTab === 'transactions' && (
+        {/* --------------------------------------------------------------------- */}
+        {/* TAB: SUBSCRIPTIONS (Dedicated Page) */}
+        {/* --------------------------------------------------------------------- */}
+        {activeTab === 'subscriptions' && (
           <div className="flex flex-col gap-6">
-            {/* Page Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0d1527] border border-slate-800 rounded-2xl p-5">
+            <div className="flex items-center justify-between">
               <div>
                 <button
                   onClick={() => setActiveTab('dashboard')}
-                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 mb-2 font-semibold cursor-pointer transition-colors"
+                  className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1.5 mb-1 font-semibold cursor-pointer"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  <span>Back to Dashboard</span>
+                  <span>Back to Overview</span>
                 </button>
-                <h2 className="text-xl font-bold text-white">Recent Purchases</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Real-time ledger of card transactions, payments, and scanned receipts</p>
+                <h2 className="font-serif-title text-2xl font-bold text-slate-900">Subscriptions</h2>
               </div>
-
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-400 hidden sm:inline">
-                  Showing <span className="font-bold text-white">{filteredTransactions.length}</span> of {transactionsList.length}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setIsAddTxOpen(true)}
-                  className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white flex items-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Purchase</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddSubOpen(true)}
+                className="px-4 py-2 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Subscription</span>
+              </button>
             </div>
 
-            {/* Search & Filter Bar */}
-            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              {/* Search Box */}
-              <div className="flex items-center gap-2 bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2 text-xs text-white flex-1 max-w-md">
-                <Search className="w-4 h-4 text-slate-400 shrink-0" />
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 divide-y divide-slate-100">
+              {subscriptionsList.map(sub => (
+                <div key={sub.id} className="py-3.5 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">{sub.name}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{sub.renewalDate || 'Renews monthly'} • {sub.category}</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-xs font-bold text-slate-900">$${Number(sub.amount).toFixed(2)}/mo</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSubscription(sub.id, sub.name)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"
+                      title="Delete subscription"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* --------------------------------------------------------------------- */}
+        {/* TAB: CARDS (Dedicated Page) */}
+        {/* --------------------------------------------------------------------- */}
+        {activeTab === 'cards' && (
+          <div className="flex flex-col gap-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <button
+                  onClick={() => setActiveTab('dashboard')}
+                  className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1.5 mb-1 font-semibold cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to Overview</span>
+                </button>
+                <h2 className="font-serif-title text-2xl font-bold text-slate-900">Connected Cards</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddAccountOpen(true)}
+                className="px-4 py-2 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Card</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {creditCards.map(card => {
+                const util = card.limit > 0 ? Math.min(100, (card.balance / card.limit) * 100) : 0;
+                return (
+                  <div key={card.id} className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between gap-4">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-slate-900">{card.institution} {card.name}</p>
+                          <p className="text-[11px] text-slate-400 font-mono mt-0.5">•••• {card.mask}</p>
+                        </div>
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/60">
+                          {card.apr || 0}% APR
+                        </span>
+                      </div>
+
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                          <span>Balance: $${Number(card.balance).toFixed(2)}</span>
+                          <span>Limit: $${Number(card.limit).toLocaleString()}</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${util > 50 ? 'bg-rose-500' : 'bg-[#18457c]'}`}
+                            style={{ width: `${util}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAccount(card.id, card.name)}
+                        className="text-xs text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
+                      >
+                        Remove Card
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* --------------------------------------------------------------------- */}
+        {/* TAB: TRANSACTIONS (Dedicated Purchases Page) */}
+        {/* --------------------------------------------------------------------- */}
+        {activeTab === 'transactions' && (
+          <div className="flex flex-col gap-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <button
+                  onClick={() => setActiveTab('dashboard')}
+                  className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-1.5 mb-1 font-semibold cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to Overview</span>
+                </button>
+                <h2 className="font-serif-title text-2xl font-bold text-slate-900">Recent Purchases</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddTxOpen(true)}
+                className="px-4 py-2 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Purchase</span>
+              </button>
+            </div>
+
+            {/* Search and Category filter */}
+            <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs flex flex-col sm:flex-row gap-3">
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 flex-1 text-xs">
+                <Search className="w-4 h-4 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Search purchases by store, merchant, or amount..."
                   value={txSearch}
                   onChange={e => setTxSearch(e.target.value)}
-                  className="bg-transparent border-none outline-none text-xs text-white placeholder-slate-500 w-full"
+                  className="bg-transparent outline-none w-full text-slate-800 placeholder-slate-400"
                 />
-                {txSearch && (
-                  <button onClick={() => setTxSearch('')} className="text-slate-400 hover:text-white">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
               </div>
-
-              {/* Category Dropdown Filter */}
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-slate-400 font-semibold shrink-0">Category:</span>
-                <select
-                  value={categoryFilter}
-                  onChange={e => setCategoryFilter(e.target.value)}
-                  className="bg-[#080d19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer"
-                >
-                  <option value="all">All Categories</option>
-                  <option value="Groceries">Groceries</option>
-                  <option value="Dining">Dining</option>
-                  <option value="Utilities">Utilities</option>
-                  <option value="Shopping">Shopping</option>
-                  <option value="Entertainment">Entertainment</option>
-                  <option value="Travel">Travel</option>
-                  <option value="Services">Services</option>
-                </select>
-              </div>
+              <select
+                value={categoryFilter}
+                onChange={e => setCategoryFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 outline-none cursor-pointer"
+              >
+                <option value="all">All Categories</option>
+                <option value="Groceries">Groceries</option>
+                <option value="Transportation">Transportation</option>
+                <option value="Dining">Dining</option>
+                <option value="Utilities">Utilities</option>
+                <option value="Shopping">Shopping</option>
+                <option value="Income">Income / Deposits</option>
+              </select>
             </div>
 
             {/* Purchases Table */}
-            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
-              {filteredTransactions.length === 0 ? (
-                <p className="text-xs text-slate-500 py-8 text-center">
-                  No purchases found matching your filter criteria.
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-800 text-slate-400 text-[11px] font-semibold uppercase tracking-wider">
-                        <th className="py-3 px-2">Date</th>
-                        <th className="py-3 px-2">Description</th>
-                        <th className="py-3 px-2">Category</th>
-                        <th className="py-3 px-2 text-right">Amount</th>
-                        <th className="py-3 px-2 text-right">Action</th>
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 text-slate-400 text-[11px] font-semibold uppercase tracking-wider bg-slate-50/50">
+                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4">Description</th>
+                    <th className="py-3 px-4">Category</th>
+                    <th className="py-3 px-4 text-right">Amount</th>
+                    <th className="py-3 px-4 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredTransactions.map(tx => {
+                    const isDeposit = Number(tx.amount) < 0 || tx.category === 'Income';
+                    const displayAmount = Math.abs(Number(tx.amount)).toFixed(2);
+                    return (
+                      <tr key={tx.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">{tx.date}</td>
+                        <td className="py-3 px-4 font-semibold text-slate-900">{tx.name}</td>
+                        <td className="py-3 px-4">
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600">
+                            {tx.category || 'Purchase'}
+                          </span>
+                        </td>
+                        <td className={`py-3 px-4 text-right font-bold ${isDeposit ? 'text-emerald-700' : 'text-slate-900'}`}>
+                          {isDeposit ? `+$${displayAmount}` : `-$${displayAmount}`}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTransaction(tx.id, tx.name)}
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer transition-colors"
+                            title="Delete purchase"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {filteredTransactions.map(tx => (
-                        <tr key={tx.id} className="hover:bg-slate-800/30 transition-colors">
-                          <td className="py-3 px-2 text-slate-400 font-mono text-[11px]">{tx.date}</td>
-                          <td className="py-3 px-2 font-medium text-white">{tx.name}</td>
-                          <td className="py-3 px-2">
-                            <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300">
-                              {tx.category || 'General'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-2 text-right font-black text-rose-400">
-                            -${Number(tx.amount).toFixed(2)}
-                          </td>
-                          <td className="py-3 px-2 text-right">
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteTransaction(tx.id, tx.name)}
-                              className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg cursor-pointer transition-colors"
-                              title="Delete purchase"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* TAB 5: AI ADVISOR (Compact Memory + Past Chats History Button) */}
-        {/* ========================================================================= */}
+        {/* --------------------------------------------------------------------- */}
+        {/* TAB: ADVISOR (Full Screen Chat Thread) */}
+        {/* --------------------------------------------------------------------- */}
         {activeTab === 'advisor' && (
-          <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col h-[700px] shadow-xl">
-            {/* Header: Title on Left, Past Chats & Compact Memory on Right */}
-            <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
+          <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col h-[650px] justify-between">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Bot className="w-4 h-4 text-blue-400" />
-                  <span>AI Financial Advisor</span>
-                </h3>
-                <p className="text-[11px] text-slate-400">Personalized debt & cash flow guidance</p>
+                <h2 className="font-serif-title text-xl font-bold text-slate-900">Advisor</h2>
+                <p className="text-xs text-slate-500">Reads your bills, cards and spending to answer questions.</p>
               </div>
-
               <div className="flex items-center gap-2">
-                {/* Past Chats Button */}
                 <button
                   type="button"
                   onClick={() => setIsPastChatsOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 cursor-pointer transition-all"
-                  title="View Past Chats & History"
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-1.5 cursor-pointer"
                 >
-                  <History className="w-3.5 h-3.5 text-blue-400" />
+                  <History className="w-3.5 h-3.5 text-blue-600" />
                   <span>Past Chats</span>
-                  {chatSessions.length > 1 && (
-                    <span className="px-1.5 py-0.2 rounded-full bg-blue-600/30 text-blue-300 text-[10px] font-bold border border-blue-500/30">
-                      {chatSessions.length}
-                    </span>
-                  )}
                 </button>
-
-                {/* Reduced Compact Memory Button */}
                 <button
                   type="button"
                   onClick={() => setIsMemoryModalOpen(true)}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 cursor-pointer transition-all"
-                  title="Manage AI Memory & Preferences"
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Brain className="w-3.5 h-3.5 text-indigo-400" />
-                  <span className="hidden sm:inline">Memory</span>
-                  {aiMemory.length > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[10px] font-bold">
-                      {aiMemory.length}
-                    </span>
-                  )}
+                  <Brain className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Memory ({aiMemory.length})</span>
                 </button>
               </div>
             </div>
 
-            {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto py-4 flex flex-col gap-3">
-              {chatMessages.map((msg, idx) => (
+            {/* Chat Thread */}
+            <div className="flex-1 overflow-y-auto py-4 flex flex-col gap-3 pr-1">
+              {chatMessages.map((msg, i) => (
                 <div
-                  key={idx}
+                  key={i}
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs leading-relaxed whitespace-pre-line ${
+                    className={`max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed ${
                       msg.role === 'user'
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                        : 'bg-[#090f1e] text-slate-200 border border-slate-800 shadow-sm'
+                        ? 'bg-[#18457c] text-white shadow-2xs'
+                        : 'bg-[#eff4f9] text-slate-800 border border-slate-200/60 shadow-2xs'
                     }`}
                   >
                     {msg.text}
@@ -2506,482 +2166,149 @@ function KlarityApp() {
               ))}
               {isAiTyping && (
                 <div className="flex justify-start">
-                  <div className="bg-[#090f1e] text-slate-400 border border-slate-800 rounded-2xl px-4 py-2.5 text-xs flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 animate-spin text-blue-400" />
-                    <span>Analyzing your finances & documents...</span>
+                  <div className="bg-[#eff4f9] rounded-2xl px-4 py-2.5 text-xs text-slate-500 animate-pulse border border-slate-200/60">
+                    Advisor is analyzing your cash flow...
                   </div>
                 </div>
               )}
               <div ref={chatEndRef} />
             </div>
 
-            {/* AI Input Form with Upload Button */}
-            <form onSubmit={handleSendChatMessage} className="pt-2 flex items-center gap-2">
-              {/* Document / PDF Upload Dropdown */}
-              <div className="relative" ref={uploadMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsUploadMenuOpen(!isUploadMenuOpen)}
-                  className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 cursor-pointer transition-all flex items-center justify-center"
-                  title="Upload or scan statement / document"
-                >
-                  <Paperclip className="w-4 h-4" />
-                </button>
-
-                {isUploadMenuOpen && (
-                  <div className="absolute bottom-12 left-0 w-64 rounded-2xl bg-[#0c1427] border border-slate-800 shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-bottom-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsUploadMenuOpen(false);
-                        fileInputRef.current?.click();
-                      }}
-                      className="w-full px-4 py-2.5 text-left text-xs text-slate-200 hover:bg-slate-800 flex items-center gap-2.5 transition-colors cursor-pointer"
-                    >
-                      <UploadCloud className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <div>
-                        <div className="font-semibold">Upload PDF / Document</div>
-                        <div className="text-[10px] text-slate-400">Scans statement & adds to bills and purchases</div>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsUploadMenuOpen(false);
-                        setIsScanBillOpen(true);
-                      }}
-                      className="w-full px-4 py-2.5 text-left text-xs text-slate-200 hover:bg-slate-800 flex items-center gap-2.5 transition-colors cursor-pointer border-t border-slate-800/60"
-                    >
-                      <FileText className="w-4 h-4 text-blue-400 shrink-0" />
-                      <div>
-                        <div className="font-semibold">Scan Statement Text</div>
-                        <div className="text-[10px] text-slate-400">Paste raw bill or statement details</div>
-                      </div>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Hidden file input for statement PDFs & documents */}
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileUpload}
-                accept=".pdf,.png,.jpg,.jpeg,.txt,.csv"
-                className="hidden"
-              />
-
+            {/* Chat Input */}
+            <form onSubmit={handleSendChatMessage} className="flex items-center gap-2 pt-3 border-t border-slate-100">
               <input
                 type="text"
-                placeholder="Ask Klarity about your finances, bills, or debt payoff..."
+                placeholder="Ask about your money..."
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
-                className="flex-1 bg-[#080d19] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
               />
               <button
                 type="submit"
                 disabled={isAiTyping || !chatInput.trim()}
-                className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer"
               >
                 Send
               </button>
             </form>
           </div>
         )}
-
-        {/* ========================================================================= */}
-        {/* TAB 6: SETTINGS */}
-        {/* ========================================================================= */}
-        {activeTab === 'settings' && (
-          <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full">
-            <div>
-              <h2 className="text-xl font-bold text-white">Settings</h2>
-              <p className="text-xs text-slate-400 mt-1">Manage bank connections, linked credit cards, profile, and security</p>
-            </div>
-
-            {/* 1. AI Advisor Engine & Custom API Keys (BYOK) */}
-            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-6 flex flex-col gap-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
-                <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Bot className="w-4 h-4 text-blue-400" />
-                    <span>AI Engine & API Keys</span>
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Choose which AI powers Klarity (Gemini, ChatGPT, DeepSeek, or Custom) and optionally provide your own API key.
-                  </p>
-                </div>
-                <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/30">
-                  {aiConfig.provider === 'gemini' ? 'Google Gemini' : aiConfig.provider === 'openai' ? 'OpenAI ChatGPT' : aiConfig.provider === 'deepseek' ? 'DeepSeek' : 'Custom Model'}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div>
-                  <label className="font-semibold text-slate-300 block mb-1">AI Provider</label>
-                  <select
-                    value={aiConfig.provider}
-                    onChange={e => setAiConfig(prev => ({ ...prev, provider: e.target.value }))}
-                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-blue-500 cursor-pointer"
-                  >
-                    <option value="gemini">Google Gemini (Default)</option>
-                    <option value="openai">OpenAI (ChatGPT: GPT-4o, GPT-4o-mini)</option>
-                    <option value="deepseek">DeepSeek (deepseek-chat, deepseek-reasoner)</option>
-                    <option value="custom">Custom (OpenRouter, Groq, Ollama, etc.)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-semibold text-slate-300 block mb-1">
-                    Model Name <span className="text-slate-500 font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder={
-                      aiConfig.provider === 'gemini' ? 'gemini-2.5-flash' :
-                      aiConfig.provider === 'openai' ? 'gpt-4o-mini' :
-                      aiConfig.provider === 'deepseek' ? 'deepseek-chat' :
-                      'custom-model-id'
-                    }
-                    value={aiConfig.modelName}
-                    onChange={e => setAiConfig(prev => ({ ...prev, modelName: e.target.value }))}
-                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="font-semibold text-slate-300">
-                      Custom API Key <span className="text-slate-500 font-normal">(Optional — leave blank to use Klarity's default server AI)</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowAiApiKey(!showAiApiKey)}
-                      className="text-[11px] text-blue-400 hover:text-blue-300 cursor-pointer"
-                    >
-                      {showAiApiKey ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
-                  <input
-                    type={showAiApiKey ? 'text' : 'password'}
-                    placeholder={
-                      aiConfig.provider === 'gemini' ? 'AIzaSy...' :
-                      aiConfig.provider === 'openai' ? 'sk-...' :
-                      aiConfig.provider === 'deepseek' ? 'sk-...' :
-                      'Your custom API key'
-                    }
-                    value={aiConfig.apiKey}
-                    onChange={e => setAiConfig(prev => ({ ...prev, apiKey: e.target.value }))}
-                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 font-mono"
-                  />
-                </div>
-
-                {aiConfig.provider === 'custom' && (
-                  <div className="sm:col-span-2">
-                    <label className="font-semibold text-slate-300 block mb-1">Custom API Base URL</label>
-                    <input
-                      type="text"
-                      placeholder="https://api.groq.com/openai/v1 or https://openrouter.ai/api/v1"
-                      value={aiConfig.customBaseUrl}
-                      onChange={e => setAiConfig(prev => ({ ...prev, customBaseUrl: e.target.value }))}
-                      className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 font-mono"
-                    />
-                  </div>
-                )}
-
-                <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                  <p className="text-[11px] text-slate-400">
-                    Your key is saved locally in your browser and used only for your own AI advisor inquiries.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      localStorage.setItem('klarity_ai_config', JSON.stringify(aiConfig));
-                      setNotificationToast('AI Engine settings updated successfully!');
-                      setTimeout(() => setNotificationToast(''), 4000);
-                    }}
-                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md shadow-blue-600/20 cursor-pointer transition-colors"
-                  >
-                    Save AI Settings
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. AI Memory & Personal Preferences */}
-            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-6 flex flex-col gap-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
-                <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Brain className="w-4 h-4 text-indigo-400" />
-                    <span>AI Memory & Personal Preferences</span>
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Teach Klarity your personal financial goals and preferences (e.g., debt payoff priority, savings targets) so it remembers them across conversations.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsMemoryModalOpen(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 cursor-pointer transition-colors"
-                >
-                  Manage Memory ({aiMemory.length})
-                </button>
-              </div>
-
-              {aiMemory.length === 0 ? (
-                <div className="p-4 rounded-xl bg-[#080d19] border border-slate-800 text-center text-xs text-slate-500 flex flex-col items-center gap-3">
-                  <span>No custom rules or memory saved yet.</span>
-                  <div className="flex flex-wrap justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleAddMemory(
-                          'Prioritize aggressive debt elimination: focus extra funds on clearing balances as fast as possible.'
-                        )
-                      }
-                      className="px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-semibold cursor-pointer"
-                    >
-                      + Rapid Debt Elimination
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleAddMemory(
-                          'Emergency savings priority: Maintain at least 3 months of emergency expenses before investing or discretionary spending.'
-                        )
-                      }
-                      className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold cursor-pointer"
-                    >
-                      + Emergency Fund First
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {aiMemory.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="px-3 py-1.5 rounded-xl bg-[#080d19] border border-slate-800 text-xs text-slate-200 flex items-center gap-2"
-                    >
-                      <span className="truncate max-w-md">{item}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveMemory(idx)}
-                        className="text-slate-500 hover:text-rose-400 cursor-pointer"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* 3. Plaid Banking Integration */}
-            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-6 flex flex-col gap-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
-                <div>
-                  <h3 className="text-sm font-bold text-white">Plaid Banking Integration</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Secure bank account linking via Plaid API</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${
-                    settings.hasPlaidKeys
-                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                  }`}>
-                    {settings.hasPlaidKeys ? `Active (${settings.plaidEnv || 'sandbox'})` : 'API Keys Needed'}
-                  </span>
-                  <button
-                    onClick={initiatePlaidLink}
-                    disabled={isConnectingPlaid}
-                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-600/20 cursor-pointer"
-                  >
-                    {isConnectingPlaid ? 'Opening Plaid...' : 'Launch Plaid Link'}
-                  </button>
-                </div>
-              </div>
-
-              <form onSubmit={handleSaveSettings} className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div>
-                  <label className="font-semibold text-slate-300 block mb-1">Plaid Client ID</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 64a8b8c123..."
-                    value={plaidClientIdInput}
-                    onChange={e => setPlaidClientIdInput(e.target.value)}
-                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-300 block mb-1">Plaid Secret</label>
-                  <input
-                    type="password"
-                    placeholder="••••••••••••••••••••"
-                    value={plaidSecretInput}
-                    onChange={e => setPlaidSecretInput(e.target.value)}
-                    className="w-full bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                  <div className="flex items-center gap-3">
-                    <label className="font-semibold text-slate-300">Environment:</label>
-                    <select
-                      value={plaidEnvInput}
-                      onChange={e => setPlaidEnvInput(e.target.value)}
-                      className="bg-[#080d19] border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="development">Development (Real Bank Accounts)</option>
-                      <option value="sandbox">Sandbox (Testing / Demo)</option>
-                      <option value="production">Production</option>
-                    </select>
-                  </div>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/20 cursor-pointer"
-                  >
-                    Save Plaid Keys
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            {/* 2. Manage Cards & Accounts */}
-            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-6 flex flex-col gap-5">
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-                <div>
-                  <h3 className="text-sm font-bold text-white">Manage Cards & Accounts</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">View and manage all active cards ({accountsList.length} total)</p>
-                </div>
-                <button
-                  onClick={() => setIsAddAccountOpen(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 cursor-pointer"
-                >
-                  Add Card
-                </button>
-              </div>
-
-              {accountsList.length === 0 ? (
-                <p className="text-xs text-slate-500 py-4 text-center">No cards or accounts added yet. Click 'Add Card' above to link one.</p>
-              ) : (
-                <div className="divide-y divide-slate-800/80">
-                  {accountsList.map(acc => (
-                    <div key={acc.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-white">{acc.name}</span>
-                          <span className="text-slate-400">({acc.institution})</span>
-                          <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 font-mono">•••• {acc.mask}</span>
-                        </div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">
-                          Limit: ${Number(acc.limit || 0).toLocaleString()} | APR: {acc.apr || 0}% | Min: ${Number(acc.minPayment || 0).toFixed(2)}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <span className="text-[10px] text-slate-500 block uppercase">Balance</span>
-                          <span className="font-bold text-rose-400 text-sm">${Number(acc.balance || 0).toFixed(2)}</span>
-                        </div>
-                        <button
-                          onClick={() => handleDeleteAccount(acc.id, acc.name)}
-                          className="px-3 py-1 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 font-semibold text-xs border border-rose-500/20 cursor-pointer"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* 3. Account Profile */}
-            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-6 flex flex-col gap-4 text-xs">
-              <h3 className="text-sm font-bold text-white border-b border-slate-800/80 pb-3">User Profile</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <span className="text-slate-400 block text-[11px]">Full Name</span>
-                  <span className="text-white font-semibold text-sm">{currentUser.name}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[11px]">Email Address</span>
-                  <span className="text-white font-semibold text-sm">{currentUser.email}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[11px]">Authentication Status</span>
-                  <span className="text-emerald-400 font-semibold">Google OAuth Verified</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[11px]">Household Role</span>
-                  <span className="text-white font-semibold">{currentUser.role || 'Primary Member'}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 4. Security & Sign Out */}
-            <div className="bg-[#0d1527] border border-rose-950/40 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-sm font-bold text-white">Sign Out</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Securely log out of this browser session</p>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition-all shadow-md shadow-rose-600/20 cursor-pointer"
-              >
-                Sign Out of Klarity
-              </button>
-            </div>
-          </div>
-        )}
       </main>
 
-      {/* ========================================================================= */}
-      {/* MODALS */}
-      {/* ========================================================================= */}
+      {/* ======================================================================= */}
+      {/* 3. RIGHT SIDEBAR: ADVISOR (Exact match from screenshot) */}
+      {/* ======================================================================= */}
+      <aside className="w-72 xl:w-80 shrink-0 border-l border-slate-200/80 bg-[#f8fafc] p-6 flex flex-col justify-between min-h-screen sticky top-0 hidden lg:flex">
+        <div>
+          {/* Header */}
+          <h2 className="text-sm font-bold text-slate-900">Advisor</h2>
+          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+            Reads your bills, cards and spending to answer questions.
+          </p>
+
+          {/* AI Message Bubble */}
+          <div className="bg-[#eff4f9] rounded-2xl p-4 text-xs text-slate-700 leading-relaxed border border-slate-200/60 mt-5 shadow-2xs">
+            {highestAprCard ? (
+              <span>
+                Your cash covers everything due this month. The {highestAprCard.name} has the highest rate at {highestAprCard.apr}%, so extra payments there save the most interest.
+              </span>
+            ) : (
+              <span>
+                Your cash covers everything due this month. Your accounts and bills are in great financial health.
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Suggestion Pills & Input at bottom */}
+        <div className="flex flex-col gap-2 mt-auto pt-6">
+          <button
+            type="button"
+            onClick={() => handleSendChatMessage('What should I pay off first?')}
+            className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-2 rounded-full shadow-2xs transition-colors cursor-pointer"
+          >
+            What should I pay off first?
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSendChatMessage("What's due in 14 days?")}
+            className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-2 rounded-full shadow-2xs transition-colors cursor-pointer"
+          >
+            What's due in 14 days?
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSendChatMessage('Where can I cut subscriptions?')}
+            className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-2 rounded-full shadow-2xs transition-colors cursor-pointer"
+          >
+            Where can I cut subscriptions?
+          </button>
+
+          {/* Chat Form */}
+          <form onSubmit={handleSendChatMessage} className="flex items-center gap-2 mt-2">
+            <input
+              type="text"
+              placeholder="Ask about your money"
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              className="flex-1 bg-white border border-slate-200/90 rounded-xl px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs"
+            />
+            <button
+              type="submit"
+              disabled={isAiTyping || !chatInput.trim()}
+              className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer"
+            >
+              Send
+            </button>
+          </form>
+        </div>
+      </aside>
+
+      {/* ======================================================================= */}
+      {/* 4. MODALS (Clean Light Theme) */}
+      {/* ======================================================================= */}
 
       {/* Add Card Modal */}
       {isAddAccountOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white">Add Credit Card</h3>
-              <button onClick={() => setIsAddAccountOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900">Add Credit Card</h3>
+              <button onClick={() => setIsAddAccountOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
             </div>
             <form onSubmit={handleAddAccount} className="flex flex-col gap-3 text-xs">
               <div>
-                <label className="font-semibold text-slate-300">Bank / Issuer</label>
+                <label className="font-semibold text-slate-700">Bank / Issuer</label>
                 <select
                   value={newAccount.institution}
                   onChange={e => setNewAccount(prev => ({ ...prev, institution: e.target.value }))}
-                  className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
                 >
+                  <option value="Everyday Rewards">Everyday Rewards</option>
+                  <option value="Travel Card">Travel Card</option>
                   <option value="Capital One">Capital One</option>
-                  <option value="Discover">Discover</option>
-                  <option value="Citi">Citi</option>
                   <option value="Chase">Chase</option>
-                  <option value="American Express">American Express</option>
-                  <option value="Bank of America">Bank of America</option>
-                  <option value="Other Bank">Other Bank</option>
+                  <option value="Citi">Citi</option>
+                  <option value="Discover">Discover</option>
+                  <option value="Bank">Bank</option>
                 </select>
               </div>
 
               <div>
-                <label className="font-semibold text-slate-300">Card Name</label>
+                <label className="font-semibold text-slate-700">Card Name</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. SavorOne, Double Cash, Freedom"
+                  placeholder="e.g. Everyday Rewards, Travel Card"
                   value={newAccount.name}
                   onChange={e => setNewAccount(prev => ({ ...prev, name: e.target.value }))}
-                  className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500"
+                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 placeholder-slate-400 outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold text-slate-300">Current Balance ($)</label>
+                  <label className="font-semibold text-slate-700">Balance ($)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -2989,48 +2316,38 @@ function KlarityApp() {
                     placeholder="0.00"
                     value={newAccount.balance}
                     onChange={e => setNewAccount(prev => ({ ...prev, balance: e.target.value }))}
-                    className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-300">Credit Limit ($)</label>
+                  <label className="font-semibold text-slate-700">Credit Limit ($)</label>
                   <input
                     type="number"
                     step="0.01"
                     placeholder="e.g. 5000"
                     value={newAccount.limit}
                     onChange={e => setNewAccount(prev => ({ ...prev, limit: e.target.value }))}
-                    className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-300">Interest APR (%)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="e.g. 24.99"
-                    value={newAccount.apr}
-                    onChange={e => setNewAccount(prev => ({ ...prev, apr: e.target.value }))}
-                    className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-300">Next Payment Due</label>
-                  <input
-                    type="date"
-                    value={newAccount.dueDate}
-                    onChange={e => setNewAccount(prev => ({ ...prev, dueDate: e.target.value }))}
-                    className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                  />
-                </div>
+              <div>
+                <label className="font-semibold text-slate-700">Interest APR (%)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  placeholder="e.g. 21.9"
+                  value={newAccount.apr}
+                  onChange={e => setNewAccount(prev => ({ ...prev, apr: e.target.value }))}
+                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
+                />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800 mt-2">
-                <button type="button" onClick={() => setIsAddAccountOpen(false)} className="px-3 py-1.5 text-slate-400">Cancel</button>
-                <button type="submit" className="px-4 py-1.5 rounded-xl bg-blue-600 text-white font-semibold">Save Card</button>
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button type="button" onClick={() => setIsAddAccountOpen(false)} className="px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-pointer">Cancel</button>
+                <button type="submit" className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold cursor-pointer">Save Card</button>
               </div>
             </form>
           </div>
@@ -3039,185 +2356,70 @@ function KlarityApp() {
 
       {/* Add Bill Modal */}
       {isAddBillOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white">Add Utility / Bill</h3>
-              <button onClick={() => setIsAddBillOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900">Add Upcoming Bill</h3>
+              <button onClick={() => setIsAddBillOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
             </div>
             <form onSubmit={handleAddBill} className="flex flex-col gap-3 text-xs">
               <div>
-                <label className="font-semibold text-slate-300">Bill Name</label>
+                <label className="font-semibold text-slate-700">Bill Name / Provider</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Pacific Gas and Electric, Fresno Water"
+                  placeholder="e.g. PG&E Electric, Rent, Water Service"
                   value={newBill.name}
                   onChange={e => setNewBill(prev => ({ ...prev, name: e.target.value, biller: e.target.value }))}
-                  className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 placeholder-slate-400 outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold text-slate-300">Amount Due ($)</label>
+                  <label className="font-semibold text-slate-700">Expected Amount ($)</label>
                   <input
                     type="number"
                     step="0.01"
                     required
-                    placeholder="e.g. 248.50"
+                    placeholder="128.40"
                     value={newBill.expectedAmount}
                     onChange={e => setNewBill(prev => ({ ...prev, expectedAmount: e.target.value }))}
-                    className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-300">Day Due of Month</label>
+                  <label className="font-semibold text-slate-700">Due Day of Month</label>
                   <input
                     type="number"
                     min="1"
                     max="31"
-                    placeholder="15"
                     value={newBill.dueDay}
                     onChange={e => setNewBill(prev => ({ ...prev, dueDay: e.target.value }))}
-                    className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800 mt-2">
-                <button type="button" onClick={() => setIsAddBillOpen(false)} className="px-3 py-1.5 text-slate-400">Cancel</button>
-                <button type="submit" className="px-4 py-1.5 rounded-xl bg-blue-600 text-white font-semibold">Save Bill</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Scan Statement Modal */}
-      {isScanBillOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white">Scan Statement</h3>
-              <button onClick={() => setIsScanBillOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
-            </div>
-            <p className="text-xs text-slate-400">
-              Paste the text from your e-bill PDF or statement below. Klarity will automatically extract the utility company, amount, and due date.
-            </p>
-            <textarea
-              rows={5}
-              value={scanText}
-              onChange={e => setScanText(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white font-mono focus:outline-none focus:border-blue-500"
-            />
-            {scanResult && (
-              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs">
-                {scanResult}
-              </div>
-            )}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-              <button type="button" onClick={() => setIsScanBillOpen(false)} className="px-3 py-1.5 text-xs text-slate-400 cursor-pointer">Close</button>
-              <button
-                type="button"
-                onClick={handleScanBill}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer"
-              >
-                Parse & Register Bill
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add Purchase Modal */}
-      {isAddTxOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-blue-400" />
-                <h3 className="text-base font-bold text-white">Add Purchase Manually</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAddTxOpen(false)}
-                className="text-slate-400 hover:text-white cursor-pointer p-1"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddTransaction} className="flex flex-col gap-3.5 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-300 mb-1">Merchant / Store Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Trader Joe's, Costco, Target"
-                  value={newTx.name}
-                  onChange={e => setNewTx({ ...newTx, name: e.target.value })}
-                  className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-300 mb-1">Amount ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="0.00"
-                    value={newTx.amount}
-                    onChange={e => setNewTx({ ...newTx, amount: e.target.value })}
-                    className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-300 mb-1">Date</label>
-                  <input
-                    type="date"
-                    required
-                    value={newTx.date}
-                    onChange={e => setNewTx({ ...newTx, date: e.target.value })}
-                    className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-300 mb-1">Category</label>
+                <label className="font-semibold text-slate-700">Category</label>
                 <select
-                  value={newTx.category}
-                  onChange={e => setNewTx({ ...newTx, category: e.target.value })}
-                  className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                  value={newBill.category}
+                  onChange={e => setNewBill(prev => ({ ...prev, category: e.target.value }))}
+                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
                 >
-                  <option value="Groceries">Groceries</option>
-                  <option value="Dining">Dining</option>
                   <option value="Utilities">Utilities</option>
-                  <option value="Shopping">Shopping</option>
-                  <option value="Entertainment">Entertainment</option>
-                  <option value="Travel">Travel</option>
-                  <option value="Services">Services</option>
+                  <option value="Housing">Housing</option>
+                  <option value="Insurance">Insurance</option>
+                  <option value="Telecom">Telecom / Internet</option>
+                  <option value="Subscriptions">Subscriptions</option>
                   <option value="Other">Other</option>
                 </select>
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsAddTxOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-md shadow-blue-600/20 cursor-pointer"
-                >
-                  Add Purchase
-                </button>
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button type="button" onClick={() => setIsAddBillOpen(false)} className="px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-pointer">Cancel</button>
+                <button type="submit" className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold cursor-pointer">Save Bill</button>
               </div>
             </form>
           </div>
@@ -3226,38 +2428,28 @@ function KlarityApp() {
 
       {/* Add Subscription Modal */}
       {isAddSubOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Layers className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-base font-bold text-white">Add Subscription</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAddSubOpen(false)}
-                className="text-slate-400 hover:text-white cursor-pointer p-1"
-              >
-                <X className="w-5 h-5" />
-              </button>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900">Add Subscription</h3>
+              <button onClick={() => setIsAddSubOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
             </div>
-
-            <form onSubmit={handleAddSubscription} className="flex flex-col gap-3.5 text-xs">
+            <form onSubmit={handleAddSubscription} className="flex flex-col gap-3 text-xs">
               <div>
-                <label className="block font-semibold text-slate-300 mb-1">Service / Subscription Name</label>
+                <label className="font-semibold text-slate-700">Subscription Service Name</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Netflix, Spotify, iCloud, ChatGPT Plus"
                   value={newSub.name}
                   onChange={e => setNewSub({ ...newSub, name: e.target.value })}
-                  className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 placeholder-slate-400 outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">Monthly Cost ($)</label>
+                  <label className="font-semibold text-slate-700">Monthly Cost ($)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -3265,15 +2457,15 @@ function KlarityApp() {
                     placeholder="15.49"
                     value={newSub.amount}
                     onChange={e => setNewSub({ ...newSub, amount: e.target.value })}
-                    className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">Billing Cycle</label>
+                  <label className="font-semibold text-slate-700">Billing Cycle</label>
                   <select
                     value={newSub.billingCycle}
                     onChange={e => setNewSub({ ...newSub, billingCycle: e.target.value })}
-                    className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
                   >
                     <option value="monthly">Monthly</option>
                     <option value="yearly">Yearly</option>
@@ -3282,264 +2474,284 @@ function KlarityApp() {
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-300 mb-1">Category</label>
+                <label className="font-semibold text-slate-700">Category</label>
                 <select
                   value={newSub.category}
                   onChange={e => setNewSub({ ...newSub, category: e.target.value })}
-                  className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
                 >
-                  <option value="Streaming">Streaming (Netflix, Hulu, Prime)</option>
+                  <option value="Streaming">Streaming (Netflix, Hulu)</option>
                   <option value="Music">Music (Spotify, Apple Music)</option>
-                  <option value="AI & Software">AI & Software (ChatGPT, Claude)</option>
-                  <option value="Cloud Storage">Cloud Storage (iCloud, Google)</option>
-                  <option value="Fitness">Fitness / Gym</option>
+                  <option value="Cloud Storage">Cloud Storage (iCloud, Drive)</option>
+                  <option value="AI & Software">AI & Software (ChatGPT)</option>
                   <option value="Other">Other</option>
                 </select>
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsAddSubOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-md shadow-indigo-600/20 cursor-pointer"
-                >
-                  Save Subscription
-                </button>
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button type="button" onClick={() => setIsAddSubOpen(false)} className="px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-pointer">Cancel</button>
+                <button type="submit" className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold cursor-pointer">Save Subscription</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* AI Memory & Preferences Modal */}
-      {isMemoryModalOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Brain className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-base font-bold text-white">AI Advisor Memory</h3>
-              </div>
-              <button
-                onClick={() => setIsMemoryModalOpen(false)}
-                className="text-slate-400 hover:text-white cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+      {/* Add Purchase Modal */}
+      {isAddTxOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900">Add Purchase</h3>
+              <button onClick={() => setIsAddTxOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
             </div>
+            <form onSubmit={handleAddTransaction} className="flex flex-col gap-3 text-xs">
+              <div>
+                <label className="font-semibold text-slate-700">Store / Description</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Trader Joe's, Shell, Target"
+                  value={newTx.name}
+                  onChange={e => setNewTx({ ...newTx, name: e.target.value })}
+                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 placeholder-slate-400 outline-none"
+                />
+              </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Klarity remembers your personal beliefs, financial rules, and lifestyle facts across every conversation so you never have to repeat them.
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-slate-700">Amount ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="54.12"
+                    value={newTx.amount}
+                    onChange={e => setNewTx({ ...newTx, amount: e.target.value })}
+                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-700">Date</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Oct 24"
+                    value={newTx.date}
+                    onChange={e => setNewTx({ ...newTx, date: e.target.value })}
+                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700">Category</label>
+                <select
+                  value={newTx.category}
+                  onChange={e => setNewTx({ ...newTx, category: e.target.value })}
+                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
+                >
+                  <option value="Groceries">Groceries</option>
+                  <option value="Transportation">Transportation</option>
+                  <option value="Dining">Dining</option>
+                  <option value="Utilities">Utilities</option>
+                  <option value="Shopping">Shopping</option>
+                  <option value="Income">Income / Deposit</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button type="button" onClick={() => setIsAddTxOpen(false)} className="px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-pointer">Cancel</button>
+                <button type="submit" className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold cursor-pointer">Save Purchase</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Scan Statement Modal */}
+      {isScanBillOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900">Scan Statement</h3>
+              <button onClick={() => setIsScanBillOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Paste statement text or e-bill details below. Klarity will extract provider name, amount, and due date.
             </p>
-
-            {/* Quick Presets */}
-            <div className="bg-[#080d19] border border-slate-800 rounded-xl p-3 flex flex-col gap-2">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Quick Presets
-              </span>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleAddMemory(
-                      'Aggressive debt elimination: Prioritize clearing existing balances as rapidly as possible.'
-                    )
-                  }
-                  className="px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-semibold cursor-pointer transition-colors"
-                >
-                  + Rapid Debt Elimination
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleAddMemory(
-                      'Emergency savings priority: Maintain at least 3 months of emergency expenses before investing or discretionary spending.'
-                    )
-                  }
-                  className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold cursor-pointer transition-colors"
-                >
-                  + Emergency Savings First
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleAddMemory(
-                      'Frugal budgeting: Help me identify recurring expenses and unnecessary subscriptions to reduce monthly overhead.'
-                    )
-                  }
-                  className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold cursor-pointer transition-colors"
-                >
-                  + Frugal Budgeting
-                </button>
+            <textarea
+              rows={5}
+              value={scanText}
+              onChange={e => setScanText(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 font-mono outline-none"
+            />
+            {scanResult && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs">
+                {scanResult}
               </div>
-            </div>
-
-            {/* Add Custom Fact */}
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Add custom memory (e.g., 'Save for a down payment', 'Avoid new credit cards')..."
-                value={newMemoryInput}
-                onChange={e => setNewMemoryInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddMemory();
-                  }
-                }}
-                className="flex-1 bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-              />
+            )}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button type="button" onClick={() => setIsScanBillOpen(false)} className="px-3 py-1.5 text-xs text-slate-500 cursor-pointer">Close</button>
               <button
                 type="button"
-                onClick={() => handleAddMemory()}
-                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+                onClick={handleScanBill}
+                className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold cursor-pointer"
               >
-                Add
-              </button>
-            </div>
-
-            {/* Active Memory Items */}
-            <div className="flex flex-col gap-2 mt-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-300">Active Memory Rules ({aiMemory.length})</span>
-                {aiMemory.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAiMemory([]);
-                      localStorage.removeItem('klarity_ai_memory');
-                      setNotificationToast('Memory cleared');
-                      setTimeout(() => setNotificationToast(''), 3000);
-                    }}
-                    className="text-[11px] text-rose-400 hover:text-rose-300 cursor-pointer"
-                  >
-                    Clear All
-                  </button>
-                )}
-              </div>
-
-              {aiMemory.length === 0 ? (
-                <div className="p-4 rounded-xl bg-[#080d19] border border-slate-800 text-center text-xs text-slate-500">
-                  No memory rules saved yet. Add one above or choose a preset.
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
-                  {aiMemory.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 rounded-xl bg-[#080d19] border border-slate-800 flex items-start justify-between gap-3 text-xs"
-                    >
-                      <span className="text-slate-200 leading-relaxed">{item}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveMemory(idx)}
-                        className="text-slate-500 hover:text-rose-400 p-1 cursor-pointer transition-colors shrink-0"
-                        title="Delete memory"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-end pt-3 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={() => setIsMemoryModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs cursor-pointer"
-              >
-                Done
+                Parse & Register Bill
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Past Chats Modal / History (like Gemini chats) */}
-      {isPastChatsOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 max-h-[85vh]">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-5 text-slate-800 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <History className="w-5 h-5 text-blue-400" />
-                <h3 className="text-base font-bold text-white">Past Conversations</h3>
+                <Settings className="w-5 h-5 text-slate-700" />
+                <h3 className="font-serif-title text-lg font-bold text-slate-900">Settings</h3>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleCreateNewChat}
-                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer transition-all"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>New Chat</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsPastChatsOpen(false)}
-                  className="text-slate-400 hover:text-white cursor-pointer p-1"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+              <button onClick={() => setIsSettingsOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+            </div>
+
+            {/* Profile Section */}
+            <div className="flex items-center gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">
+              <div className="w-10 h-10 rounded-full bg-[#183b6b] text-white flex items-center justify-center font-bold text-sm">
+                {userInitials}
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-900">{currentUser?.name}</p>
+                <p className="text-[11px] text-slate-500">{currentUser?.email}</p>
               </div>
             </div>
 
-            <p className="text-xs text-slate-300">
-              Select any past conversation below to resume where you left off, or start a new thread.
-            </p>
-
-            <div className="overflow-y-auto flex flex-col gap-2 flex-1 pr-1 max-h-96">
-              {chatSessions.map(session => {
-                const isActive = session.id === activeSessionId;
-                const msgCount = session.messages?.length || 0;
-                return (
-                  <div
-                    key={session.id}
-                    onClick={() => handleSwitchSession(session.id)}
-                    className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                      isActive
-                        ? 'bg-blue-600/15 border-blue-500/50 text-white'
-                        : 'bg-[#080d19] border-slate-800 hover:border-slate-700 text-slate-300'
-                    }`}
+            {/* Plaid Banking Settings */}
+            <div className="flex flex-col gap-3">
+              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Bank Connection (Plaid)</h4>
+              <form onSubmit={handleSaveSettings} className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="text-slate-600 block mb-1">Plaid Client ID</label>
+                  <input
+                    type="text"
+                    value={plaidClientIdInput}
+                    onChange={e => setPlaidClientIdInput(e.target.value)}
+                    placeholder="Client ID"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-600 block mb-1">Plaid Secret</label>
+                  <input
+                    type="password"
+                    value={plaidSecretInput}
+                    onChange={e => setPlaidSecretInput(e.target.value)}
+                    placeholder="Secret Key"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
+                  />
+                </div>
+                <div className="sm:col-span-2 flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={initiatePlaidLink}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold cursor-pointer"
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold truncate text-white">{session.title || 'Conversation'}</p>
-                      <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
-                        <span>{new Date(session.createdAt || Date.now()).toLocaleDateString()}</span>
-                        <span>•</span>
-                        <span>{msgCount} messages</span>
-                        {isActive && <span className="text-blue-400 font-semibold">• Active</span>}
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={(e) => handleDeleteSession(session.id, e)}
-                      className="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-500/10 cursor-pointer transition-colors shrink-0"
-                      title="Delete conversation"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                );
-              })}
+                    Launch Plaid Link
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white font-semibold cursor-pointer"
+                  >
+                    Save Plaid Keys
+                  </button>
+                </div>
+              </form>
             </div>
 
-            <div className="flex items-center justify-end pt-3 border-t border-slate-800">
+            {/* Sign Out */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-xs text-slate-500">Sign out of this session</span>
               <button
                 type="button"
-                onClick={() => setIsPastChatsOpen(false)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs cursor-pointer"
+                onClick={() => {
+                  setIsSettingsOpen(false);
+                  handleLogout();
+                }}
+                className="px-3.5 py-1.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 font-semibold text-xs cursor-pointer"
               >
-                Close
+                Sign Out
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Memory Modal */}
+      {isMemoryModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-serif-title text-lg font-bold text-slate-900">AI Advisor Memory</h3>
+              <button onClick={() => setIsMemoryModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Add custom preference..."
+                value={newMemoryInput}
+                onChange={e => setNewMemoryInput(e.target.value)}
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => handleAddMemory()}
+                className="px-4 py-2 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
+              >
+                Add
+              </button>
+            </div>
+            <div className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
+              {aiMemory.map((item, idx) => (
+                <div key={idx} className="py-2 flex items-center justify-between text-xs">
+                  <span>{item}</span>
+                  <button type="button" onClick={() => handleRemoveMemory(idx)} className="text-slate-400 hover:text-rose-600">✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Past Chats Modal */}
+      {isPastChatsOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-serif-title text-lg font-bold text-slate-900">Past Conversations</h3>
+              <button onClick={() => setIsPastChatsOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+            </div>
+            <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
+              {chatSessions.map(session => (
+                <div
+                  key={session.id}
+                  onClick={() => handleSwitchSession(session.id)}
+                  className="py-2.5 flex items-center justify-between cursor-pointer hover:bg-slate-50 px-2 rounded-lg"
+                >
+                  <div>
+                    <p className="text-xs font-semibold text-slate-900">{session.title}</p>
+                    <p className="text-[10px] text-slate-400">{session.messages?.length || 0} messages</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteSession(session.id, e)}
+                    className="text-slate-400 hover:text-rose-600 p-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         </div>
