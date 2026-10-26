@@ -41,7 +41,8 @@ import {
   Brain,
   X,
   History,
-  ArrowLeft
+  ArrowLeft,
+  Layers
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
@@ -240,10 +241,12 @@ function KlarityApp() {
   // Modals
   const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
   const [isAddBillOpen, setIsAddBillOpen] = useState(false);
+  const [isAddTxOpen, setIsAddTxOpen] = useState(false);
+  const [isAddSubOpen, setIsAddSubOpen] = useState(false);
   const [isScanBillOpen, setIsScanBillOpen] = useState(false);
   const [notificationToast, setNotificationToast] = useState('');
 
-  // Forms for real accounts and real bills
+  // Forms for real accounts, bills, purchases, and subscriptions
   const [newAccount, setNewAccount] = useState({
     institution: 'Capital One',
     name: '',
@@ -261,6 +264,21 @@ function KlarityApp() {
     category: 'Utilities',
     expectedAmount: '',
     dueDay: '15'
+  });
+
+  const [newTx, setNewTx] = useState({
+    name: '',
+    amount: '',
+    category: 'Groceries',
+    date: new Date().toISOString().split('T')[0]
+  });
+
+  const [newSub, setNewSub] = useState({
+    name: '',
+    amount: '',
+    billingCycle: 'monthly',
+    renewalDate: '1st of month',
+    category: 'Entertainment'
   });
 
   const [scanText, setScanText] = useState(
@@ -909,6 +927,99 @@ function KlarityApp() {
     }
   };
 
+  // Add Transaction Manually
+  const handleAddTransaction = async (e) => {
+    e.preventDefault();
+    if (!newTx.name.trim() || !newTx.amount) return;
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newTx,
+          ownerId: currentUser?.id
+        })
+      });
+      if (res.ok) {
+        setIsAddTxOpen(false);
+        setNewTx({
+          name: '',
+          amount: '',
+          category: 'Groceries',
+          date: new Date().toISOString().split('T')[0]
+        });
+        await fetchData();
+        setNotificationToast(`Added purchase: ${newTx.name}`);
+        setTimeout(() => setNotificationToast(''), 3500);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Delete Purchase (Transaction)
+  const handleDeleteTransaction = async (txId, txName) => {
+    if (!window.confirm(`Delete purchase "${txName || 'this transaction'}"?`)) return;
+    try {
+      const res = await fetch(`/api/transactions/${txId}`, { method: 'DELETE' });
+      if (res.ok) {
+        await fetchData();
+        setNotificationToast('Purchase deleted.');
+        setTimeout(() => setNotificationToast(''), 3000);
+      }
+    } catch (err) {
+      console.error('Failed to delete transaction:', err);
+    }
+  };
+
+  // Add Subscription
+  const handleAddSubscription = async (eOrSub) => {
+    if (eOrSub && eOrSub.preventDefault) eOrSub.preventDefault();
+    const subToSave = (eOrSub && eOrSub.name) ? eOrSub : newSub;
+    if (!subToSave.name || !subToSave.amount) return;
+
+    try {
+      const res = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...subToSave,
+          ownerId: currentUser?.id
+        })
+      });
+      if (res.ok) {
+        setIsAddSubOpen(false);
+        setNewSub({
+          name: '',
+          amount: '',
+          billingCycle: 'monthly',
+          renewalDate: '1st of month',
+          category: 'Entertainment'
+        });
+        await fetchData();
+        setNotificationToast(`Added subscription: ${subToSave.name}`);
+        setTimeout(() => setNotificationToast(''), 3500);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Delete Subscription
+  const handleDeleteSubscription = async (subId, subName) => {
+    if (!window.confirm(`Remove subscription "${subName || 'this subscription'}"?`)) return;
+    try {
+      const res = await fetch(`/api/subscriptions/${subId}`, { method: 'DELETE' });
+      if (res.ok) {
+        await fetchData();
+        setNotificationToast('Subscription removed.');
+        setTimeout(() => setNotificationToast(''), 3000);
+      }
+    } catch (err) {
+      console.error('Failed to delete subscription:', err);
+    }
+  };
+
   // AI Chat
   const handleSendChatMessage = async (eOrText) => {
     if (eOrText && typeof eOrText === 'object' && eOrText.preventDefault) {
@@ -1131,6 +1242,8 @@ function KlarityApp() {
   const accountsList = data?.accounts || [];
   const billsList = data?.bills || [];
   const transactionsList = data?.transactions || [];
+  const subscriptionsList = data?.subscriptions || [];
+  const totalMonthlySubscriptions = subscriptionsList.reduce((acc, s) => acc + Number(s.amount || 0), 0);
 
   const checkingAccounts = accountsList.filter(a => a.type === 'depository');
   const creditCards = accountsList.filter(a => a.type === 'credit');
@@ -1444,314 +1557,436 @@ function KlarityApp() {
               </div>
             </div>
 
-            {/* Main Balanced Grid: Left side for Bills, Purchases & Cards, Right side for AI Financial Advisor & Cash Flow */}
+            {/* Main Balanced Grid: Left side for 4 smaller square cards (Bills, Subscriptions, Purchases, Cards), Right side ONLY for AI Financial Advisor */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left Column: Upcoming Bills, Recent Purchases & Cards (8 Cols) */}
-              <div className="lg:col-span-8 flex flex-col gap-6">
+              {/* Left Column: 2x2 Grid of Smaller Square Cards (8 Cols) */}
+              <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 
-                {/* Upcoming Bills Box (Clickable -> Dedicated Bills Page) */}
+                {/* 1. Upcoming Bills Box (Smaller Square Card) */}
                 <div
                   onClick={() => setActiveTab('bills')}
-                  className="bg-[#0d1527] border border-slate-800 hover:border-slate-700/80 rounded-2xl p-5 shadow-sm transition-all cursor-pointer group flex flex-col justify-between min-h-[260px]"
+                  className="bg-[#0d1527] border border-slate-800 hover:border-slate-700/80 rounded-2xl p-4 shadow-sm transition-all cursor-pointer group flex flex-col justify-between h-[370px]"
                 >
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
+                  <div className="flex flex-col h-full justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <h2 className="text-base font-bold text-white group-hover:text-blue-400 transition-colors">
+                          <h2 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">
                             Upcoming Bills
                           </h2>
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold">
-                            {billsList.length} Total
+                            {billsList.length}
                           </span>
                         </div>
-                        <p className="text-xs text-slate-400 mt-0.5">Click to view all bills, filters & search</p>
-                      </div>
 
-                      <div className="flex items-center gap-2.5">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setIsScanBillOpen(true);
-                          }}
-                          className="text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-lg font-medium flex items-center gap-1 cursor-pointer transition-colors"
-                        >
-                          <FileText className="w-3.5 h-3.5 text-blue-400" />
-                          <span>Scan</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setIsAddBillOpen(true);
-                          }}
-                          className="text-xs text-white bg-blue-600 hover:bg-blue-500 px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Add Bill</span>
-                        </button>
-                        <span className="text-xs text-blue-400 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5 font-semibold">
-                          <span>View All</span>
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </span>
-                      </div>
-                    </div>
-
-                    {billsList.length === 0 ? (
-                      <div className="py-6 flex flex-col items-center justify-center text-center gap-3 bg-[#080d19] border border-slate-800/80 rounded-xl p-4">
-                        <Zap className="w-7 h-7 text-amber-400/80" />
-                        <div>
-                          <p className="text-xs font-semibold text-white">No Monthly Bills Added Yet</p>
-                          <p className="text-[11px] text-slate-400 mt-0.5 max-w-md">
-                            Upload a statement PDF or register your electricity, water, internet, or phone bills to track due dates and avoid late fees.
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
-                          {[
-                            { name: 'PG&E Electric & Gas', amount: 210, dueDay: 15, category: 'Utilities' },
-                            { name: 'Fresno Water Service', amount: 85, dueDay: 20, category: 'Utilities' },
-                            { name: 'Xfinity High-Speed Internet', amount: 70, dueDay: 5, category: 'Subscriptions' }
-                          ].map((preset, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                try {
-                                  await fetch('/api/bills', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                      name: preset.name,
-                                      expectedAmount: preset.amount,
-                                      dueDay: preset.dueDay,
-                                      category: preset.category,
-                                      assignedOwnerId: currentUser?.id
-                                    })
-                                  });
-                                  await fetchData();
-                                  setNotificationToast(`Added ${preset.name}!`);
-                                  setTimeout(() => setNotificationToast(''), 3000);
-                                } catch (err) {
-                                  console.error(err);
-                                }
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-[11px] border border-slate-700/60 font-medium cursor-pointer transition-colors"
-                            >
-                              + {preset.name}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-slate-800/80">
-                        {billsList.slice(0, 5).map(bill => {
-                          const isDueSoon = bill.status === 'due_soon';
-                          return (
-                            <div key={bill.id} className="py-3 flex items-center justify-between gap-4">
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold text-white truncate">{bill.name}</p>
-                                <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
-                                  <span>Due {bill.nextDueDate || bill.dueDate || `Day ${bill.dueDay}`}</span>
-                                  <span className="bg-slate-800 px-1.5 py-0.5 rounded text-[10px] text-slate-300">
-                                    {bill.category}
-                                  </span>
-                                </p>
-                              </div>
-
-                              <div className="flex items-center gap-3 shrink-0">
-                                <div className="text-right">
-                                  <div className="text-sm font-bold text-white">${Number(bill.expectedAmount).toFixed(2)}</div>
-                                  <span
-                                    className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                                      bill.status === 'paid'
-                                        ? 'bg-emerald-500/20 text-emerald-400'
-                                        : isDueSoon
-                                        ? 'bg-red-500/20 text-red-300 animate-pulse'
-                                        : 'bg-slate-800 text-slate-400'
-                                    }`}
-                                  >
-                                    {bill.status === 'paid' ? 'Paid' : isDueSoon ? 'Due Soon' : 'Upcoming'}
-                                  </span>
-                                </div>
-                                {bill.status !== 'paid' && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handlePayBill(bill.id, bill.name, bill.expectedAmount);
-                                    }}
-                                    className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-300 transition-colors cursor-pointer"
-                                    title="Mark as paid"
-                                  >
-                                    Mark Paid
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Recent Purchases Box (Clickable -> Dedicated Purchases Page) */}
-                <div
-                  onClick={() => setActiveTab('transactions')}
-                  className="bg-[#0d1527] border border-slate-800 hover:border-slate-700/80 rounded-2xl p-5 shadow-sm transition-all cursor-pointer group flex flex-col justify-between min-h-[260px]"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h2 className="text-base font-bold text-white group-hover:text-blue-400 transition-colors">
-                            Recent Purchases
-                          </h2>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold">
-                            {transactionsList.length} Total
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-400 mt-0.5">Click to view complete purchase ledger & search</p>
-                      </div>
-
-                      <span className="text-xs text-blue-400 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5 font-semibold">
-                        <span>View All Purchases</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </span>
-                    </div>
-
-                    {transactionsList.length === 0 ? (
-                      <div className="py-6 flex flex-col items-center justify-center text-center gap-3 bg-[#080d19] border border-slate-800/80 rounded-xl p-4">
-                        <Receipt className="w-7 h-7 text-blue-400/80" />
-                        <div>
-                          <p className="text-xs font-semibold text-white">No Purchases Recorded Yet</p>
-                          <p className="text-[11px] text-slate-400 mt-0.5 max-w-md">
-                            Connect your bank account via Plaid or record manual transactions to track card charges and spending trends.
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-1.5">
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              initiatePlaidLink();
+                              setIsAddBillOpen(true);
                             }}
-                            className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs text-white font-semibold cursor-pointer shadow-md shadow-emerald-600/20"
+                            className="text-[11px] text-white bg-blue-600 hover:bg-blue-500 px-2 py-1 rounded-lg font-semibold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
                           >
-                            Connect Bank (Plaid)
+                            <Plus className="w-3 h-3" />
+                            <span>Add</span>
                           </button>
+                          <span className="text-[11px] text-blue-400 group-hover:translate-x-0.5 transition-transform flex items-center font-semibold">
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </span>
                         </div>
                       </div>
-                    ) : (
-                      <div className="divide-y divide-slate-800/80">
-                        {transactionsList.slice(0, 5).map(tx => (
-                          <div key={tx.id} className="py-3 flex items-center justify-between gap-4">
-                            <div>
-                              <p className="text-sm font-semibold text-white">{tx.name}</p>
-                              <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
-                                <span>{tx.date}</span>
-                                <span>•</span>
-                                <span>{tx.account || 'Account'}</span>
-                              </p>
-                            </div>
 
-                            <div className="text-right">
-                              <div className="text-sm font-bold text-white">
-                                ${Number(tx.amount).toFixed(2)}
-                              </div>
-                              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                                {tx.category}
-                              </span>
-                            </div>
+                      {billsList.length === 0 ? (
+                        <div className="py-6 flex flex-col items-center justify-center text-center gap-2 bg-[#080d19] border border-slate-800/80 rounded-xl p-3">
+                          <Zap className="w-6 h-6 text-amber-400/80" />
+                          <p className="text-xs font-semibold text-white">No Bills Added Yet</p>
+                          <p className="text-[10px] text-slate-400">Add utilities or quick presets below:</p>
+                          <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1">
+                            {[
+                              { name: 'PG&E Electric', amount: 210, dueDay: 15, category: 'Utilities' },
+                              { name: 'Water Service', amount: 85, dueDay: 20, category: 'Utilities' }
+                            ].map((preset, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    await fetch('/api/bills', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        name: preset.name,
+                                        expectedAmount: preset.amount,
+                                        dueDay: preset.dueDay,
+                                        category: preset.category,
+                                        assignedOwnerId: currentUser?.id
+                                      })
+                                    });
+                                    await fetchData();
+                                    setNotificationToast(`Added ${preset.name}!`);
+                                    setTimeout(() => setNotificationToast(''), 3000);
+                                  } catch (err) {
+                                    console.error(err);
+                                  }
+                                }}
+                                className="px-2 py-0.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-[10px] border border-slate-700/60 font-medium cursor-pointer"
+                              >
+                                + {preset.name}
+                              </button>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-slate-800/80 overflow-y-auto max-h-[250px] pr-1">
+                          {billsList.slice(0, 4).map(bill => {
+                            const isDueSoon = bill.status === 'due_soon';
+                            return (
+                              <div key={bill.id} className="py-2.5 flex items-center justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-semibold text-white truncate">{bill.name}</p>
+                                  <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                    <span>Due {bill.nextDueDate || bill.dueDate || `Day ${bill.dueDay}`}</span>
+                                    <span className="text-slate-600">•</span>
+                                    <span className="text-slate-400">{bill.category}</span>
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <div className="text-right">
+                                    <div className="text-xs font-bold text-white">${Number(bill.expectedAmount).toFixed(2)}</div>
+                                    <span
+                                      className={`text-[9px] px-1 py-0.2 rounded font-semibold ${
+                                        bill.status === 'paid'
+                                          ? 'text-emerald-400 bg-emerald-500/10'
+                                          : isDueSoon
+                                          ? 'text-red-300 bg-red-500/20'
+                                          : 'text-slate-400 bg-slate-800'
+                                      }`}
+                                    >
+                                      {bill.status === 'paid' ? 'Paid' : isDueSoon ? 'Due Soon' : 'Upcoming'}
+                                    </span>
+                                  </div>
+                                  {bill.status !== 'paid' && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handlePayBill(bill.id, bill.name, bill.expectedAmount);
+                                      }}
+                                      className="px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-300 transition-colors cursor-pointer"
+                                      title="Mark as paid"
+                                    >
+                                      Pay
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                      <span>Monthly Bills:</span>
+                      <span className="font-bold text-white">
+                        ${(data?.metrics?.totalMonthlyBills || billsList.reduce((acc, b) => acc + Number(b.expectedAmount || 0), 0)).toFixed(2)}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Connected Cards & Balances Overview (Fills the page properly) */}
-                <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
+                {/* 2. Subscriptions Box (NEW Smaller Square Card) */}
+                <div className="bg-[#0d1527] border border-slate-800 hover:border-slate-700/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between h-[370px]">
+                  <div className="flex flex-col h-full justify-between">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-base font-bold text-white">Connected Cards & Credit Limits</h2>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold">
-                          {creditCards.length} Cards
-                        </span>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-sm font-bold text-white">Subscriptions</h2>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold">
+                            {subscriptionsList.length}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsAddSubOpen(true)}
+                          className="text-[11px] text-white bg-indigo-600 hover:bg-indigo-500 px-2 py-1 rounded-lg font-semibold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Add Sub</span>
+                        </button>
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5">Credit line utilization and APR interest metrics</p>
-                    </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setIsAddAccountOpen(true)}
-                      className="text-xs text-white bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 cursor-pointer shadow-md shadow-blue-600/20"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Card</span>
-                    </button>
-                  </div>
-
-                  {creditCards.length === 0 ? (
-                    <div className="p-5 rounded-xl bg-[#080d19] border border-slate-800 text-center flex flex-col items-center gap-2">
-                      <CreditCard className="w-7 h-7 text-slate-500" />
-                      <p className="text-xs font-semibold text-white">No Credit Cards Linked Yet</p>
-                      <p className="text-[11px] text-slate-400 max-w-sm">
-                        Add cards like Capital One, Discover, or Chase to track interest APRs, payoff priorities, and limits.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setIsAddAccountOpen(true)}
-                        className="mt-1 px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 cursor-pointer"
-                      >
-                        + Add Manual Card
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {creditCards.map(card => {
-                        const util = card.limit > 0 ? Math.min(100, (card.balance / card.limit) * 100) : 0;
-                        return (
-                          <div key={card.id} className="p-4 rounded-xl bg-[#080d19] border border-slate-800 flex flex-col justify-between gap-3">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-xs font-bold text-white">{card.institution} {card.name}</p>
-                                <p className="text-[10px] text-slate-400 font-mono mt-0.5">•••• {card.mask}</p>
-                              </div>
-                              <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                                {card.apr || 0}% APR
-                              </span>
-                            </div>
-
-                            <div>
-                              <div className="flex items-center justify-between text-xs mb-1">
-                                <span className="text-slate-400 text-[11px]">Balance: ${Number(card.balance).toFixed(2)}</span>
-                                <span className="text-slate-400 text-[11px]">Limit: ${Number(card.limit).toLocaleString()}</span>
-                              </div>
-                              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full transition-all ${util > 50 ? 'bg-rose-500' : 'bg-blue-500'}`}
-                                  style={{ width: `${util}%` }}
-                                ></div>
-                              </div>
-                            </div>
+                      {subscriptionsList.length === 0 ? (
+                        <div className="py-5 flex flex-col items-center justify-center text-center gap-2 bg-[#080d19] border border-slate-800/80 rounded-xl p-3">
+                          <Layers className="w-6 h-6 text-indigo-400/80" />
+                          <p className="text-xs font-semibold text-white">No Subscriptions Tracked</p>
+                          <p className="text-[10px] text-slate-400">Click a preset to add recurring services:</p>
+                          <div className="grid grid-cols-2 gap-1.5 w-full mt-1">
+                            {[
+                              { name: 'Netflix', amount: 15.49, category: 'Streaming' },
+                              { name: 'Spotify', amount: 11.99, category: 'Music' },
+                              { name: 'iCloud', amount: 2.99, category: 'Cloud Storage' },
+                              { name: 'ChatGPT Plus', amount: 20.00, category: 'AI & Software' }
+                            ].map((preset, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => handleAddSubscription(preset)}
+                                className="px-2 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-[10px] border border-slate-700/60 font-medium flex items-center justify-between cursor-pointer transition-colors"
+                              >
+                                <span className="truncate">{preset.name}</span>
+                                <span className="font-semibold text-indigo-300 ml-1">${preset.amount}</span>
+                              </button>
+                            ))}
                           </div>
-                        );
-                      })}
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-slate-800/80 overflow-y-auto max-h-[250px] pr-1">
+                          {subscriptionsList.map(sub => (
+                            <div key={sub.id} className="py-2.5 flex items-center justify-between gap-2 group">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-semibold text-white truncate">{sub.name}</p>
+                                <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                  <span>{sub.category || 'Recurring'}</span>
+                                  <span className="text-slate-600">•</span>
+                                  <span>{sub.billingCycle || 'monthly'}</span>
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className="text-right">
+                                  <div className="text-xs font-bold text-indigo-300">
+                                    ${Number(sub.amount).toFixed(2)}
+                                  </div>
+                                  <span className="text-[9px] text-slate-400">/mo</span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSubscription(sub.id, sub.name)}
+                                  className="text-slate-500 hover:text-rose-400 p-1 rounded hover:bg-rose-500/10 cursor-pointer transition-colors"
+                                  title="Delete subscription"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
+
+                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                      <span>Total Subscriptions:</span>
+                      <span className="font-bold text-indigo-300">
+                        ${totalMonthlySubscriptions.toFixed(2)}/mo
+                      </span>
+                    </div>
+                  </div>
                 </div>
+
+                {/* 3. Recent Purchases Box (Smaller Square Card with Delete Option) */}
+                <div
+                  onClick={() => setActiveTab('transactions')}
+                  className="bg-[#0d1527] border border-slate-800 hover:border-slate-700/80 rounded-2xl p-4 shadow-sm transition-all cursor-pointer group flex flex-col justify-between h-[370px]"
+                >
+                  <div className="flex flex-col h-full justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">
+                            Recent Purchases
+                          </h2>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold">
+                            {transactionsList.length}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsAddTxOpen(true);
+                            }}
+                            className="text-[11px] text-white bg-blue-600 hover:bg-blue-500 px-2 py-1 rounded-lg font-semibold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Add</span>
+                          </button>
+                          <span className="text-[11px] text-blue-400 group-hover:translate-x-0.5 transition-transform flex items-center font-semibold">
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </span>
+                        </div>
+                      </div>
+
+                      {transactionsList.length === 0 ? (
+                        <div className="py-6 flex flex-col items-center justify-center text-center gap-2 bg-[#080d19] border border-slate-800/80 rounded-xl p-3">
+                          <Receipt className="w-6 h-6 text-blue-400/80" />
+                          <p className="text-xs font-semibold text-white">No Purchases Yet</p>
+                          <p className="text-[10px] text-slate-400">Add transactions manually or connect your bank.</p>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsAddTxOpen(true);
+                            }}
+                            className="mt-1 px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-semibold cursor-pointer"
+                          >
+                            + Add Purchase
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-slate-800/80 overflow-y-auto max-h-[250px] pr-1">
+                          {transactionsList.slice(0, 4).map(tx => (
+                            <div key={tx.id} className="py-2.5 flex items-center justify-between gap-2 group">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-semibold text-white truncate">{tx.name}</p>
+                                <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                  <span>{tx.date}</span>
+                                  <span className="text-slate-600">•</span>
+                                  <span className="truncate">{tx.category || 'Purchase'}</span>
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className="text-right">
+                                  <div className="text-xs font-bold text-white">
+                                    ${Number(tx.amount).toFixed(2)}
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteTransaction(tx.id, tx.name);
+                                  }}
+                                  className="text-slate-500 hover:text-rose-400 p-1 rounded hover:bg-rose-500/10 cursor-pointer transition-colors"
+                                  title="Delete purchase"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                      <span>Ledger Entries:</span>
+                      <span className="font-bold text-white">
+                        {transactionsList.length} recorded
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Connected Cards Box (Smaller Square Card) */}
+                <div
+                  onClick={() => setActiveTab('cards')}
+                  className="bg-[#0d1527] border border-slate-800 hover:border-slate-700/80 rounded-2xl p-4 shadow-sm transition-all cursor-pointer group flex flex-col justify-between h-[370px]"
+                >
+                  <div className="flex flex-col h-full justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">
+                            Connected Cards
+                          </h2>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold">
+                            {creditCards.length}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsAddAccountOpen(true);
+                            }}
+                            className="text-[11px] text-white bg-blue-600 hover:bg-blue-500 px-2 py-1 rounded-lg font-semibold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Add</span>
+                          </button>
+                          <span className="text-[11px] text-blue-400 group-hover:translate-x-0.5 transition-transform flex items-center font-semibold">
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </span>
+                        </div>
+                      </div>
+
+                      {creditCards.length === 0 ? (
+                        <div className="py-6 flex flex-col items-center justify-center text-center gap-2 bg-[#080d19] border border-slate-800/80 rounded-xl p-3">
+                          <CreditCard className="w-6 h-6 text-slate-500" />
+                          <p className="text-xs font-semibold text-white">No Credit Cards Linked</p>
+                          <p className="text-[10px] text-slate-400">Add cards to monitor limits and APR interest.</p>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsAddAccountOpen(true);
+                            }}
+                            className="mt-1 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-semibold border border-slate-700 cursor-pointer"
+                          >
+                            + Add Manual Card
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-2 overflow-y-auto max-h-[250px] pr-1">
+                          {creditCards.slice(0, 3).map(card => {
+                            const util = card.limit > 0 ? Math.min(100, (card.balance / card.limit) * 100) : 0;
+                            return (
+                              <div key={card.id} className="p-2.5 rounded-xl bg-[#080d19] border border-slate-800/80 flex flex-col gap-1.5">
+                                <div className="flex items-center justify-between">
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold text-white truncate">{card.institution} {card.name}</p>
+                                    <p className="text-[10px] text-slate-400 font-mono">•••• {card.mask}</p>
+                                  </div>
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                    {card.apr || 0}% APR
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between text-[10px] text-slate-400">
+                                  <span>Bal: ${Number(card.balance).toFixed(2)}</span>
+                                  <span>Limit: ${Number(card.limit).toLocaleString()}</span>
+                                </div>
+                                <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${util > 50 ? 'bg-rose-500' : 'bg-blue-500'}`}
+                                    style={{ width: `${util}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                      <span>Total Credit Debt:</span>
+                      <span className="font-bold text-rose-400">
+                        ${(data?.metrics?.totalCreditDebt || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
               </div>
 
-              {/* Right Column: AI Financial Advisor Widget & Monthly Health Summary (4 Cols) */}
-              <div className="lg:col-span-4 flex flex-col gap-6 sticky top-24">
-                {/* AI Advisor Card with Interactive Quick Inquiries */}
-                <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col justify-between gap-4">
+              {/* Right Column: ONLY the AI Financial Advisor Box */}
+              <div className="lg:col-span-4 sticky top-24">
+                <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col justify-between h-[756px]">
                   <div>
-                    <div className="flex items-center justify-between mb-3">
+                    {/* Header */}
+                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
                       <div>
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
                           <Bot className="w-4 h-4 text-blue-400" />
@@ -1764,30 +1999,33 @@ function KlarityApp() {
                       </span>
                     </div>
 
-                    <div className="bg-[#070b14] border border-slate-800/80 rounded-xl p-3.5 text-xs text-slate-300 leading-relaxed mb-4">
+                    {/* AI Household Insight */}
+                    <div className="bg-[#070b14] border border-slate-800/80 rounded-xl p-4 text-xs text-slate-300 leading-relaxed mb-4">
                       {highestAprCard ? (
                         isHalalFinance ? (
                           <span>
-                            I noticed your upcoming bills and active cards. In alignment with your Halal preferences, prioritize clearing <strong>{highestAprCard.institution} {highestAprCard.name}</strong> (Balance: ${Number(highestAprCard.balance).toFixed(2)}) completely to eliminate debt without conventional interest.
+                            I noticed your upcoming bills, active subscriptions, and card balances. In alignment with your Halal preferences, prioritize clearing <strong>{highestAprCard.institution} {highestAprCard.name}</strong> (Balance: ${Number(highestAprCard.balance).toFixed(2)}) completely to eliminate debt without conventional interest.
                           </span>
                         ) : (
                           <span>
-                            I noticed your upcoming bills and connected credit debt. You can save money on interest by directing extra funds to <strong>{highestAprCard.institution} {highestAprCard.name}</strong> with <strong>{highestAprCard.apr}% APR</strong>.
+                            I noticed your upcoming bills, subscriptions, and connected credit debt. You can save money on interest by directing extra funds to <strong>{highestAprCard.institution} {highestAprCard.name}</strong> with <strong>{highestAprCard.apr}% APR</strong>.
                           </span>
                         )
                       ) : (
                         <span>
-                          I monitor your bills and accounts to provide recommendations on cash flow, debt elimination, and savings.
+                          I monitor your bills, subscriptions, and accounts to provide personalized recommendations on cash flow, expense reduction, and savings.
                         </span>
                       )}
                     </div>
 
+                    {/* Quick Inquiries / Questions */}
                     <p className="text-xs font-semibold text-slate-400 mb-2">Quick Inquiries:</p>
-                    <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-col gap-2 mb-4">
                       {[
                         isHalalFinance ? 'How should I eliminate debt without interest?' : 'What should I pay off first?',
                         'Show bills due in the next 14 days',
-                        'How can I reduce expenses?'
+                        'How can I cut subscription expenses?',
+                        'What is my monthly cash flow health?'
                       ].map((q, i) => (
                         <button
                           key={i}
@@ -1796,58 +2034,29 @@ function KlarityApp() {
                             setActiveTab('advisor');
                             handleSendChatMessage(q);
                           }}
-                          className="text-left text-xs px-3 py-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700/60 transition-colors flex items-center justify-between cursor-pointer"
+                          className="text-left text-xs px-3 py-2 rounded-lg bg-slate-800/70 hover:bg-slate-800 text-slate-200 border border-slate-700/60 transition-colors flex items-center justify-between cursor-pointer"
                         >
-                          <span>{q}</span>
+                          <span className="truncate pr-2">{q}</span>
                           <ChevronRight className="w-3 h-3 text-slate-500 shrink-0" />
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('advisor')}
-                    className="mt-2 w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-xs shadow-md shadow-blue-600/20 hover:opacity-95 transition-opacity cursor-pointer text-center"
-                  >
-                    Open Full AI Advisor Chat
-                  </button>
-                </div>
-
-                {/* Monthly Financial Health Summary Card (Provides vertical balance) */}
-                <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col gap-3 text-xs">
-                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-                    <span className="font-bold text-white">Monthly Cash Flow Health</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30">
-                      Healthy
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col gap-2.5 pt-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400 text-[11px]">Monthly Bills Obligation</span>
-                      <span className="font-bold text-white">${(data?.metrics?.totalMonthlyBills || 0).toFixed(2)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400 text-[11px]">Available Liquid Cash</span>
-                      <span className="font-bold text-emerald-400">${(data?.metrics?.totalChecking || 0).toFixed(2)}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400 text-[11px]">Total Credit Debt</span>
-                      <span className="font-bold text-rose-400">${(data?.metrics?.totalCreditDebt || 0).toFixed(2)}</span>
-                    </div>
-
-                    <div className="border-t border-slate-800/80 pt-2.5 mt-1 flex items-center justify-between">
-                      <span className="text-slate-300 font-semibold text-[11px]">Estimated Net Worth</span>
-                      <span className="font-black text-sm text-white">
-                        ${(data?.metrics?.netWorthEstimate || 0).toFixed(2)}
-                      </span>
-                    </div>
+                  {/* Bottom: Direct Chat Launcher */}
+                  <div className="pt-3 border-t border-slate-800/80 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('advisor')}
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-xs shadow-md shadow-blue-600/20 hover:opacity-95 transition-opacity cursor-pointer text-center flex items-center justify-center gap-2"
+                    >
+                      <Bot className="w-4 h-4" />
+                      <span>Open Full AI Advisor Chat</span>
+                    </button>
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
         )}
@@ -2122,8 +2331,18 @@ function KlarityApp() {
                 <p className="text-xs text-slate-400 mt-0.5">Real-time ledger of card transactions, payments, and scanned receipts</p>
               </div>
 
-              <div className="text-xs text-slate-400">
-                Showing <span className="font-bold text-white">{filteredTransactions.length}</span> of {transactionsList.length} purchases
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-slate-400 hidden sm:inline">
+                  Showing <span className="font-bold text-white">{filteredTransactions.length}</span> of {transactionsList.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsAddTxOpen(true)}
+                  className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white flex items-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Purchase</span>
+                </button>
               </div>
             </div>
 
@@ -2181,6 +2400,7 @@ function KlarityApp() {
                         <th className="py-3 px-2">Description</th>
                         <th className="py-3 px-2">Category</th>
                         <th className="py-3 px-2 text-right">Amount</th>
+                        <th className="py-3 px-2 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
@@ -2195,6 +2415,16 @@ function KlarityApp() {
                           </td>
                           <td className="py-3 px-2 text-right font-black text-rose-400">
                             -${Number(tx.amount).toFixed(2)}
+                          </td>
+                          <td className="py-3 px-2 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTransaction(tx.id, tx.name)}
+                              className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg cursor-pointer transition-colors"
+                              title="Delete purchase"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -2896,6 +3126,193 @@ function KlarityApp() {
                 Parse & Register Bill
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Purchase Modal */}
+      {isAddTxOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-blue-400" />
+                <h3 className="text-base font-bold text-white">Add Purchase Manually</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddTxOpen(false)}
+                className="text-slate-400 hover:text-white cursor-pointer p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddTransaction} className="flex flex-col gap-3.5 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-300 mb-1">Merchant / Store Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Trader Joe's, Costco, Target"
+                  value={newTx.name}
+                  onChange={e => setNewTx({ ...newTx, name: e.target.value })}
+                  className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-300 mb-1">Amount ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="0.00"
+                    value={newTx.amount}
+                    onChange={e => setNewTx({ ...newTx, amount: e.target.value })}
+                    className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-300 mb-1">Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={newTx.date}
+                    onChange={e => setNewTx({ ...newTx, date: e.target.value })}
+                    className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-300 mb-1">Category</label>
+                <select
+                  value={newTx.category}
+                  onChange={e => setNewTx({ ...newTx, category: e.target.value })}
+                  className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="Groceries">Groceries</option>
+                  <option value="Dining">Dining</option>
+                  <option value="Utilities">Utilities</option>
+                  <option value="Shopping">Shopping</option>
+                  <option value="Entertainment">Entertainment</option>
+                  <option value="Travel">Travel</option>
+                  <option value="Services">Services</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddTxOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-md shadow-blue-600/20 cursor-pointer"
+                >
+                  Add Purchase
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Subscription Modal */}
+      {isAddSubOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-base font-bold text-white">Add Subscription</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddSubOpen(false)}
+                className="text-slate-400 hover:text-white cursor-pointer p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddSubscription} className="flex flex-col gap-3.5 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-300 mb-1">Service / Subscription Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Netflix, Spotify, iCloud, ChatGPT Plus"
+                  value={newSub.name}
+                  onChange={e => setNewSub({ ...newSub, name: e.target.value })}
+                  className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-300 mb-1">Monthly Cost ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="15.49"
+                    value={newSub.amount}
+                    onChange={e => setNewSub({ ...newSub, amount: e.target.value })}
+                    className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-300 mb-1">Billing Cycle</label>
+                  <select
+                    value={newSub.billingCycle}
+                    onChange={e => setNewSub({ ...newSub, billingCycle: e.target.value })}
+                    className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-300 mb-1">Category</label>
+                <select
+                  value={newSub.category}
+                  onChange={e => setNewSub({ ...newSub, category: e.target.value })}
+                  className="w-full bg-[#080d19] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="Streaming">Streaming (Netflix, Hulu, Prime)</option>
+                  <option value="Music">Music (Spotify, Apple Music)</option>
+                  <option value="AI & Software">AI & Software (ChatGPT, Claude)</option>
+                  <option value="Cloud Storage">Cloud Storage (iCloud, Google)</option>
+                  <option value="Fitness">Fitness / Gym</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddSubOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-md shadow-indigo-600/20 cursor-pointer"
+                >
+                  Save Subscription
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

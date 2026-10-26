@@ -345,6 +345,7 @@ app.get('/api/data', (req, res) => {
     accounts: visibleAccounts,
     bills: visibleBills,
     transactions: visibleTransactions,
+    subscriptions: data.subscriptions || [],
     metrics: {
       totalChecking: Number(totalChecking.toFixed(2)),
       totalCreditDebt: Number(totalCreditDebt.toFixed(2)),
@@ -445,6 +446,45 @@ app.post('/api/transactions', (req, res) => {
   data.transactions.unshift(newTx);
   writeData(data);
   res.json({ success: true, transaction: newTx });
+});
+
+// Delete purchase
+app.delete('/api/transactions/:id', (req, res) => {
+  const data = readData();
+  data.transactions = (data.transactions || []).filter(t => t.id !== req.params.id);
+  writeData(data);
+  res.json({ success: true });
+});
+
+// Subscriptions
+app.get('/api/subscriptions', (req, res) => {
+  const data = readData();
+  res.json({ subscriptions: data.subscriptions || [] });
+});
+
+app.post('/api/subscriptions', (req, res) => {
+  const { name, amount, billingCycle, renewalDate, category, ownerId } = req.body;
+  const data = readData();
+  if (!data.subscriptions) data.subscriptions = [];
+  const newSub = {
+    id: `sub-${Date.now()}`,
+    name: name || 'Subscription',
+    amount: Number(amount) || 0,
+    billingCycle: billingCycle || 'monthly',
+    renewalDate: renewalDate || '1st of month',
+    category: category || 'Entertainment',
+    ownerId: ownerId || ''
+  };
+  data.subscriptions.push(newSub);
+  writeData(data);
+  res.json({ success: true, subscription: newSub });
+});
+
+app.delete('/api/subscriptions/:id', (req, res) => {
+  const data = readData();
+  data.subscriptions = (data.subscriptions || []).filter(s => s.id !== req.params.id);
+  writeData(data);
+  res.json({ success: true });
 });
 
 // Scan e-bill
