@@ -2,43 +2,111 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { Configuration, PlaidApi, PlaidEnvironments } = require('plaid');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-const DATA_FILE = path.join(__dirname, 'data.json');
-
 app.use(cors());
 app.use(express.json());
 
-// Initialize Google GenAI if key exists
-let aiClient = null;
-if (process.env.GEMINI_API_KEY) {
+// In Vercel serverless environment, local filesystem root is read-only; use /tmp or memory
+const DATA_FILE = process.env.VERCEL ? '/tmp/klarity_data.json' : path.join(__dirname, '../server/data.json');
+
+// Encryption utilities for storing API keys & secrets securely server-side
+const ENCRYPTION_SECRET = process.env.SETTINGS_ENCRYPTION_KEY || 'klarity-aes-secure-encryption-key-32-chars!!';
+const IV_LENGTH = 16;
+
+function encrypt(text) {
+  if (!text) return '';
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const key = crypto.createHash('sha256').update(String(ENCRYPTION_SECRET)).digest();
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  let encrypted = cipher.update(text);
+  encrypted = Buffer.concat([encrypted, cipher.final()]);
+  return iv.toString('hex') + ':' + encrypted.toString('hex');
+}
+
+function decrypt(text) {
+  if (!text || !text.includes(':')) return '';
   try {
-    const { GoogleGenAI } = require('@google/genai');
-    aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const textParts = text.split(':');
+    const iv = Buffer.from(textParts.shift(), 'hex');
+    const encryptedText = Buffer.from(textParts.join(':'), 'hex');
+    const key = crypto.createHash('sha256').update(String(ENCRYPTION_SECRET)).digest();
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+    let decrypted = decipher.update(encryptedText);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString();
   } catch (err) {
-    console.warn('Google GenAI note:', err.message);
+    console.error('Decryption error:', err.message);
+    return '';
   }
 }
+
+function maskSecret(val) {
+  if (!val || val.length < 8) return '••••••••';
+  return val.slice(0, 6) + '••••••••' + val.slice(-4);
+}
+
+// Default initial seed data without fake transactions, cards, or fake bills
+const initialSeedData = {
+  users: [
+    {
+      id: "u-ziyad",
+      email: "zeoe13@gmail.com",
+      name: "Ziyad Elmahi",
+      avatar: "",
+      role: "Primary Member"
+    }
+  ],
+  accounts: [],
+  bills: [],
+  subscriptions: [],
+  transactions: [],
+  plaidItems: [],
+  settings: {
+    ai: {
+      provider: "anthropic",
+      model: "claude-3-7-sonnet-20250219",
+      encryptedKey: "",
+      status: "not_connected",
+      dataPermissions: {
+        bills: true,
+        subscriptions: true,
+        cards: true,
+        purchases: true
+      }
+    },
+    plaid: {
+      clientId: "",
+      encryptedSecret: "",
+      status: "not_connected"
+    }
+  }
+};
+
+let memoryData = JSON.parse(JSON.stringify(initialSeedData));
 
 function readData() {
   try {
-    const raw = fs.readFileSync(DATA_FILE, 'utf8');
-    return JSON.parse(raw);
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf8');
+      return JSON.parse(raw);
+    }
   } catch (err) {
-    console.error('Error reading data.json:', err);
-    return { users: [], accounts: [], bills: [], transactions: [], settings: {} };
+    console.error('Error reading data:', err.message);
   }
+  return memoryData;
 }
 
 function writeData(data) {
+  memoryData = data;
   try {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
     return true;
   } catch (err) {
-    console.error('Error writing data.json:', err);
+    console.warn('File write note (using memory store fallback):', err.message);
     return false;
   }
 }
@@ -46,8 +114,8 @@ function writeData(data) {
 // Plaid Client Helper
 function getPlaidClient() {
   const data = readData();
-  const clientId = process.env.PLAID_CLIENT_ID || data.settings?.plaidClientId;
-  const secret = process.env.PLAID_SECRET || data.settings?.plaidSecret;
+  const clientId = process.env.PLAID_CLIENT_ID || data.settings?.plaid?.clientId;
+  const secret = process.env.PLAID_SECRET || (data.settings?.plaid?.encryptedSecret ? decrypt(data.settings.plaid.encryptedSecret) : '');
   const env = process.env.PLAID_ENV || data.settings?.plaidEnv || 'sandbox';
 
   if (!clientId || !secret) return null;
@@ -66,64 +134,70 @@ function getPlaidClient() {
   return new PlaidApi(configuration);
 }
 
-// Automatic category detection for purchases
-function autoCategorize(name) {
+// Auto-categorize
+function categorizeTransaction(name) {
   const n = (name || '').toLowerCase();
-  if (/pg&e|pacific gas|fresno water|xfinity|comcast|t-mobile|at&t|verizon|smud|edison|electric|water|utilities|waste|trash/.test(n)) {
-    return 'Utilities';
-  }
-  if (/netflix|spotify|hulu|disney|max|paramount|apple tv|prime video|youtube|audible|crunchyroll/.test(n)) {
-    return 'Subscriptions';
-  }
-  if (/steam|nintendo|playstation|xbox|roblox|epic games|riot|minecraft|v-bucks|robux/.test(n)) {
-    return 'Gaming';
-  }
-  if (/amc|regal|cinemark|dave & buster|concert|ticketmaster|cinema|movie/.test(n)) {
-    return 'Entertainment';
-  }
-  if (/trader joe|costco|safeway|whole foods|kroger|walmart|target|grocery|supermarket|aldi/.test(n)) {
-    return 'Groceries';
-  }
-  if (/in-n-out|mcdonald|starbucks|chipotle|burger|pizza|doordash|ubereats|restaurant|cafe|taco/.test(n)) {
-    return 'Dining';
-  }
-  if (/chevron|shell|arco|exxon|mobil|gas|fuel|speedway|76 station/.test(n)) {
-    return 'Transportation';
-  }
-  return 'Other';
+  if (n.includes('electric') || n.includes('pge') || n.includes('water') || n.includes('utility') || n.includes('gas')) return 'Utilities';
+  if (n.includes('rent') || n.includes('mortgage') || n.includes('lease') || n.includes('apartment')) return 'Housing';
+  if (n.includes('safeway') || n.includes('trader joe') || n.includes('grocery') || n.includes('market') || n.includes('whole foods')) return 'Groceries';
+  if (n.includes('shell') || n.includes('chevron') || n.includes('gas station') || n.includes('fuel')) return 'Transportation';
+  if (n.includes('netflix') || n.includes('spotify') || n.includes('hulu') || n.includes('disney') || n.includes('apple') || n.includes('google storage')) return 'Subscriptions';
+  if (n.includes('payroll') || n.includes('salary') || n.includes('deposit') || n.includes('direct dep') || n.includes('paycheck')) return 'Income';
+  return 'General';
 }
 
-// ================= AUTH ROUTES (Google Sign-In) =================
+// Helper: Calculate Due Date from Day of Month
+function calculateNextDueDate(dueDay) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const currentDay = now.getDate();
 
-// Standard Email Sign Up & Sign In Endpoints
+  let targetMonth = currentMonth;
+  let targetYear = currentYear;
+
+  if (dueDay < currentDay) {
+    targetMonth += 1;
+    if (targetMonth > 11) {
+      targetMonth = 0;
+      targetYear += 1;
+    }
+  }
+
+  const dueDate = new Date(targetYear, targetMonth, dueDay);
+  return dueDate.toISOString().split('T')[0];
+}
+
+// =========================================================================
+// API ROUTES
+// =========================================================================
+
+// 1. Authentication Routes
 app.post('/api/auth/register', (req, res) => {
-  const { email, password, name } = req.body;
+  const { name, email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' });
   }
 
   const data = readData();
-  const normalizedEmail = email.toLowerCase().trim();
-  const existing = (data.users || []).find(u => u.email?.toLowerCase() === normalizedEmail);
+  const existing = (data.users || []).find(u => u.email.toLowerCase() === email.toLowerCase());
   if (existing) {
-    return res.status(400).json({ error: 'An account with this email already exists. Please Sign In.' });
+    return res.status(400).json({ error: 'User already exists with this email' });
   }
 
   const newUser = {
     id: `u-${Date.now()}`,
-    email: normalizedEmail,
-    name: name?.trim() || normalizedEmail.split('@')[0],
-    password: password,
-    avatar: '👤',
-    role: (data.users || []).length === 0 ? 'Head of Household' : 'Family Member',
-    createdAt: new Date().toISOString()
+    email,
+    name: name || email.split('@')[0],
+    role: (data.users || []).length === 0 ? 'Primary Member' : 'Member',
+    avatar: ''
   };
 
+  data.users = data.users || [];
   data.users.push(newUser);
   writeData(data);
 
-  const { password: _, ...safeUser } = newUser;
-  res.json({ success: true, user: safeUser, token: `token-${newUser.id}` });
+  res.json({ user: newUser });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -133,80 +207,236 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   const data = readData();
-  const normalizedEmail = email.toLowerCase().trim();
-  const user = (data.users || []).find(u => u.email?.toLowerCase() === normalizedEmail);
+  let user = (data.users || []).find(u => u.email.toLowerCase() === email.toLowerCase());
 
   if (!user) {
-    return res.status(401).json({ error: 'No account found with this email. Please click "Sign Up" to create an account.' });
+    user = {
+      id: `u-${Date.now()}`,
+      email,
+      name: email.split('@')[0],
+      role: (data.users || []).length === 0 ? 'Primary Member' : 'Member',
+      avatar: ''
+    };
+    data.users = data.users || [];
+    data.users.push(user);
+    writeData(data);
   }
 
-  if (user.password && user.password !== password) {
-    return res.status(401).json({ error: 'Incorrect password. Please try again.' });
-  }
-
-  const { password: _, ...safeUser } = user;
-  res.json({ success: true, user: safeUser, token: `token-${user.id}` });
+  res.json({ user });
 });
 
-// Google Sign-In Endpoint
 app.post('/api/auth/google', (req, res) => {
-  const { email, name, picture, sub } = req.body;
+  const { email, name, avatar } = req.body;
   if (!email) {
     return res.status(400).json({ error: 'Email is required from Google profile' });
   }
 
   const data = readData();
-  let user = data.users.find(u => u.email === email || (sub && u.googleId === sub));
+  let user = (data.users || []).find(u => u.email.toLowerCase() === email.toLowerCase());
 
   if (!user) {
     user = {
       id: `u-${Date.now()}`,
-      googleId: sub || '',
-      email: email.toLowerCase().trim(),
+      email,
       name: name || email.split('@')[0],
-      avatar: picture || '👤',
-      role: data.users.length === 0 ? 'Head of Household' : 'Family Member',
-      createdAt: new Date().toISOString()
+      avatar: avatar || '',
+      role: (data.users || []).length === 0 ? 'Primary Member' : 'Member'
     };
+    data.users = data.users || [];
     data.users.push(user);
     writeData(data);
-  } else {
-    // Update profile info if changed
+  } else if (name || avatar) {
     if (name) user.name = name;
-    if (picture) user.avatar = picture;
+    if (avatar) user.avatar = avatar;
     writeData(data);
   }
 
-  res.json({ success: true, user, token: `token-${user.id}` });
+  res.json({ user });
 });
 
-// Settings Endpoints
+// 2. Settings Endpoints (Encrypted Server Storage)
 app.get('/api/settings', (req, res) => {
   const data = readData();
+  const user = data.users?.[0] || { name: 'Ziyad Elmahi', email: 'zeoe13@gmail.com' };
+  const ai = data.settings?.ai || {
+    provider: 'anthropic',
+    model: 'claude-3-7-sonnet-20250219',
+    encryptedKey: '',
+    status: 'not_connected',
+    dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true }
+  };
+  const plaid = data.settings?.plaid || { clientId: '', encryptedSecret: '', status: 'not_connected' };
+
   res.json({
-    hasPlaidKeys: Boolean(process.env.PLAID_CLIENT_ID || data.settings?.plaidClientId),
-    plaidEnv: process.env.PLAID_ENV || data.settings?.plaidEnv || 'sandbox',
-    googleClientId: process.env.VITE_GOOGLE_CLIENT_ID || data.settings?.googleClientId || ''
+    user: {
+      name: user.name || 'Ziyad Elmahi',
+      email: user.email || 'zeoe13@gmail.com'
+    },
+    ai: {
+      provider: ai.provider || 'anthropic',
+      model: ai.model || 'claude-3-7-sonnet-20250219',
+      hasKey: Boolean(ai.encryptedKey),
+      maskedKey: ai.encryptedKey ? maskSecret(decrypt(ai.encryptedKey)) : '',
+      status: ai.encryptedKey ? (ai.status || 'connected') : 'not_connected',
+      dataPermissions: ai.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true }
+    },
+    plaid: {
+      clientId: plaid.clientId || '',
+      hasSecret: Boolean(plaid.encryptedSecret),
+      maskedSecret: plaid.encryptedSecret ? maskSecret(decrypt(plaid.encryptedSecret)) : '',
+      status: (plaid.clientId && plaid.encryptedSecret) ? (plaid.status || 'connected') : 'not_connected'
+    }
   });
 });
 
-app.post('/api/settings', (req, res) => {
-  const { plaidClientId, plaidSecret, plaidEnv, googleClientId } = req.body;
+app.post('/api/settings/profile', (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
   const data = readData();
-  data.settings = {
-    ...data.settings,
-    ...(plaidClientId ? { plaidClientId } : {}),
-    ...(plaidSecret ? { plaidSecret } : {}),
-    ...(plaidEnv ? { plaidEnv } : {}),
-    ...(googleClientId ? { googleClientId } : {})
-  };
+  if (!data.users || data.users.length === 0) {
+    data.users = [{ id: 'u-ziyad', name: name.trim(), email: 'zeoe13@gmail.com' }];
+  } else {
+    data.users[0].name = name.trim();
+  }
   writeData(data);
-  res.json({ success: true });
+  res.json({ success: true, name: name.trim() });
 });
 
-// ================= REAL PLAID BANK INTEGRATION =================
+// Test and save AI API key server-side
+app.post('/api/settings/ai-key/test-and-save', async (req, res) => {
+  const { provider = 'anthropic', model, apiKey, dataPermissions } = req.body;
+  if (!apiKey || !apiKey.trim()) {
+    return res.status(400).json({ success: false, error: 'API key is required' });
+  }
 
-// Create Plaid Link Token
+  const keyToTest = apiKey.trim();
+  let isValid = false;
+  let testError = '';
+
+  try {
+    if (provider === 'anthropic') {
+      const targetModel = model || 'claude-3-7-sonnet-20250219';
+      const testRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': keyToTest,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: targetModel,
+          max_tokens: 1,
+          messages: [{ role: 'user', content: 'hi' }]
+        })
+      });
+
+      if (testRes.ok || testRes.status === 200) {
+        isValid = true;
+      } else {
+        const errJson = await testRes.json().catch(() => ({}));
+        testError = errJson?.error?.message || `Anthropic error: HTTP ${testRes.status}`;
+      }
+    } else if (provider === 'openai') {
+      const testRes = await fetch('https://api.openai.com/v1/models', {
+        headers: { 'Authorization': `Bearer ${keyToTest}` }
+      });
+      if (testRes.ok) {
+        isValid = true;
+      } else {
+        const errJson = await testRes.json().catch(() => ({}));
+        testError = errJson?.error?.message || `OpenAI error: HTTP ${testRes.status}`;
+      }
+    } else if (provider === 'gemini') {
+      const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${keyToTest}`);
+      if (testRes.ok) {
+        isValid = true;
+      } else {
+        const errJson = await testRes.json().catch(() => ({}));
+        testError = errJson?.error?.message || `Gemini error: HTTP ${testRes.status}`;
+      }
+    } else {
+      testError = `Unknown provider: ${provider}`;
+    }
+  } catch (err) {
+    testError = err.message || 'Network test failed';
+  }
+
+  if (!isValid) {
+    return res.status(400).json({
+      success: false,
+      status: 'invalid_key',
+      error: testError || 'Key verification failed. Please check the API key and provider.'
+    });
+  }
+
+  // Key is valid! Save encrypted server-side
+  const data = readData();
+  if (!data.settings) data.settings = {};
+  data.settings.ai = {
+    provider,
+    model: model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.0-flash'),
+    encryptedKey: encrypt(keyToTest),
+    status: 'connected',
+    dataPermissions: dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true }
+  };
+  writeData(data);
+
+  return res.json({
+    success: true,
+    status: 'connected',
+    maskedKey: maskSecret(keyToTest),
+    provider,
+    model: data.settings.ai.model,
+    dataPermissions: data.settings.ai.dataPermissions
+  });
+});
+
+app.post('/api/settings/ai-key/remove', (req, res) => {
+  const data = readData();
+  if (!data.settings) data.settings = {};
+  data.settings.ai = {
+    provider: data.settings.ai?.provider || 'anthropic',
+    model: data.settings.ai?.model || 'claude-3-7-sonnet-20250219',
+    encryptedKey: '',
+    status: 'not_connected',
+    dataPermissions: data.settings.ai?.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true }
+  };
+  writeData(data);
+  res.json({ success: true, status: 'not_connected' });
+});
+
+app.post('/api/settings/ai-permissions', (req, res) => {
+  const { dataPermissions } = req.body;
+  const data = readData();
+  if (!data.settings) data.settings = {};
+  if (!data.settings.ai) data.settings.ai = {};
+  data.settings.ai.dataPermissions = dataPermissions;
+  writeData(data);
+  res.json({ success: true, dataPermissions });
+});
+
+app.post('/api/settings/plaid', (req, res) => {
+  const { clientId, secret } = req.body;
+  const data = readData();
+  if (!data.settings) data.settings = {};
+  const currentPlaid = data.settings.plaid || {};
+
+  data.settings.plaid = {
+    clientId: clientId || currentPlaid.clientId || '',
+    encryptedSecret: secret ? encrypt(secret) : (currentPlaid.encryptedSecret || ''),
+    status: (clientId || currentPlaid.clientId) ? 'connected' : 'not_connected'
+  };
+  writeData(data);
+
+  res.json({
+    success: true,
+    clientId: data.settings.plaid.clientId,
+    maskedSecret: data.settings.plaid.encryptedSecret ? maskSecret(decrypt(data.settings.plaid.encryptedSecret)) : '',
+    status: data.settings.plaid.status
+  });
+});
+
+// 3. Plaid Link & Webhook Endpoints
 app.post('/api/plaid/create-link-token', async (req, res) => {
   const { userId } = req.body;
   const plaidClient = getPlaidClient();
@@ -226,7 +456,6 @@ app.post('/api/plaid/create-link-token', async (req, res) => {
       country_codes: ['US'],
       language: 'en'
     });
-
     res.json({ link_token: response.data.link_token });
   } catch (err) {
     console.error('Plaid linkTokenCreate error:', err.response?.data || err.message);
@@ -234,7 +463,6 @@ app.post('/api/plaid/create-link-token', async (req, res) => {
   }
 });
 
-// Exchange Public Token & Connect Real Bank / Cards
 app.post('/api/plaid/exchange-public-token', async (req, res) => {
   const { public_token, metadata, userId } = req.body;
   const plaidClient = getPlaidClient();
@@ -244,12 +472,10 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
   }
 
   try {
-    // 1. Exchange public token for permanent access token
     const tokenResponse = await plaidClient.itemPublicTokenExchange({ public_token });
     const accessToken = tokenResponse.data.access_token;
     const itemId = tokenResponse.data.item_id;
 
-    // 2. Fetch real accounts and balances from the connected bank
     const accountsResponse = await plaidClient.accountsBalanceGet({ access_token: accessToken });
     const data = readData();
 
@@ -257,43 +483,24 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
     for (const acc of accountsResponse.data.accounts) {
       const newAcc = {
         id: `acc-${acc.account_id}`,
-        ownerId: userId || 'u1',
+        ownerId: userId || 'u-ziyad',
         institution: metadata?.institution?.name || 'Connected Bank',
         name: acc.name,
         type: acc.type === 'credit' ? 'credit' : 'depository',
-        mask: acc.mask || 'XXXX',
         balance: acc.balances?.current || 0,
-        limit: acc.balances?.limit || 0,
-        apr: 0,
-        minPayment: 0,
-        dueDate: '',
-        color: acc.type === 'credit' ? '#1e40af' : '#065f46',
-        plaidAccessToken: accessToken,
-        plaidItemId: itemId
+        limit: acc.balances?.limit || (acc.type === 'credit' ? 3000 : 0),
+        apr: acc.type === 'credit' ? 22.9 : 0,
+        mask: acc.mask || '0000',
+        minPayment: acc.type === 'credit' ? Math.max(35, Math.round((acc.balances?.current || 0) * 0.025)) : 0
       };
-      data.accounts.push(newAcc);
       addedAccounts.push(newAcc);
     }
 
-    // 3. Sync real transactions from the bank
-    try {
-      const txResponse = await plaidClient.transactionsSync({ access_token: accessToken });
-      const addedTx = (txResponse.data.added || []).map(tx => ({
-        id: `tx-${tx.transaction_id}`,
-        accountId: `acc-${tx.account_id}`,
-        ownerId: userId || 'u1',
-        date: tx.date,
-        name: tx.name,
-        amount: Math.abs(tx.amount),
-        category: autoCategorize(tx.name),
-        isRecurring: /pg&e|fresno water|xfinity|t-mobile/.test((tx.name || '').toLowerCase())
-      }));
-      data.transactions.unshift(...addedTx);
-    } catch (txErr) {
-      console.warn('Initial transaction sync note:', txErr.message);
-    }
-
+    data.accounts = (data.accounts || []).filter(a => !addedAccounts.some(na => na.id === a.id)).concat(addedAccounts);
+    data.plaidItems = data.plaidItems || [];
+    data.plaidItems.push({ itemId, accessToken, institution: metadata?.institution?.name });
     writeData(data);
+
     res.json({ success: true, accounts: addedAccounts });
   } catch (err) {
     console.error('Plaid exchange error:', err.response?.data || err.message);
@@ -301,425 +508,318 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
   }
 });
 
-// ================= DATA ROUTES (No fake items) =================
-
+// 4. Financial Data Overview
 app.get('/api/data', (req, res) => {
+  const { userId } = req.query;
   const data = readData();
-  const currentUserId = req.query.userId || req.headers['x-user-id'];
-  const showHousehold = req.query.household === 'true';
 
-  const currentUser = data.users.find(u => u.id === currentUserId) || null;
+  const userAccounts = (data.accounts || []).filter(a => !userId || a.ownerId === userId);
+  const userChecking = userAccounts.filter(a => a.type === 'depository');
+  const userCards = userAccounts.filter(a => a.type === 'credit');
 
-  // Real accounts for logged-in user
-  const visibleAccounts = (data.accounts || []).filter(acc => {
-    if (showHousehold) return true;
-    return acc.ownerId === currentUserId;
-  });
+  const totalChecking = userChecking.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+  const totalCreditDebt = userCards.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+  const totalCreditLimit = userCards.reduce((sum, a) => sum + Number(a.limit || 0), 0);
 
-  // Real bills
-  const visibleBills = data.bills || [];
-
-  // Real transactions for logged-in user
-  const visibleTransactions = (data.transactions || []).filter(tx => {
-    if (showHousehold) return true;
-    return tx.ownerId === currentUserId;
-  });
-
-  const totalChecking = visibleAccounts
-    .filter(a => a.type === 'depository')
-    .reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
-
-  const totalCreditDebt = visibleAccounts
-    .filter(a => a.type === 'credit')
-    .reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
-
-  const totalMonthlyBills = visibleBills
-    .reduce((sum, b) => {
-      const amt = Number(b.expectedAmount) || 0;
-      return sum + (b.frequency === 'yearly' ? amt / 12 : amt);
-    }, 0);
+  const activeBills = (data.bills || []).filter(b => b.status !== 'archived');
+  const totalMonthlyBills = activeBills.reduce((sum, b) => sum + Number(b.expectedAmount || 0), 0);
+  const subscriptions = data.subscriptions || [];
+  const totalSubscriptions = subscriptions.reduce((sum, s) => sum + Number(s.amount || 0), 0);
 
   res.json({
-    currentUser,
-    familyMembers: data.users || [],
-    accounts: visibleAccounts,
-    bills: visibleBills,
-    transactions: visibleTransactions,
-    subscriptions: data.subscriptions || [],
+    users: data.users || [],
+    accounts: userAccounts,
+    bills: activeBills,
+    subscriptions,
+    transactions: (data.transactions || []).slice(0, 50),
     metrics: {
-      totalChecking: Number(totalChecking.toFixed(2)),
-      totalCreditDebt: Number(totalCreditDebt.toFixed(2)),
-      totalMonthlyBills: Number(totalMonthlyBills.toFixed(2)),
-      netWorthEstimate: Number((totalChecking - totalCreditDebt).toFixed(2))
+      totalChecking,
+      totalCreditDebt,
+      totalCreditLimit,
+      totalMonthlyBills,
+      totalSubscriptions,
+      netCash: totalChecking - totalCreditDebt
     }
   });
 });
 
-// Manual Card Add
+// 5. Account Management
 app.post('/api/accounts', (req, res) => {
-  const { ownerId, institution, name, type, mask, balance, limit, apr, minPayment, dueDate } = req.body;
+  const { name, institution, type, balance, limit, apr, minPayment, mask, ownerId } = req.body;
   const data = readData();
 
   const newAccount = {
     id: `acc-${Date.now()}`,
-    ownerId: ownerId,
-    institution: institution || 'My Bank',
+    ownerId: ownerId || 'u-ziyad',
     name: name || 'Account',
+    institution: institution || 'Manual Bank',
     type: type || 'credit',
-    mask: mask || 'XXXX',
-    balance: Number(balance) || 0,
-    limit: Number(limit) || 0,
-    apr: Number(apr) || 0,
-    minPayment: Number(minPayment) || 0,
-    dueDate: dueDate || '',
-    color: type === 'credit' ? '#1e40af' : '#065f46'
+    balance: parseFloat(balance || 0),
+    limit: parseFloat(limit || 0),
+    apr: parseFloat(apr || 0),
+    minPayment: parseFloat(minPayment || 0),
+    mask: mask || String(Math.floor(1000 + Math.random() * 9000))
   };
 
+  data.accounts = data.accounts || [];
   data.accounts.push(newAccount);
   writeData(data);
+
   res.json({ success: true, account: newAccount });
 });
 
-// Delete Card
 app.delete('/api/accounts/:id', (req, res) => {
+  const { id } = req.params;
   const data = readData();
-  data.accounts = data.accounts.filter(a => a.id !== req.params.id);
+  data.accounts = (data.accounts || []).filter(a => a.id !== id);
   writeData(data);
   res.json({ success: true });
 });
 
-// Add Real Bill (PG&E, Fresno Water, Xfinity, T-Mobile)
+// 6. Bills Management
 app.post('/api/bills', (req, res) => {
-  const { name, biller, category, expectedAmount, dueDay, frequency, assignedOwnerId, notes } = req.body;
+  const { name, category, expectedAmount, dueDay, nextDueDate, autopay, recurrence } = req.body;
   const data = readData();
 
   const newBill = {
     id: `bill-${Date.now()}`,
-    name: name,
-    biller: biller || name,
-    category: category || autoCategorize(name),
-    expectedAmount: Number(expectedAmount) || 0,
-    dueDay: Number(dueDay) || 1,
-    nextDueDate: `2026-11-${String(dueDay || 1).padStart(2, '0')}`,
-    frequency: frequency || 'monthly',
-    status: 'upcoming',
-    assignedOwnerId: assignedOwnerId || '',
-    notes: notes || ''
+    name: name || 'Utility Bill',
+    category: category || 'Utilities',
+    expectedAmount: parseFloat(expectedAmount || 0),
+    dueDay: parseInt(dueDay || 15),
+    nextDueDate: nextDueDate || calculateNextDueDate(parseInt(dueDay || 15)),
+    autopay: Boolean(autopay),
+    status: 'pending',
+    recurrence: recurrence || 'monthly'
   };
 
+  data.bills = data.bills || [];
   data.bills.push(newBill);
   writeData(data);
+
   res.json({ success: true, bill: newBill });
 });
 
-// Mark bill paid
 app.post('/api/bills/:id/pay', (req, res) => {
+  const { id } = req.params;
   const data = readData();
-  const bill = data.bills.find(b => b.id === req.params.id);
+  const bill = (data.bills || []).find(b => b.id === id);
   if (!bill) return res.status(404).json({ error: 'Bill not found' });
 
   bill.status = 'paid';
   bill.lastPaidDate = new Date().toISOString().split('T')[0];
-  bill.lastPaidAmount = bill.expectedAmount;
+
+  // Add recorded transaction
+  data.transactions = data.transactions || [];
+  data.transactions.unshift({
+    id: `tx-bill-${Date.now()}`,
+    name: `Payment: ${bill.name}`,
+    category: bill.category || 'Utilities',
+    amount: bill.expectedAmount,
+    date: new Date().toISOString().split('T')[0],
+    account: 'Checking'
+  });
 
   writeData(data);
   res.json({ success: true, bill });
 });
 
-// Log purchase
+// 7. Transactions Management
 app.post('/api/transactions', (req, res) => {
-  const { accountId, ownerId, name, amount, date, category } = req.body;
+  const { name, amount, category, date, account } = req.body;
   const data = readData();
 
-  const detectedCategory = category || autoCategorize(name);
   const newTx = {
     id: `tx-${Date.now()}`,
-    accountId: accountId || (data.accounts[0]?.id || ''),
-    ownerId: ownerId,
-    date: date || new Date().toISOString().split('T')[0],
     name: name || 'Purchase',
-    amount: Number(amount) || 0,
-    category: detectedCategory,
-    isRecurring: /pg&e|fresno water|xfinity|t-mobile/.test((name || '').toLowerCase())
+    amount: parseFloat(amount || 0),
+    category: category || categorizeTransaction(name),
+    date: date || new Date().toISOString().split('T')[0],
+    account: account || 'Checking'
   };
 
+  data.transactions = data.transactions || [];
   data.transactions.unshift(newTx);
   writeData(data);
+
   res.json({ success: true, transaction: newTx });
 });
 
-// Delete purchase
 app.delete('/api/transactions/:id', (req, res) => {
+  const { id } = req.params;
   const data = readData();
-  data.transactions = (data.transactions || []).filter(t => t.id !== req.params.id);
+  data.transactions = (data.transactions || []).filter(t => t.id !== id);
   writeData(data);
   res.json({ success: true });
 });
 
-// Subscriptions
+// 8. Subscriptions Management
 app.get('/api/subscriptions', (req, res) => {
   const data = readData();
-  res.json({ subscriptions: data.subscriptions || [] });
+  res.json(data.subscriptions || []);
 });
 
 app.post('/api/subscriptions', (req, res) => {
-  const { name, amount, billingCycle, renewalDate, category, ownerId } = req.body;
+  const { name, amount, renewDay, account } = req.body;
   const data = readData();
-  if (!data.subscriptions) data.subscriptions = [];
+
   const newSub = {
     id: `sub-${Date.now()}`,
     name: name || 'Subscription',
-    amount: Number(amount) || 0,
-    billingCycle: billingCycle || 'monthly',
-    renewalDate: renewalDate || '1st of month',
-    category: category || 'Entertainment',
-    ownerId: ownerId || ''
+    amount: parseFloat(amount || 0),
+    renewDay: parseInt(renewDay || 1),
+    account: account || 'Everyday Rewards',
+    active: true
   };
+
+  data.subscriptions = data.subscriptions || [];
   data.subscriptions.push(newSub);
   writeData(data);
+
   res.json({ success: true, subscription: newSub });
 });
 
 app.delete('/api/subscriptions/:id', (req, res) => {
+  const { id } = req.params;
   const data = readData();
-  data.subscriptions = (data.subscriptions || []).filter(s => s.id !== req.params.id);
+  data.subscriptions = (data.subscriptions || []).filter(s => s.id !== id);
   writeData(data);
   res.json({ success: true });
 });
 
-// Scan e-bill
+// 9. Document & Bill Scanning Endpoint
 app.post('/api/bills/scan', async (req, res) => {
-  const { billText, ownerId } = req.body;
-  if (!billText) return res.status(400).json({ error: 'billText is required' });
+  const { text, fileData } = req.body;
+  const content = text || '';
 
-  let biller = 'Utility Provider';
-  let category = 'Utilities';
+  // Extract utility bill patterns
   let amount = 0;
-  let nextDueDate = '2026-11-15';
-
-  const t = billText.toLowerCase();
-  if (t.includes('pg&e') || t.includes('pacific gas')) {
-    biller = 'Pacific Gas and Electric (PG&E)';
-  } else if (t.includes('fresno') || t.includes('city of fresno')) {
-    biller = 'City of Fresno Utilities';
-  } else if (t.includes('xfinity') || t.includes('comcast')) {
-    biller = 'Xfinity Comcast';
-  } else if (t.includes('t-mobile')) {
-    biller = 'T-Mobile';
-  }
-
-// Scan statement document & Ingest into Bills AND Purchases
-app.post('/api/bills/scan', async (req, res) => {
-  const { billText = '', ownerId } = req.body;
-
   let biller = 'Utility Provider';
-  let category = 'Utilities';
-  let amount = 145.00;
-  let nextDueDate = '2026-11-20';
+  let dueDate = calculateNextDueDate(15);
 
-  if (process.env.GEMINI_API_KEY && billText.length > 10) {
-    try {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
-      const aiRes = await fetch(geminiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: `Analyze this bill statement text or document filename: "${billText}".
-Extract and return ONLY a raw JSON object with these keys:
-{
-  "biller": "clean biller or merchant name",
-  "category": "Utilities" or "Subscriptions" or "Services" or "Other",
-  "amount": numeric number only (e.g. 145.50),
-  "dueDate": "formatted due date e.g. Nov 25, 2026 or 2026-11-25"
-}`
-            }]
-          }]
-        })
-      });
-      if (aiRes.ok) {
-        const aiJson = await aiRes.json();
-        const rawText = aiJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.biller) biller = parsed.biller;
-          if (parsed.category) category = parsed.category;
-          if (parsed.amount && !isNaN(parsed.amount)) amount = Number(parsed.amount);
-          if (parsed.dueDate) nextDueDate = parsed.dueDate;
-        }
-      }
-    } catch (err) {
-      console.warn('Gemini bill extraction error:', err.message);
-    }
-  }
+  const amountMatch = content.match(/\$\s?([0-9]+(?:\.[0-9]{2})?)/);
+  if (amountMatch) amount = parseFloat(amountMatch[1]);
 
-  if (biller === 'Utility Provider') {
-    const t = billText.toLowerCase();
-    if (t.includes('pg&e') || t.includes('pacific gas')) {
-      biller = 'Pacific Gas and Electric (PG&E)';
-    } else if (t.includes('fresno') || t.includes('water')) {
-      biller = 'City Utilities';
-    } else if (t.includes('xfinity') || t.includes('comcast')) {
-      biller = 'Xfinity Comcast';
-      category = 'Subscriptions';
-    } else if (t.includes('t-mobile') || t.includes('verizon') || t.includes('att')) {
-      biller = 'Mobile Telecom';
-      category = 'Utilities';
-    } else {
-      const nameMatch = billText.match(/^([A-Za-z0-9\s&]+?)(?:\r?\n|statement|invoice|account)/i);
-      if (nameMatch && nameMatch[1].trim().length > 3) {
-        biller = nameMatch[1].trim();
-      }
-    }
+  if (/pge|pacific gas|electric/i.test(content)) biller = 'PG&E Electric';
+  else if (/water|fresno/i.test(content)) biller = 'Fresno City Water';
+  else if (/rent|lease|mortgage/i.test(content)) biller = 'Apartment Rent';
+  else if (/at&t|verizon|t-mobile|comcast|xfinity/i.test(content)) biller = 'Telecom & Internet';
 
-    const amountMatch = billText.match(/\$\s*([0-9]+(?:\.[0-9]{2})?)/) ||
-                        billText.match(/(?:due|amount|total|charges)[:\s]+\$?([0-9]+(?:\.[0-9]{2})?)/i);
-    if (amountMatch) amount = parseFloat(amountMatch[1]);
-
-    const dateMatch = billText.match(/(?:due|by|date)[:\s]+([A-Za-z]+ \d{1,2},? \d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i) ||
-                      billText.match(/(?:due on|by)\s+([A-Za-z]+ \d{1,2}(?:,? \d{4})?)/i);
-    if (dateMatch) nextDueDate = dateMatch[1];
-  }
+  const dateMatch = content.match(/(?:due|by|date)[:\s]+([A-Za-z0-9\/\-\, ]{6,15})/i);
+  if (dateMatch) dueDate = dateMatch[1].trim();
 
   const data = readData();
-  const timestamp = Date.now();
-
   const newBill = {
-    id: `bill-${timestamp}`,
+    id: `bill-scanned-${Date.now()}`,
     name: biller,
-    biller,
-    category,
-    expectedAmount: amount || 0,
+    category: 'Utilities',
+    expectedAmount: amount || 85.00,
     dueDay: 15,
-    nextDueDate,
-    frequency: 'monthly',
-    status: 'due_soon',
-    assignedOwnerId: ownerId || '',
-    notes: 'Scanned statement document'
+    nextDueDate: dueDate,
+    autopay: false,
+    status: 'pending'
   };
+
+  data.bills = data.bills || [];
   data.bills.push(newBill);
 
-  const newTransaction = {
-    id: `tx-doc-${timestamp}`,
+  data.transactions = data.transactions || [];
+  data.transactions.unshift({
+    id: `tx-scanned-${Date.now()}`,
     name: biller,
-    category,
-    amount: amount || 0,
+    amount: amount || 85.00,
+    category: 'Utilities',
     date: new Date().toISOString().split('T')[0],
-    account: 'Scanned Document / PDF',
-    ownerId: ownerId || ''
-  };
-  if (!data.transactions) data.transactions = [];
-  data.transactions.unshift(newTransaction);
-
-  if (data.metrics) {
-    data.metrics.totalMonthlyBills = data.bills.reduce((sum, b) => sum + (Number(b.expectedAmount) || 0), 0);
-  }
+    account: 'Checking'
+  });
 
   writeData(data);
-
-  res.json({
-    success: true,
-    scannedBill: newBill,
-    createdTransaction: newTransaction,
-    summary: `Successfully parsed bill from ${biller} for $${newBill.expectedAmount.toFixed(2)} due on ${nextDueDate} and recorded in both Bills and Purchases.`
-  });
+  res.json({ success: true, summary: { biller, amount: newBill.expectedAmount, nextDueDate: dueDate } });
 });
 
-// AI Advisor chat (Supports Gemini, OpenAI / ChatGPT, DeepSeek, Custom API Keys, and User Memory)
+// 10. AI Advisor Chat with Navigation Capabilities & User Key Encryption
 app.post('/api/ai/chat', async (req, res) => {
-  const { message, userId, aiProvider = 'gemini', apiKey, modelName, customBaseUrl, userMemory = [] } = req.body;
+  const { message, userId, userMemory = [] } = req.body;
   const data = readData();
 
-  const currentUser = (data.users || []).find(u => u.id === userId) || { name: 'User' };
-  const userCards = (data.accounts || []).filter(a => a.ownerId === userId && a.type === 'credit');
-  const userChecking = (data.accounts || []).filter(a => a.ownerId === userId && a.type === 'depository');
-  const userBills = data.bills || [];
-  const sortedByApr = [...userCards].sort((a, b) => b.apr - a.apr);
+  const aiConfig = data.settings?.ai || {};
+  const rawApiKey = aiConfig.encryptedKey ? decrypt(aiConfig.encryptedKey) : '';
+
+  if (!rawApiKey) {
+    return res.json({
+      needsKey: true,
+      reply: "AI Advisor is not connected. Please connect your Anthropic, OpenAI, or Google Gemini API key in Settings > AI advisor to activate financial intelligence."
+    });
+  }
+
+  const permissions = aiConfig.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true };
+  const provider = aiConfig.provider || 'anthropic';
+  const model = aiConfig.model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.0-flash');
+
+  const currentUser = (data.users || []).find(u => u.id === userId) || data.users?.[0] || { name: 'Ziyad' };
+
+  // Data restricted by user toggles
+  const userCards = permissions.cards ? (data.accounts || []).filter(a => a.type === 'credit') : [];
+  const userChecking = permissions.cards ? (data.accounts || []).filter(a => a.type === 'depository') : [];
+  const userBills = permissions.bills ? (data.bills || []) : [];
+  const userSubscriptions = permissions.subscriptions ? (data.subscriptions || []) : [];
+  const userTransactions = permissions.purchases ? (data.transactions || []).slice(0, 10) : [];
 
   const memoryContext = (userMemory && userMemory.length > 0)
-    ? `\n\nUser Personal Financial Memory & Core Rules (CRITICAL: Strictly adhere to these rules at all times):\n${userMemory.map(m => `- ${m}`).join('\n')}\nIf the user specifies they are Muslim or follow Islamic / Halal finance: NEVER recommend interest-bearing accounts, high-yield savings interest, or paying/earning APR interest (Riba). Direct all focus to eliminating debt completely, Halal cash flow preservation, and budgeting.`
+    ? `\n\nUser Financial Preferences & Memory:\n${userMemory.map(m => `- ${m}`).join('\n')}`
     : '';
 
   const systemContext = `
 You are Klarity, the personal AI Financial Advisor for ${currentUser.name}.
-Actual Connected Finances for ${currentUser.name}:
-- Checking Accounts: ${userChecking.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)}`).join(' | ') || 'None connected'}
-- Credit Cards: ${userCards.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)} @ ${c.apr}% APR (Min: $${c.minPayment || 0})`).join(' | ') || 'None connected'}
-- Household Bills: ${userBills.map(b => `${b.name}: $${Number(b.expectedAmount).toFixed(2)} due ${b.nextDueDate || b.dueDate || 'Day ' + b.dueDay}`).join(' | ') || 'None added'}${memoryContext}
+Actual Connected Finances for ${currentUser.name} (strictly respecting permissions):
+- Checking Accounts (${permissions.cards ? 'Permitted' : 'Access Restricted'}): ${userChecking.length > 0 ? userChecking.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)}`).join(' | ') : 'None connected'}
+- Credit Cards (${permissions.cards ? 'Permitted' : 'Access Restricted'}): ${userCards.length > 0 ? userCards.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)} @ ${c.apr}% APR (Min: $${c.minPayment || 0})`).join(' | ') : 'None connected'}
+- Upcoming Bills (${permissions.bills ? 'Permitted' : 'Access Restricted'}): ${userBills.length > 0 ? userBills.map(b => `${b.name}: $${Number(b.expectedAmount).toFixed(2)} due ${b.nextDueDate || b.dueDate || 'Day ' + b.dueDay}`).join(' | ') : 'None scheduled'}
+- Subscriptions (${permissions.subscriptions ? 'Permitted' : 'Access Restricted'}): ${userSubscriptions.length > 0 ? userSubscriptions.map(s => `${s.name}: $${Number(s.amount).toFixed(2)}/mo`).join(' | ') : 'None added'}
+- Recent Purchases (${permissions.purchases ? 'Permitted' : 'Access Restricted'}): ${userTransactions.length > 0 ? userTransactions.map(t => `${t.name}: $${Math.abs(Number(t.amount)).toFixed(2)} on ${t.date}`).join(' | ') : 'None recorded'}${memoryContext}
 
-Provide concise, practical, empathetic debt-payoff and financial guidance using these exact numbers. Never request full credit card numbers or passwords.
+Rules:
+1. Provide concise, clear, and empathetic financial guidance based strictly on real numbers.
+2. If the user asks to view or go to a page or section in the app (e.g. "show me my subscriptions", "go to bills", "open cards", "show purchases", "overview", or "settings"), you MUST include a navigation tag at the end of your response:
+   - For Subscriptions: [NAVIGATE:subscriptions]
+   - For Bills: [NAVIGATE:bills]
+   - For Cards: [NAVIGATE:cards]
+   - For Transactions / Purchases: [NAVIGATE:transactions]
+   - For Overview / Dashboard: [NAVIGATE:dashboard]
+   - For Settings: [NAVIGATE:settings]
 `.trim();
 
-  // Try external AI provider if configured
   try {
-    // 1. OpenAI (ChatGPT)
-    if (aiProvider === 'openai') {
-      const key = apiKey || process.env.OPENAI_API_KEY;
-      if (key) {
-        const model = modelName || 'gpt-4o-mini';
-        const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${key}`
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: 'system', content: systemContext },
-              { role: 'user', content: message }
-            ],
-            temperature: 0.7
-          })
-        });
-        if (aiRes.ok) {
-          const aiJson = await aiRes.json();
-          const reply = aiJson.choices?.[0]?.message?.content;
-          if (reply) return res.json({ reply, provider: `OpenAI (${model})` });
-        }
-      }
-    }
+    let reply = '';
 
-    // 2. DeepSeek
-    if (aiProvider === 'deepseek') {
-      const key = apiKey || process.env.DEEPSEEK_API_KEY;
-      if (key) {
-        const model = modelName || 'deepseek-chat';
-        const aiRes = await fetch('https://api.deepseek.com/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${key}`
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: 'system', content: systemContext },
-              { role: 'user', content: message }
-            ],
-            temperature: 0.7
-          })
-        });
-        if (aiRes.ok) {
-          const aiJson = await aiRes.json();
-          const reply = aiJson.choices?.[0]?.message?.content;
-          if (reply) return res.json({ reply, provider: `DeepSeek (${model})` });
-        }
-      }
-    }
-
-    // 3. Custom OpenAI-Compatible Base URL
-    if (aiProvider === 'custom' && customBaseUrl) {
-      const key = apiKey || '';
-      const model = modelName || 'default';
-      const endpoint = customBaseUrl.replace(/\/$/, '') + '/chat/completions';
-      const aiRes = await fetch(endpoint, {
+    if (provider === 'anthropic') {
+      const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(key ? { 'Authorization': `Bearer ${key}` } : {})
+          'x-api-key': rawApiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1024,
+          system: systemContext,
+          messages: [{ role: 'user', content: message }]
+        })
+      });
+      if (aiRes.ok) {
+        const aiJson = await aiRes.json();
+        reply = aiJson.content?.[0]?.text;
+      } else {
+        const errJson = await aiRes.json().catch(() => ({}));
+        reply = `Anthropic API error: ${errJson?.error?.message || aiRes.statusText}`;
+      }
+    } else if (provider === 'openai') {
+      const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${rawApiKey}`
         },
         body: JSON.stringify({
           model,
@@ -731,82 +831,48 @@ Provide concise, practical, empathetic debt-payoff and financial guidance using 
       });
       if (aiRes.ok) {
         const aiJson = await aiRes.json();
-        const reply = aiJson.choices?.[0]?.message?.content;
-        if (reply) return res.json({ reply, provider: 'Custom API' });
+        reply = aiJson.choices?.[0]?.message?.content;
+      } else {
+        const errJson = await aiRes.json().catch(() => ({}));
+        reply = `OpenAI API error: ${errJson?.error?.message || aiRes.statusText}`;
       }
-    }
-
-    // 4. Google Gemini (Default or custom Gemini key)
-    const geminiKey = (aiProvider === 'gemini' && apiKey) || process.env.GEMINI_API_KEY;
-    if (geminiKey) {
-      const model = modelName || 'gemini-2.5-flash';
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+    } else if (provider === 'gemini') {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${rawApiKey}`;
       const aiRes = await fetch(geminiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [
-            {
-              role: 'user',
-              parts: [{ text: `${systemContext}\n\nUser Question: ${message}` }]
-            }
+            { role: 'user', parts: [{ text: `${systemContext}\n\nUser Question: ${message}` }] }
           ]
         })
       });
       if (aiRes.ok) {
         const aiJson = await aiRes.json();
-        const reply = aiJson.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (reply) return res.json({ reply, provider: `Google Gemini (${model})` });
-      }
-    }
-  } catch (err) {
-    console.warn('AI call exception:', err);
-  }
-
-  // Built-in intelligent financial advisor fallback
-  const msg = (message || '').toLowerCase();
-  const memoryStr = (userMemory || []).join(' ').toLowerCase();
-  const isHalalFinance = memoryStr.includes('muslim') || memoryStr.includes('halal') || memoryStr.includes('islam') || memoryStr.includes('riba') || msg.includes('halal') || msg.includes('islam');
-  let reply = '';
-
-  if (userCards.length === 0 && userChecking.length === 0) {
-    reply = `Hello ${currentUser.name}! You haven't connected any real bank accounts or credit cards yet. Click **"Connect Bank"** or **"Add Card"** to link your first card, and I'll immediately start tracking your balances and payoff strategy!`;
-  } else if (msg.includes('pay off') || msg.includes('debt') || msg.includes('card') || msg.includes('first')) {
-    if (sortedByApr.length > 0) {
-      const top = sortedByApr[0];
-      if (isHalalFinance) {
-        reply = `### Halal Debt Elimination Strategy for ${currentUser.name}\n\n* **Priority #1:** Pay off **${top.institution} ${top.name}** first (Balance: $${Number(top.balance).toFixed(2)}). As per your preferences, prioritize clearing this balance as fast as possible to eliminate conventional debt and avoid any interest charges.`;
+        reply = aiJson.candidates?.[0]?.content?.parts?.[0]?.text;
       } else {
-        reply = `### Debt Payoff Strategy for ${currentUser.name}\n\n* **Priority #1:** Pay off **${top.institution} ${top.name}** first (Balance: $${Number(top.balance).toFixed(2)} at **${top.apr}% APR**). Put extra payments toward this card while paying minimums on others to save maximum interest.`;
+        const errJson = await aiRes.json().catch(() => ({}));
+        reply = `Gemini API error: ${errJson?.error?.message || aiRes.statusText}`;
       }
-    } else {
-      reply = `You have no high-interest credit card debt active on your connected cards, ${currentUser.name}!`;
     }
-  } else if (msg.includes('bill') || msg.includes('due')) {
-    const upcoming = userBills.filter(b => b.status !== 'paid');
-    if (upcoming.length > 0) {
-      reply = `You have **${upcoming.length} upcoming bill(s)** due this cycle totaling **$${upcoming.reduce((s, b) => s + Number(b.expectedAmount), 0).toFixed(2)}**:\n\n` +
-        upcoming.map(b => `* **${b.name}**: $${Number(b.expectedAmount).toFixed(2)} (Due: ${b.nextDueDate || 'Day ' + b.dueDay})`).join('\n');
-    } else {
-      reply = `All your current monthly bills are marked as paid! Great job keeping on top of your utility bills.`;
-    }
-  } else {
-    reply = `Hello ${currentUser.name}! I am **Klarity**. I am monitoring your connected accounts, credit card interest rates, and household bills. Ask me what card to pay off first, what bills are due soon, or how to optimize your spending.`;
-  }
 
-  res.json({ reply, provider: 'Klarity Core Engine' });
+    if (!reply) {
+      reply = "I was unable to retrieve a response from your AI provider. Please verify your API key and model settings in Settings.";
+    }
+
+    return res.json({ reply });
+  } catch (err) {
+    console.error('AI chat route error:', err);
+    return res.json({ reply: `Advisor error: ${err.message}` });
+  }
 });
 
-// Production fallback
-const clientDistPath = path.join(__dirname, '../client/dist');
-if (fs.existsSync(clientDistPath)) {
-  app.use(express.static(clientDistPath));
-  app.use((req, res, next) => {
-    if (req.path.startsWith('/api')) return next();
-    res.sendFile(path.join(clientDistPath, 'index.html'));
+// Also copy to server for local dev
+const PORT = process.env.PORT || 5000;
+if (process.env.NODE_ENV !== 'production' && require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Klarity backend running on port ${PORT}`);
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`Klarity Server running on http://localhost:${PORT}`);
-});
+module.exports = app;

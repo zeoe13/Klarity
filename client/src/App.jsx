@@ -201,7 +201,7 @@ function KlarityApp() {
       const saved = localStorage.getItem('klarity_user');
       return saved ? JSON.parse(saved) : {
         id: 'u-ziyad',
-        email: 'ziyad@klarity.app',
+        email: 'zeoe13@gmail.com',
         name: 'Ziyad Elmahi',
         avatar: '',
         role: 'Primary Member'
@@ -209,7 +209,7 @@ function KlarityApp() {
     } catch {
       return {
         id: 'u-ziyad',
-        email: 'ziyad@klarity.app',
+        email: 'zeoe13@gmail.com',
         name: 'Ziyad Elmahi',
         avatar: '',
         role: 'Primary Member'
@@ -241,9 +241,26 @@ function KlarityApp() {
   // Settings & Plaid state
   const [settings, setSettings] = useState({ hasPlaidKeys: false, plaidEnv: 'development' });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [plaidClientIdInput, setPlaidClientIdInput] = useState('');
-  const [plaidSecretInput, setPlaidSecretInput] = useState('');
-  const [plaidEnvInput, setPlaidEnvInput] = useState('development');
+  const [settingsActiveTab, setSettingsActiveTab] = useState('profile'); // 'profile' | 'ai' | 'plaid' | 'session'
+  const [settingsDisplayName, setSettingsDisplayName] = useState(currentUser?.name || 'Ziyad Elmahi');
+  const [settingsAiProvider, setSettingsAiProvider] = useState('anthropic');
+  const [settingsAiModel, setSettingsAiModel] = useState('claude-3-7-sonnet-20250219');
+  const [settingsAiApiKey, setSettingsAiApiKey] = useState('');
+  const [settingsAiMaskedKey, setSettingsAiMaskedKey] = useState('');
+  const [settingsAiStatus, setSettingsAiStatus] = useState('not_connected'); // 'not_connected' | 'connected' | 'invalid_key'
+  const [settingsAiShowKey, setSettingsAiShowKey] = useState(false);
+  const [settingsAiTesting, setSettingsAiTesting] = useState(false);
+  const [settingsAiPermissions, setSettingsAiPermissions] = useState({
+    bills: true,
+    subscriptions: true,
+    cards: true,
+    purchases: true
+  });
+  const [settingsPlaidClientId, setSettingsPlaidClientId] = useState('');
+  const [settingsPlaidSecret, setSettingsPlaidSecret] = useState('');
+  const [settingsPlaidMaskedSecret, setSettingsPlaidMaskedSecret] = useState('');
+  const [settingsPlaidStatus, setSettingsPlaidStatus] = useState('not_connected');
+  const [settingsPlaidShowSecret, setSettingsPlaidShowSecret] = useState(false);
 
   // Plaid Link token state
   const [linkToken, setLinkToken] = useState(null);
@@ -550,16 +567,148 @@ function KlarityApp() {
     }
   };
 
-  // Fetch Settings
+  // Fetch Settings & Sync with Server-Side Encrypted Values
   const fetchSettings = async () => {
     try {
       const res = await fetch('/api/settings');
       if (res.ok) {
         const json = await res.json();
         setSettings(json);
+        if (json.user?.name) {
+          setSettingsDisplayName(json.user.name);
+        }
+        if (json.ai) {
+          setSettingsAiProvider(json.ai.provider || 'anthropic');
+          setSettingsAiModel(json.ai.model || 'claude-3-7-sonnet-20250219');
+          setSettingsAiMaskedKey(json.ai.maskedKey || '');
+          setSettingsAiStatus(json.ai.status || 'not_connected');
+          if (json.ai.dataPermissions) {
+            setSettingsAiPermissions(json.ai.dataPermissions);
+          }
+        }
+        if (json.plaid) {
+          setSettingsPlaidClientId(json.plaid.clientId || '');
+          setSettingsPlaidMaskedSecret(json.plaid.maskedSecret || '');
+          setSettingsPlaidStatus(json.plaid.status || 'not_connected');
+        }
       }
     } catch (err) {
       console.warn('Could not fetch settings:', err);
+    }
+  };
+
+  const handleProviderChange = (newProvider) => {
+    setSettingsAiProvider(newProvider);
+    if (newProvider === 'anthropic') setSettingsAiModel('claude-3-7-sonnet-20250219');
+    else if (newProvider === 'openai') setSettingsAiModel('gpt-4o');
+    else if (newProvider === 'gemini') setSettingsAiModel('gemini-2.0-flash');
+  };
+
+  const handleSaveProfile = async () => {
+    if (!settingsDisplayName.trim()) return;
+    try {
+      const res = await fetch('/api/settings/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: settingsDisplayName.trim() })
+      });
+      if (res.ok) {
+        setCurrentUser(prev => ({ ...prev, name: settingsDisplayName.trim() }));
+        setNotificationToast('Profile updated!');
+        setTimeout(() => setNotificationToast(''), 3000);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSaveAndTestAiKey = async () => {
+    if (!settingsAiApiKey.trim()) {
+      setNotificationToast('Please enter an API key to test');
+      setTimeout(() => setNotificationToast(''), 3000);
+      return;
+    }
+    setSettingsAiTesting(true);
+    try {
+      const res = await fetch('/api/settings/ai-key/test-and-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: settingsAiProvider,
+          model: settingsAiModel,
+          apiKey: settingsAiApiKey.trim(),
+          dataPermissions: settingsAiPermissions
+        })
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setSettingsAiStatus('connected');
+        setSettingsAiMaskedKey(json.maskedKey);
+        setSettingsAiApiKey('');
+        setNotificationToast('API key verified and securely saved server-side!');
+      } else {
+        setSettingsAiStatus('invalid_key');
+        setNotificationToast(`Verification failed: ${json.error || 'Invalid API key'}`);
+      }
+    } catch (err) {
+      setSettingsAiStatus('invalid_key');
+      setNotificationToast('Verification request failed');
+    } finally {
+      setSettingsAiTesting(false);
+      setTimeout(() => setNotificationToast(''), 4000);
+    }
+  };
+
+  const handleRemoveAiKey = async () => {
+    try {
+      const res = await fetch('/api/settings/ai-key/remove', { method: 'POST' });
+      if (res.ok) {
+        setSettingsAiStatus('not_connected');
+        setSettingsAiMaskedKey('');
+        setSettingsAiApiKey('');
+        setNotificationToast('AI API key removed.');
+        setTimeout(() => setNotificationToast(''), 3000);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleTogglePermission = async (category) => {
+    const updated = { ...settingsAiPermissions, [category]: !settingsAiPermissions[category] };
+    setSettingsAiPermissions(updated);
+    try {
+      await fetch('/api/settings/ai-permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataPermissions: updated })
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSavePlaidCredentials = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    try {
+      const res = await fetch('/api/settings/plaid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: settingsPlaidClientId,
+          secret: settingsPlaidSecret
+        })
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setSettingsPlaidMaskedSecret(json.maskedSecret);
+        setSettingsPlaidStatus(json.status);
+        setSettingsPlaidSecret('');
+        setNotificationToast('Plaid credentials saved securely server-side!');
+        setTimeout(() => setNotificationToast(''), 3000);
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -1041,6 +1190,24 @@ function KlarityApp() {
     if (!userMsg || isAiTyping) return;
 
     setChatInput('');
+
+    // Instant client-side intent navigation (e.g. "Show me my subscriptions")
+    const lower = userMsg.toLowerCase();
+    if (lower.includes('subscription')) {
+      setActiveTab('subscriptions');
+    } else if (lower.includes('bill')) {
+      setActiveTab('bills');
+    } else if (lower.includes('card')) {
+      setActiveTab('cards');
+    } else if (lower.includes('transaction') || lower.includes('purchase')) {
+      setActiveTab('transactions');
+    } else if (lower.includes('overview') || lower.includes('dashboard') || lower.includes('home')) {
+      setActiveTab('dashboard');
+    } else if (lower.includes('setting')) {
+      setSettingsActiveTab('ai');
+      setIsSettingsOpen(true);
+    }
+
     const userUpdatedMessages = [...chatMessages, { role: 'user', text: userMsg }];
     updateActiveSession(userUpdatedMessages);
     setIsAiTyping(true);
@@ -1052,25 +1219,38 @@ function KlarityApp() {
         body: JSON.stringify({
           message: userMsg,
           userId: currentUser?.id,
-          aiProvider: aiConfig.provider,
-          apiKey: aiConfig.apiKey,
-          modelName: aiConfig.modelName,
-          customBaseUrl: aiConfig.customBaseUrl,
           userMemory: aiMemory
         })
       });
+
       const json = await res.json();
-      const finalMessages = [...userUpdatedMessages, { role: 'assistant', text: json.reply }];
-      updateActiveSession(finalMessages);
-    } catch (err) {
-      const finalMessages = [
-        ...userUpdatedMessages,
-        {
-          role: 'assistant',
-          text: `I've analyzed your real connected data. You currently have checking balance of $${data?.metrics?.totalChecking?.toFixed(2) || '0.00'} and credit card balances of $${data?.metrics?.totalCreditDebt?.toFixed(2) || '0.00'}. Keep extra payments targeted at your highest APR cards.`
+      let replyText = json.reply || "I've reviewed your request.";
+
+      // Handle AI navigation tags: [NAVIGATE:target]
+      const navMatch = replyText.match(/\[NAVIGATE:([a-zA-Z0-9_-]+)\]/i);
+      if (navMatch) {
+        const dest = navMatch[1].toLowerCase();
+        if (dest === 'settings') {
+          setSettingsActiveTab('ai');
+          setIsSettingsOpen(true);
+        } else if (['dashboard', 'bills', 'subscriptions', 'cards', 'transactions', 'overview'].includes(dest)) {
+          setActiveTab(dest === 'overview' ? 'dashboard' : dest);
         }
+        replyText = replyText.replace(/\[NAVIGATE:[a-zA-Z0-9_-]+\]/gi, '').trim();
+      }
+
+      if (json.needsKey) {
+        setSettingsAiStatus('not_connected');
+      }
+
+      const updated = [...userUpdatedMessages, { role: 'assistant', text: replyText }];
+      updateActiveSession(updated);
+    } catch (err) {
+      const updated = [
+        ...userUpdatedMessages,
+        { role: 'assistant', text: "Could not connect to AI advisor. Please verify your settings." }
       ];
-      updateActiveSession(finalMessages);
+      updateActiveSession(updated);
     } finally {
       setIsAiTyping(false);
     }
@@ -1251,161 +1431,30 @@ function KlarityApp() {
   // =========================================================================
   // 2. MAIN APP: REAL CARDS, REAL BILLS, REAL DATA ONLY (Clean Light Theme)
   // =========================================================================
-  const defaultAccounts = [
-    {
-      id: "acc-checking",
-      institution: "Checking",
-      name: "Checking Account",
-      type: "depository",
-      balance: 4218.36,
-      limit: 0,
-      apr: 0,
-      mask: "8912"
-    },
-    {
-      id: "acc-everyday",
-      institution: "Bank",
-      name: "Everyday Rewards",
-      type: "credit",
-      balance: 1102.20,
-      limit: 5000,
-      apr: 21.9,
-      mask: "4417"
-    },
-    {
-      id: "acc-travel",
-      institution: "Bank",
-      name: "Travel Card",
-      type: "credit",
-      balance: 662.00,
-      limit: 2000,
-      apr: 24.4,
-      mask: "9082"
-    }
-  ];
-
-  const defaultBills = [
-    {
-      id: "bill-pge",
-      name: "PG&E Electric",
-      biller: "PG&E",
-      category: "Utilities",
-      expectedAmount: 128.40,
-      dueDay: "28",
-      nextDueDate: "Due Oct 28 • Checking",
-      daysUntil: 3,
-      status: "due_soon"
-    },
-    {
-      id: "bill-rent",
-      name: "Rent",
-      biller: "Property Management",
-      category: "Housing",
-      expectedAmount: 650.00,
-      dueDay: "1",
-      nextDueDate: "Due Nov 1 • Checking",
-      daysUntil: 7,
-      status: "upcoming"
-    },
-    {
-      id: "bill-water",
-      name: "Water Service",
-      biller: "Fresno Water",
-      category: "Utilities",
-      expectedAmount: 63.75,
-      dueDay: "6",
-      nextDueDate: "Due Nov 6 • Checking",
-      daysUntil: 12,
-      status: "upcoming"
-    }
-  ];
-
-  const defaultSubscriptions = [
-    {
-      id: "sub-netflix",
-      name: "Netflix",
-      amount: 15.49,
-      billingCycle: "monthly",
-      renewalDate: "Renews Nov 3",
-      category: "Streaming"
-    },
-    {
-      id: "sub-spotify",
-      name: "Spotify",
-      amount: 11.99,
-      billingCycle: "monthly",
-      renewalDate: "Renews Nov 9",
-      category: "Music"
-    },
-    {
-      id: "sub-icloud",
-      name: "iCloud",
-      amount: 2.99,
-      billingCycle: "monthly",
-      renewalDate: "Renews Nov 14",
-      category: "Cloud Storage"
-    },
-    {
-      id: "sub-chatgpt",
-      name: "ChatGPT Plus",
-      amount: 20.00,
-      billingCycle: "monthly",
-      renewalDate: "Renews Nov 20",
-      category: "AI & Software"
-    }
-  ];
-
-  const defaultTransactions = [
-    {
-      id: "tx-1",
-      name: "Trader Joe's",
-      amount: 54.12,
-      category: "Groceries",
-      date: "Oct 24",
-      account: "Everyday Rewards"
-    },
-    {
-      id: "tx-2",
-      name: "Shell",
-      amount: 41.80,
-      category: "Transportation",
-      date: "Oct 23",
-      account: "Everyday Rewards"
-    },
-    {
-      id: "tx-3",
-      name: "Paycheck deposit",
-      amount: -1850.00,
-      category: "Income",
-      date: "Oct 22",
-      account: "Checking"
-    }
-  ];
-
-  const accountsList = data?.accounts?.length ? data.accounts : defaultAccounts;
-  const billsList = data?.bills?.length ? data.bills : defaultBills;
-  const subscriptionsList = data?.subscriptions?.length ? data.subscriptions : defaultSubscriptions;
-  const transactionsList = data?.transactions?.length ? data.transactions : defaultTransactions;
+  const accountsList = data?.accounts || [];
+  const billsList = data?.bills || [];
+  const subscriptionsList = data?.subscriptions || [];
+  const transactionsList = data?.transactions || [];
 
   const checkingAccounts = accountsList.filter(a => a.type === 'depository');
   const creditCards = accountsList.filter(a => a.type === 'credit');
   const highestAprCard = (creditCards || [])
     .filter(a => Number(a.balance) > 0)
-    .sort((a, b) => Number(b.apr || 0) - Number(a.apr || 0))[0] || { name: 'Travel Card', apr: 24.4, institution: 'Bank', balance: 662 };
+    .sort((a, b) => Number(b.apr || 0) - Number(a.apr || 0))[0] || null;
 
   const isHalalFinance = aiMemory.some(m => {
     const s = m.toLowerCase();
     return s.includes('muslim') || s.includes('halal') || s.includes('islam') || s.includes('riba');
   });
 
-  const availableCash = checkingAccounts.reduce((sum, a) => sum + Number(a.balance || 0), 0) || 4218.36;
-  const cardBalances = creditCards.reduce((sum, a) => sum + Number(a.balance || 0), 0) || 1764.20;
+  const availableCash = checkingAccounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
+  const cardBalances = creditCards.reduce((sum, a) => sum + Number(a.balance || 0), 0);
   const billsDueIn14DaysSum = billsList
     .filter(b => b.status !== 'paid' && (b.daysUntil == null || b.daysUntil <= 14))
-    .reduce((sum, b) => sum + Number(b.expectedAmount || 0), 0) || 842.15;
-  const billsDueIn14DaysCount = billsList.filter(b => b.status !== 'paid' && (b.daysUntil == null || b.daysUntil <= 14)).length || 3;
-  const totalMonthlyBills = billsList.reduce((sum, b) => sum + Number(b.expectedAmount || 0), 0) || 842.15;
-  const totalMonthlySubscriptions = subscriptionsList.reduce((sum, s) => sum + Number(s.amount || 0), 0) || 50.47;
+    .reduce((sum, b) => sum + Number(b.expectedAmount || 0), 0);
+  const billsDueIn14DaysCount = billsList.filter(b => b.status !== 'paid' && (b.daysUntil == null || b.daysUntil <= 14)).length;
+  const totalMonthlyBills = billsList.reduce((sum, b) => sum + Number(b.expectedAmount || 0), 0);
+  const totalMonthlySubscriptions = subscriptionsList.reduce((sum, s) => sum + Number(s.amount || 0), 0);
 
   const firstName = currentUser?.name ? currentUser.name.split(' ')[0] : 'Ziyad';
   const userInitials = (currentUser?.name || 'Ziyad Elmahi')
@@ -1475,8 +1524,7 @@ function KlarityApp() {
               { id: 'bills', label: 'Bills' },
               { id: 'subscriptions', label: 'Subscriptions' },
               { id: 'cards', label: 'Cards' },
-              { id: 'transactions', label: 'Transactions' },
-              { id: 'advisor', label: 'Advisor' }
+              { id: 'transactions', label: 'Transactions' }
             ].map(item => {
               const isActive = activeTab === item.id;
               return (
@@ -1532,7 +1580,7 @@ function KlarityApp() {
             <option value="subscriptions">Subscriptions</option>
             <option value="cards">Cards</option>
             <option value="transactions">Transactions</option>
-            <option value="advisor">Advisor</option>
+            
           </select>
         </div>
 
@@ -1631,8 +1679,15 @@ function KlarityApp() {
                   </button>
                 </div>
 
-                <div className="divide-y divide-slate-100">
-                  {billsList.slice(0, 4).map(bill => (
+                {billsList.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400">
+                    <Receipt className="w-7 h-7 mx-auto text-slate-300 mb-1.5 stroke-1" />
+                    <p className="text-xs font-semibold text-slate-600">No upcoming bills</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Add a bill or scan a statement to track payments.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {billsList.slice(0, 4).map(bill => (
                     <div key={bill.id} className="py-3 flex items-center justify-between gap-4">
                       <div className="min-w-0">
                         <p className="text-xs font-semibold text-slate-900">{bill.name}</p>
@@ -1653,7 +1708,8 @@ function KlarityApp() {
                       </div>
                     </div>
                   ))}
-                </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs mt-2">
@@ -1680,8 +1736,14 @@ function KlarityApp() {
                     </button>
                   </div>
 
-                  <div className="divide-y divide-slate-100">
-                    {subscriptionsList.slice(0, 4).map(sub => (
+                  {subscriptionsList.length === 0 ? (
+                    <div className="py-8 text-center text-slate-400">
+                      <p className="text-xs font-semibold text-slate-600">No subscriptions added</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Track recurring streaming, services, and software.</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {subscriptionsList.slice(0, 4).map(sub => (
                       <div key={sub.id} className="py-2.5 flex items-center justify-between gap-3 group">
                         <div>
                           <p className="text-xs font-semibold text-slate-900">{sub.name}</p>
@@ -1702,7 +1764,8 @@ function KlarityApp() {
                         </div>
                       </div>
                     ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs mt-2">
@@ -1727,8 +1790,15 @@ function KlarityApp() {
                     </button>
                   </div>
 
-                  <div className="flex flex-col gap-3">
-                    {creditCards.slice(0, 2).map((card, idx) => {
+                  {creditCards.length === 0 ? (
+                    <div className="py-8 text-center text-slate-400">
+                      <CreditCard className="w-7 h-7 mx-auto text-slate-300 mb-1.5 stroke-1" />
+                      <p className="text-xs font-semibold text-slate-600">No cards connected</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Add cards manually or connect your bank via Plaid.</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {creditCards.slice(0, 2).map((card, idx) => {
                       const util = card.limit > 0 ? Math.min(100, (card.balance / card.limit) * 100) : 0;
                       const isTravel = idx === 1 || (card.name || '').toLowerCase().includes('travel');
                       return (
@@ -1757,7 +1827,8 @@ function KlarityApp() {
                         </div>
                       );
                     })}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1776,8 +1847,14 @@ function KlarityApp() {
                   </button>
                 </div>
 
-                <div className="divide-y divide-slate-100">
-                  {transactionsList.slice(0, 3).map(tx => {
+                {transactionsList.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400">
+                    <p className="text-xs font-semibold text-slate-600">No recent transactions found</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Add a purchase or link your bank with Plaid.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {transactionsList.slice(0, 3).map(tx => {
                     const isDeposit = Number(tx.amount) < 0 || tx.category === 'Income';
                     const displayAmount = Math.abs(Number(tx.amount)).toFixed(2);
                     return (
@@ -1802,7 +1879,8 @@ function KlarityApp() {
                       </div>
                     );
                   })}
-                </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2196,8 +2274,9 @@ function KlarityApp() {
       </main>
 
       {/* ======================================================================= */}
-      {/* 3. RIGHT SIDEBAR: ADVISOR */}
+      {/* 3. RIGHT SIDEBAR: ADVISOR (Hidden when on AI Advisor full view) */}
       {/* ======================================================================= */}
+      {activeTab !== 'advisor' && (
       <aside className="w-80 xl:w-88 shrink-0 border-l border-slate-200/80 bg-[#f8fafc] p-5 xl:p-6 flex flex-col h-screen sticky top-0 hidden lg:flex">
         {/* Header with Quick Actions */}
         <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200/70">
@@ -2233,6 +2312,28 @@ function KlarityApp() {
         {/* Scrollable Conversation Stream */}
         <div className="flex-1 overflow-y-auto py-3 space-y-3 min-h-0 pr-0.5">
           {/* Initial Advisor Insight Bubble */}
+          {settingsAiStatus !== 'connected' && (
+            <div className="bg-amber-50/90 border border-amber-200/90 rounded-2xl p-4 text-xs text-amber-900 flex flex-col gap-2 shadow-2xs">
+              <div className="flex items-center gap-2 font-bold text-amber-950">
+                <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>AI Advisor Not Connected</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Connect your Anthropic, OpenAI, or Google Gemini API key to activate personal debt payoff advice and automated intelligence.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsActiveTab('ai');
+                  setIsSettingsOpen(true);
+                }}
+                className="self-start px-3 py-1.5 rounded-lg bg-[#1B4B91] hover:bg-[#153a70] text-white text-xs font-semibold cursor-pointer shadow-2xs transition-all mt-1"
+              >
+                Configure in Settings &rarr;
+              </button>
+            </div>
+          )}
+
           <div className="bg-[#eff4f9] rounded-2xl p-4 text-xs text-slate-700 leading-relaxed border border-slate-200/60 shadow-2xs">
             {highestAprCard ? (
               <span>
@@ -2332,6 +2433,7 @@ function KlarityApp() {
           </form>
         </div>
       </aside>
+      )}
 
       {/* ======================================================================= */}
       {/* 4. MODALS (Clean Light Theme) */}
@@ -2674,89 +2776,388 @@ function KlarityApp() {
         </div>
       )}
 
-      {/* Settings Modal */}
+      {/* Settings Modal - Redesigned matching reference mockup */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-5 text-slate-800 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <Settings className="w-5 h-5 text-slate-700" />
-                <h3 className="font-serif-title text-lg font-bold text-slate-900">Settings</h3>
-              </div>
-              <button onClick={() => setIsSettingsOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
-            </div>
-
-            {/* Profile Section */}
-            <div className="flex items-center gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">
-              <div className="w-10 h-10 rounded-full bg-[#183b6b] text-white flex items-center justify-center font-bold text-sm">
-                {userInitials}
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-900">{currentUser?.name}</p>
-                <p className="text-[11px] text-slate-500">{currentUser?.email}</p>
-              </div>
-            </div>
-
-            {/* Plaid Banking Settings */}
-            <div className="flex flex-col gap-3">
-              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Bank Connection (Plaid)</h4>
-              <form onSubmit={handleSaveSettings} className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-[880px] w-full min-h-[580px] h-[640px] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
+            
+            {/* Modal Body: Left Tabs + Right Content */}
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+              
+              {/* Left Sidebar Tabs */}
+              <div className="w-full md:w-56 lg:w-60 shrink-0 border-b md:border-b-0 md:border-r border-slate-200/80 p-5 sm:p-6 flex flex-col justify-between bg-slate-50/60">
                 <div>
-                  <label className="text-slate-600 block mb-1">Plaid Client ID</label>
-                  <input
-                    type="text"
-                    value={plaidClientIdInput}
-                    onChange={e => setPlaidClientIdInput(e.target.value)}
-                    placeholder="Client ID"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
-                  />
+                  <h3 className="font-serif-title text-xl font-bold text-slate-900 mb-6 hidden md:block">Settings</h3>
+                  
+                  <nav className="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
+                    {[
+                      { id: 'profile', label: 'Profile', dot: false },
+                      { id: 'ai', label: 'AI advisor', dot: settingsAiStatus !== 'connected' },
+                      { id: 'plaid', label: 'Bank connection', dot: settingsPlaidStatus !== 'connected' },
+                      { id: 'session', label: 'Session', dot: false }
+                    ].map(tab => {
+                      const isActive = settingsActiveTab === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => setSettingsActiveTab(tab.id)}
+                          className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-between transition-all cursor-pointer shrink-0 ${
+                            isActive
+                              ? 'bg-white text-[#1B4B91] font-semibold border border-slate-200/90 shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 font-medium'
+                          }`}
+                        >
+                          <span>{tab.label}</span>
+                          {tab.dot && (
+                            <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0 ml-2"></span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </nav>
                 </div>
-                <div>
-                  <label className="text-slate-600 block mb-1">Plaid Secret</label>
-                  <input
-                    type="password"
-                    value={plaidSecretInput}
-                    onChange={e => setPlaidSecretInput(e.target.value)}
-                    placeholder="Secret Key"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
-                  />
-                </div>
-                <div className="sm:col-span-2 flex items-center justify-between pt-1">
+
+                {/* Sign Out at bottom of left sidebar */}
+                <div className="hidden md:block pt-4 border-t border-slate-200/80">
                   <button
                     type="button"
-                    onClick={initiatePlaidLink}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold cursor-pointer"
+                    onClick={() => {
+                      setIsSettingsOpen(false);
+                      handleLogout();
+                    }}
+                    className="text-rose-600 hover:text-rose-700 font-semibold text-xs transition-colors cursor-pointer block py-1.5"
                   >
-                    Launch Plaid Link
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-1.5 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white font-semibold cursor-pointer"
-                  >
-                    Save Plaid Keys
+                    Sign out
                   </button>
                 </div>
-              </form>
+              </div>
+
+              {/* Right Content Panel */}
+              <div className="flex-1 p-6 sm:p-8 flex flex-col justify-between overflow-y-auto bg-white">
+                <div>
+                  {/* TAB 1: PROFILE */}
+                  {settingsActiveTab === 'profile' && (
+                    <div className="flex flex-col gap-6">
+                      <div>
+                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Profile</h2>
+                        <p className="text-xs text-slate-500 mt-1">How you appear in Klarity.</p>
+                      </div>
+
+                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-6 bg-white shadow-2xs">
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-12 h-12 rounded-full bg-[#1B4B91] text-white flex items-center justify-center font-bold text-base shadow-2xs shrink-0">
+                            {userInitials}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">{currentUser?.name || 'Ziyad Elmahi'}</p>
+                            <p className="text-xs text-slate-500">{currentUser?.email || 'zeoe13@gmail.com'}</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                          <div>
+                            <label className="text-xs font-medium text-slate-700 block mb-1.5">Display name</label>
+                            <input
+                              type="text"
+                              value={settingsDisplayName}
+                              onChange={e => setSettingsDisplayName(e.target.value)}
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-blue-600 shadow-2xs"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-xs font-medium text-slate-700 block mb-1.5">Email</label>
+                            <input
+                              type="email"
+                              value={currentUser?.email || 'zeoe13@gmail.com'}
+                              disabled
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-600 cursor-not-allowed shadow-2xs"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1.5">Email can't be changed here.</p>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end pt-2 border-t border-slate-100">
+                          <button
+                            type="button"
+                            onClick={handleSaveProfile}
+                            className="px-4 py-2 rounded-xl bg-[#1B4B91] hover:bg-[#153a70] text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                          >
+                            Save profile
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 2: AI ADVISOR */}
+                  {settingsActiveTab === 'ai' && (
+                    <div className="flex flex-col gap-5">
+                      <div>
+                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">AI advisor</h2>
+                        <p className="text-xs text-slate-500 mt-1">Configure the AI model and choose what data it can access.</p>
+                      </div>
+
+                      {/* Card: Model & Key Configuration */}
+                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-4 bg-white shadow-2xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          <div>
+                            <label className="text-xs font-medium text-slate-700 block mb-1.5">Provider</label>
+                            <select
+                              value={settingsAiProvider}
+                              onChange={e => handleProviderChange(e.target.value)}
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs cursor-pointer"
+                            >
+                              <option value="anthropic">Anthropic (Claude)</option>
+                              <option value="openai">OpenAI (ChatGPT)</option>
+                              <option value="gemini">Google Gemini</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-xs font-medium text-slate-700 block mb-1.5">Model</label>
+                            <input
+                              type="text"
+                              value={settingsAiModel}
+                              onChange={e => setSettingsAiModel(e.target.value)}
+                              placeholder="e.g. claude-3-7-sonnet-20250219"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-medium text-slate-700 block mb-1.5">API Key</label>
+                          <div className="relative">
+                            <input
+                              type={settingsAiShowKey ? 'text' : 'password'}
+                              value={settingsAiApiKey}
+                              onChange={e => setSettingsAiApiKey(e.target.value)}
+                              placeholder={settingsAiMaskedKey ? `Saved: ${settingsAiMaskedKey}` : 'Paste API key (sk-...)'}
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setSettingsAiShowKey(!settingsAiShowKey)}
+                              className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                            >
+                              {settingsAiShowKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Status Pill & Action Buttons */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-500 font-medium">Status:</span>
+                            {settingsAiStatus === 'connected' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                Connected
+                              </span>
+                            ) : settingsAiStatus === 'invalid_key' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                                <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                                Invalid key
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                                Not connected
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {Boolean(settingsAiMaskedKey) && (
+                              <button
+                                type="button"
+                                onClick={handleRemoveAiKey}
+                                className="px-3.5 py-2 rounded-xl border border-rose-200 bg-rose-50/50 hover:bg-rose-100 text-rose-700 text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
+                              >
+                                Remove key
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={handleSaveAndTestAiKey}
+                              disabled={settingsAiTesting}
+                              className="px-4 py-2 rounded-xl bg-[#1B4B91] hover:bg-[#153a70] text-white text-xs font-semibold shadow-2xs transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2"
+                            >
+                              {settingsAiTesting && <span className="w-3 h-3 rounded-full border-2 border-white/40 border-t-white animate-spin"></span>}
+                              <span>{settingsAiTesting ? 'Testing key...' : 'Save and test key'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card: Data Access Permissions */}
+                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-4 bg-white shadow-2xs">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Data access permissions</h4>
+                          <p className="text-[11px] text-slate-500 mt-0.5">Control which categories of personal financial data the AI advisor can analyze.</p>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                          {[
+                            { id: 'bills', label: 'Bills' },
+                            { id: 'subscriptions', label: 'Subscriptions' },
+                            { id: 'cards', label: 'Cards' },
+                            { id: 'purchases', label: 'Purchases' }
+                          ].map(perm => {
+                            const isAllowed = settingsAiPermissions[perm.id];
+                            return (
+                              <button
+                                key={perm.id}
+                                type="button"
+                                onClick={() => handleTogglePermission(perm.id)}
+                                className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
+                                  isAllowed
+                                    ? 'bg-[#eff4f9] border-[#1B4B91]/40 text-[#1B4B91] shadow-2xs'
+                                    : 'bg-slate-50 border-slate-200 text-slate-400'
+                                }`}
+                              >
+                                <span>{perm.label}</span>
+                                <span className={`w-2 h-2 rounded-full ${isAllowed ? 'bg-[#1B4B91]' : 'bg-slate-300'}`}></span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 3: BANK CONNECTION */}
+                  {settingsActiveTab === 'plaid' && (
+                    <div className="flex flex-col gap-6">
+                      <div>
+                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Bank connection</h2>
+                        <p className="text-xs text-slate-500 mt-1">Connect and manage your bank accounts through Plaid.</p>
+                      </div>
+
+                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-5 bg-white shadow-2xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-500 font-medium">Connection status:</span>
+                          {settingsPlaidStatus === 'connected' ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              Connected
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                              No bank linked
+                            </span>
+                          )}
+                        </div>
+
+                        <form onSubmit={handleSavePlaidCredentials} className="flex flex-col gap-4">
+                          <div>
+                            <label className="text-xs font-medium text-slate-700 block mb-1.5">Plaid Client ID</label>
+                            <input
+                              type="text"
+                              value={settingsPlaidClientId}
+                              onChange={e => setSettingsPlaidClientId(e.target.value)}
+                              placeholder="Client ID"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-xs font-medium text-slate-700 block mb-1.5">Plaid Secret</label>
+                            <div className="relative">
+                              <input
+                                type={settingsPlaidShowSecret ? 'text' : 'password'}
+                                value={settingsPlaidSecret}
+                                onChange={e => setSettingsPlaidSecret(e.target.value)}
+                                placeholder={settingsPlaidMaskedSecret ? `Saved: ${settingsPlaidMaskedSecret}` : 'Secret Key'}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setSettingsPlaidShowSecret(!settingsPlaidShowSecret)}
+                                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                              >
+                                {settingsPlaidShowSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                            <button
+                              type="button"
+                              onClick={initiatePlaidLink}
+                              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                            >
+                              Link a bank
+                            </button>
+                            <button
+                              type="submit"
+                              className="px-4 py-2 rounded-xl bg-[#1B4B91] hover:bg-[#153a70] text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                            >
+                              Save credentials
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 4: SESSION */}
+                  {settingsActiveTab === 'session' && (
+                    <div className="flex flex-col gap-6">
+                      <div>
+                        <h2 className="font-serif-title text-2xl font-bold text-slate-900">Session</h2>
+                        <p className="text-xs text-slate-500 mt-1">Manage your active login session.</p>
+                      </div>
+
+                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-5 bg-white shadow-2xs">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-900">Signed in as</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{currentUser?.email || 'zeoe13@gmail.com'}</p>
+                          </div>
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Active
+                          </span>
+                        </div>
+
+                        <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+                          <span className="text-xs text-slate-500">End this session and sign out</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsSettingsOpen(false);
+                              handleLogout();
+                            }}
+                            className="px-4 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 font-semibold text-xs cursor-pointer transition-colors shadow-2xs"
+                          >
+                            Sign Out
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Modal Footer */}
+                <div className="pt-6 border-t border-slate-200/80 flex items-center justify-between mt-auto">
+                  <span className="text-xs text-slate-400">Changes in this section save when you press its button.</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsSettingsOpen(false)}
+                    className="border border-slate-200 rounded-xl px-4 py-2 hover:bg-slate-50 text-slate-800 text-xs font-semibold cursor-pointer shadow-2xs transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {/* Sign Out */}
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-xs text-slate-500">Sign out of this session</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSettingsOpen(false);
-                  handleLogout();
-                }}
-                className="px-3.5 py-1.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 font-semibold text-xs cursor-pointer"
-              >
-                Sign Out
-              </button>
-            </div>
           </div>
         </div>
       )}
-
       {/* AI Memory Modal */}
       {isMemoryModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
