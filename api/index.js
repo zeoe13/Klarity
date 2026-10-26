@@ -819,11 +819,24 @@ function shouldPerformWebSearch(message) {
 
 // 10. AI Advisor Chat with Navigation Capabilities & User Key Encryption
 app.post('/api/ai/chat', async (req, res) => {
-  const { message, userId, userMemory = [] } = req.body;
+  const { message, userId, userMemory = [], clientApiKey, clientProvider, clientModel } = req.body;
   const data = readData();
 
   const aiConfig = data.settings?.ai || {};
-  const rawApiKey = aiConfig.encryptedKey ? decrypt(aiConfig.encryptedKey) : '';
+  let rawApiKey = clientApiKey || (aiConfig.encryptedKey ? decrypt(aiConfig.encryptedKey) : '');
+
+  // If serverless disk reset occurred and client has cached credentials, restore them into server data
+  if (clientApiKey && !aiConfig.encryptedKey) {
+    if (!data.settings) data.settings = {};
+    data.settings.ai = {
+      provider: clientProvider || 'gemini',
+      model: clientModel || 'gemini-2.0-flash',
+      encryptedKey: encrypt(clientApiKey),
+      status: 'connected',
+      dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true }
+    };
+    writeData(data);
+  }
 
   if (!rawApiKey) {
     return res.json({
@@ -833,8 +846,8 @@ app.post('/api/ai/chat', async (req, res) => {
   }
 
   const permissions = aiConfig.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true };
-  const provider = aiConfig.provider || 'anthropic';
-  const model = aiConfig.model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.0-flash');
+  const provider = clientProvider || aiConfig.provider || 'gemini';
+  const model = clientModel || aiConfig.model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-2.0-flash');
 
   const currentUser = (data.users || []).find(u => u.id === userId) || data.users?.[0] || { name: 'Ziyad' };
 

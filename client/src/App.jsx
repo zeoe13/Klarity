@@ -245,11 +245,41 @@ function KlarityApp() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsActiveTab, setSettingsActiveTab] = useState('profile'); // 'profile' | 'ai' | 'plaid' | 'session'
   const [settingsDisplayName, setSettingsDisplayName] = useState(currentUser?.name || 'Ziyad Elmahi');
-  const [settingsAiProvider, setSettingsAiProvider] = useState('anthropic');
-  const [settingsAiModel, setSettingsAiModel] = useState('claude-3-7-sonnet-20250219');
-  const [settingsAiApiKey, setSettingsAiApiKey] = useState('');
-  const [settingsAiMaskedKey, setSettingsAiMaskedKey] = useState('');
-  const [settingsAiStatus, setSettingsAiStatus] = useState('not_connected'); // 'not_connected' | 'connected' | 'invalid_key'
+  const [settingsAiProvider, setSettingsAiProvider] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_ai_provider') || 'gemini';
+    } catch {
+      return 'gemini';
+    }
+  });
+  const [settingsAiModel, setSettingsAiModel] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_ai_model') || 'gemini-2.0-flash';
+    } catch {
+      return 'gemini-2.0-flash';
+    }
+  });
+  const [settingsAiApiKey, setSettingsAiApiKey] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_ai_api_key') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [settingsAiMaskedKey, setSettingsAiMaskedKey] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_ai_masked_key') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [settingsAiStatus, setSettingsAiStatus] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_ai_status') || 'not_connected';
+    } catch {
+      return 'not_connected';
+    }
+  });
   const [settingsAiShowKey, setSettingsAiShowKey] = useState(false);
   const [settingsAiTesting, setSettingsAiTesting] = useState(false);
   const [settingsAiPermissions, setSettingsAiPermissions] = useState({
@@ -690,7 +720,8 @@ function KlarityApp() {
   };
 
   const handleSaveAndTestAiKey = async () => {
-    if (!settingsAiApiKey.trim()) {
+    const rawKey = settingsAiApiKey.trim() || localStorage.getItem('klarity_ai_api_key') || '';
+    if (!rawKey) {
       setNotificationToast('Please enter an API key to test');
       setTimeout(() => setNotificationToast(''), 3000);
       return;
@@ -703,7 +734,7 @@ function KlarityApp() {
         body: JSON.stringify({
           provider: settingsAiProvider,
           model: settingsAiModel,
-          apiKey: settingsAiApiKey.trim(),
+          apiKey: rawKey,
           dataPermissions: settingsAiPermissions
         })
       });
@@ -711,8 +742,14 @@ function KlarityApp() {
       if (res.ok && json.success) {
         setSettingsAiStatus('connected');
         setSettingsAiMaskedKey(json.maskedKey);
-        setSettingsAiApiKey('');
-        setNotificationToast('API key verified and securely saved server-side!');
+        try {
+          localStorage.setItem('klarity_ai_api_key', rawKey);
+          localStorage.setItem('klarity_ai_masked_key', json.maskedKey);
+          localStorage.setItem('klarity_ai_provider', settingsAiProvider);
+          localStorage.setItem('klarity_ai_model', settingsAiModel);
+          localStorage.setItem('klarity_ai_status', 'connected');
+        } catch {}
+        setNotificationToast('API key verified and securely saved!');
       } else {
         setSettingsAiStatus('invalid_key');
         setNotificationToast(`Verification failed: ${json.error || 'Invalid API key'}`);
@@ -733,6 +770,11 @@ function KlarityApp() {
         setSettingsAiStatus('not_connected');
         setSettingsAiMaskedKey('');
         setSettingsAiApiKey('');
+        try {
+          localStorage.removeItem('klarity_ai_api_key');
+          localStorage.removeItem('klarity_ai_masked_key');
+          localStorage.removeItem('klarity_ai_status');
+        } catch {}
         setNotificationToast('AI API key removed.');
         setTimeout(() => setNotificationToast(''), 3000);
       }
@@ -1303,13 +1345,20 @@ function KlarityApp() {
     setIsAiTyping(true);
 
     try {
+      const cachedApiKey = settingsAiApiKey.trim() || localStorage.getItem('klarity_ai_api_key') || '';
+      const cachedProvider = settingsAiProvider || localStorage.getItem('klarity_ai_provider') || 'gemini';
+      const cachedModel = settingsAiModel || localStorage.getItem('klarity_ai_model') || 'gemini-2.0-flash';
+
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMsg,
           userId: currentUser?.id,
-          userMemory: aiMemory
+          userMemory: aiMemory,
+          clientApiKey: cachedApiKey,
+          clientProvider: cachedProvider,
+          clientModel: cachedModel
         })
       });
 
