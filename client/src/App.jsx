@@ -668,14 +668,21 @@ function KlarityApp() {
           setSettingsDisplayName(json.user.name);
         }
         if (json.ai) {
-          let prov = json.ai.provider || localStorage.getItem('klarity_ai_provider') || 'gemini';
-          let mod = json.ai.model || localStorage.getItem('klarity_ai_model') || 'gemini-3.8-flash';
+          let prov = localStorage.getItem('klarity_ai_provider') || json.ai.provider || 'gemini';
+          let mod = localStorage.getItem('klarity_ai_model') || json.ai.model || 'gemini-3.8-flash';
           if (mod.includes('2.0') || mod.includes('2.5') || mod.includes('tts')) mod = 'gemini-3.8-flash';
+
+          const storedKey = localStorage.getItem('klarity_ai_api_key');
+          const storedMasked = localStorage.getItem('klarity_ai_masked_key');
+          const storedStatus = localStorage.getItem('klarity_ai_status');
+
+          const finalMasked = json.ai.maskedKey || storedMasked || '';
+          const finalStatus = (json.ai.status === 'connected' || storedStatus === 'connected' || Boolean(storedKey)) ? 'connected' : 'not_connected';
 
           setSettingsAiProvider(prov);
           setSettingsAiModel(mod);
-          setSettingsAiMaskedKey(json.ai.maskedKey || localStorage.getItem('klarity_ai_masked_key') || '');
-          setSettingsAiStatus(json.ai.status || localStorage.getItem('klarity_ai_status') || 'not_connected');
+          setSettingsAiMaskedKey(finalMasked);
+          setSettingsAiStatus(finalStatus);
           if (json.ai.dataPermissions) {
             setSettingsAiPermissions(json.ai.dataPermissions);
           }
