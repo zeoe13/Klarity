@@ -355,6 +355,43 @@ function KlarityApp() {
 
   const [isPastChatsOpen, setIsPastChatsOpen] = useState(false);
 
+  // Resizable Right Advisor Sidebar state
+  const [advisorWidth, setAdvisorWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_advisor_width');
+      return saved ? Math.min(Math.max(parseInt(saved, 10), 280), 650) : 340;
+    } catch (e) {
+      return 340;
+    }
+  });
+  const [isResizingAdvisor, setIsResizingAdvisor] = useState(false);
+
+  const startResizingAdvisor = (mouseDownEvent) => {
+    mouseDownEvent.preventDefault();
+    setIsResizingAdvisor(true);
+    const startX = mouseDownEvent.clientX;
+    const startWidth = advisorWidth;
+
+    const doDrag = (mouseMoveEvent) => {
+      // Dragging leftwards increases right sidebar width
+      const deltaX = startX - mouseMoveEvent.clientX;
+      const newW = Math.min(Math.max(startWidth + deltaX, 280), 650);
+      setAdvisorWidth(newW);
+    };
+
+    const stopDrag = () => {
+      setIsResizingAdvisor(false);
+      window.removeEventListener('mousemove', doDrag);
+      window.removeEventListener('mouseup', stopDrag);
+      try {
+        localStorage.setItem('klarity_advisor_width', String(advisorWidth));
+      } catch (e) {}
+    };
+
+    window.addEventListener('mousemove', doDrag);
+    window.addEventListener('mouseup', stopDrag);
+  };
+
   // Active chat messages
   const [chatMessages, setChatMessages] = useState(() => {
     const active = chatSessions.find(s => s.id === activeSessionId) || chatSessions[0];
@@ -2289,7 +2326,24 @@ function KlarityApp() {
       {/* 3. RIGHT SIDEBAR: ADVISOR (Hidden when on AI Advisor full view) */}
       {/* ======================================================================= */}
       {activeTab !== 'advisor' && (
-      <aside className="w-80 xl:w-88 shrink-0 border-l border-slate-200/80 bg-[#f8fafc] p-5 xl:p-6 flex flex-col h-screen sticky top-0 hidden lg:flex">
+      <aside
+        style={{ width: `${advisorWidth}px` }}
+        className={`shrink-0 border-l border-slate-200/80 bg-[#f8fafc] p-5 xl:p-6 flex flex-col h-screen sticky top-0 hidden lg:flex relative transition-[width] duration-75 ${
+          isResizingAdvisor ? 'select-none cursor-col-resize !transition-none' : ''
+        }`}
+      >
+        {/* Draggable Resize Handle on left border */}
+        <div
+          onMouseDown={startResizingAdvisor}
+          className={`absolute -left-1.5 top-0 bottom-0 w-3 cursor-col-resize z-30 group flex items-center justify-center transition-colors ${
+            isResizingAdvisor ? 'bg-blue-500/30' : 'hover:bg-blue-400/20'
+          }`}
+          title="Drag to resize Advisor sidebar"
+        >
+          <div className={`w-1 h-9 rounded-full transition-colors ${
+            isResizingAdvisor ? 'bg-blue-600' : 'bg-slate-300 group-hover:bg-blue-500'
+          }`}></div>
+        </div>
         {/* Header with Quick Actions */}
         <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200/70">
           <div>
@@ -2812,7 +2866,7 @@ function KlarityApp() {
       {/* Settings Modal - Redesigned matching reference mockup */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-[880px] w-full min-h-[580px] h-[640px] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-[880px] w-full min-h-[580px] h-[640px] flex flex-col overflow-hidden">
             
             {/* Modal Body: Left Tabs + Right Content */}
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
@@ -2835,7 +2889,7 @@ function KlarityApp() {
                           key={tab.id}
                           type="button"
                           onClick={() => setSettingsActiveTab(tab.id)}
-                          className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-between transition-all cursor-pointer shrink-0 ${
+                          className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-between transition-colors duration-100 cursor-pointer shrink-0 ${
                             isActive
                               ? 'bg-white text-[#1B4B91] font-semibold border border-slate-200/90 shadow-2xs'
                               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 font-medium'
@@ -2859,7 +2913,7 @@ function KlarityApp() {
                 <div>
                   {/* TAB 1: PROFILE */}
                   {settingsActiveTab === 'profile' && (
-                    <div className="flex flex-col gap-6">
+                    <div key="settings-tab-profile" className="flex flex-col gap-6">
                       <div>
                         <h2 className="font-serif-title text-2xl font-bold text-slate-900">Profile</h2>
                         <p className="text-xs text-slate-500 mt-1">How you appear in Klarity.</p>
@@ -2914,7 +2968,7 @@ function KlarityApp() {
 
                   {/* TAB 2: AI ADVISOR */}
                   {settingsActiveTab === 'ai' && (
-                    <div className="flex flex-col gap-5">
+                    <div key="settings-tab-ai" className="flex flex-col gap-5">
                       <div>
                         <h2 className="font-serif-title text-2xl font-bold text-slate-900">AI advisor</h2>
                         <p className="text-xs text-slate-500 mt-1">Configure the AI model and choose what data it can access.</p>
@@ -3051,7 +3105,7 @@ function KlarityApp() {
 
                   {/* TAB 3: BANK CONNECTION */}
                   {settingsActiveTab === 'plaid' && (
-                    <div className="flex flex-col gap-6">
+                    <div key="settings-tab-plaid" className="flex flex-col gap-6">
                       <div>
                         <h2 className="font-serif-title text-2xl font-bold text-slate-900">Bank connection</h2>
                         <p className="text-xs text-slate-500 mt-1">Connect and manage your bank accounts through Plaid.</p>
@@ -3127,7 +3181,7 @@ function KlarityApp() {
 
                   {/* TAB 4: SESSION */}
                   {settingsActiveTab === 'session' && (
-                    <div className="flex flex-col gap-6">
+                    <div key="settings-tab-session" className="flex flex-col gap-6">
                       <div>
                         <h2 className="font-serif-title text-2xl font-bold text-slate-900">Session</h2>
                         <p className="text-xs text-slate-500 mt-1">Manage your active login session.</p>
