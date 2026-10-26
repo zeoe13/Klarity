@@ -230,11 +230,20 @@ function KlarityApp() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   // Main dashboard state
-  const [data, setData] = useState({
-    accounts: [],
-    bills: [],
-    transactions: [],
-    metrics: { totalChecking: 0, totalCreditDebt: 0, totalMonthlyBills: 0, netWorthEstimate: 0 }
+  const [data, setData] = useState(() => {
+    try {
+      const cached = localStorage.getItem('klarity_finance_data');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && Array.isArray(parsed.accounts)) return parsed;
+      }
+    } catch (e) {}
+    return {
+      accounts: [],
+      bills: [],
+      transactions: [],
+      metrics: { totalChecking: 0, totalCreditDebt: 0, totalMonthlyBills: 0, netWorthEstimate: 0 }
+    };
   });
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard | cards | bills | transactions | advisor | settings
@@ -866,10 +875,43 @@ function KlarityApp() {
     if (!user) return;
     setLoading(true);
     try {
+      const localCachedAccounts = (() => {
+        try {
+          const raw = localStorage.getItem('klarity_accounts');
+          return raw ? JSON.parse(raw) : [];
+        } catch { return []; }
+      })();
+
       const res = await fetch(`/api/data?userId=${user.id}&household=${household}`);
       if (res.ok) {
         const json = await res.json();
-        setData(json);
+        if (json.accounts && json.accounts.length > 0) {
+          setData(json);
+          try {
+            localStorage.setItem('klarity_finance_data', JSON.stringify(json));
+            localStorage.setItem('klarity_accounts', JSON.stringify(json.accounts));
+          } catch (e) {}
+        } else if (localCachedAccounts.length > 0) {
+          // Cold serverless reset: preserve locally cached accounts and re-sync
+          const mergedAccounts = localCachedAccounts;
+          const restoredData = {
+            ...json,
+            accounts: mergedAccounts,
+            metrics: {
+              ...json.metrics,
+              totalCreditDebt: mergedAccounts.filter(a => a.type === 'credit').reduce((s, a) => s + Number(a.balance || 0), 0),
+              totalChecking: mergedAccounts.filter(a => a.type === 'depository').reduce((s, a) => s + Number(a.balance || 0), 0)
+            }
+          };
+          setData(restoredData);
+          fetch('/api/accounts/batch-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accounts: mergedAccounts, userId: user.id })
+          }).catch(() => {});
+        } else {
+          setData(json);
+        }
       }
     } catch (err) {
       console.error('Failed to load data:', err);
@@ -1100,10 +1142,11 @@ function KlarityApp() {
       token,
       onSuccess: async (public_token, metadata) => {
         try {
+          setIsConnectingPlaid(true);
           const storedClientId = settingsPlaidClientId || localStorage.getItem('klarity_plaid_client_id') || '';
           const storedSecret = settingsPlaidSecret || localStorage.getItem('klarity_plaid_secret') || '';
 
-          await fetch('/api/plaid/exchange-public-token', {
+          const res = await fetch('/api/plaid/exchange-public-token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1114,12 +1157,41 @@ function KlarityApp() {
               clientPlaidSecret: storedSecret
             })
           });
+
+          const resData = await res.json();
+          if (res.ok && resData.accounts && resData.accounts.length > 0) {
+            setData(prev => {
+              const existing = prev.accounts || [];
+              const updatedAccounts = existing.filter(a => !resData.accounts.some(na => na.id === a.id)).concat(resData.accounts);
+              const newData = {
+                ...prev,
+                accounts: updatedAccounts,
+                metrics: {
+                  ...prev.metrics,
+                  totalCreditDebt: updatedAccounts.filter(a => a.type === 'credit').reduce((s, a) => s + Number(a.balance || 0), 0),
+                  totalChecking: updatedAccounts.filter(a => a.type === 'depository').reduce((s, a) => s + Number(a.balance || 0), 0)
+                }
+              };
+              try {
+                localStorage.setItem('klarity_finance_data', JSON.stringify(newData));
+                localStorage.setItem('klarity_accounts', JSON.stringify(updatedAccounts));
+                localStorage.setItem('klarity_plaid_status', 'connected');
+              } catch (e) {}
+              return newData;
+            });
+            setSettingsPlaidStatus('connected');
+            setNotificationToast(`Connected ${resData.accounts.length} account(s) from ${metadata?.institution?.name || 'bank'}!`);
+          } else if (!res.ok) {
+            setPlaidError(resData.error || 'Failed to exchange Plaid token.');
+          }
           setLinkToken(null);
           await fetchData();
-          setNotificationToast('Bank account successfully linked!');
-          setTimeout(() => setNotificationToast(''), 4000);
         } catch (err) {
-          console.error(err);
+          console.error('Plaid link exchange error:', err);
+          setPlaidError('Could not complete bank linking: ' + err.message);
+        } finally {
+          setIsConnectingPlaid(false);
+          setTimeout(() => setNotificationToast(''), 5000);
         }
       },
       onExit: () => setLinkToken(null)
@@ -1629,8 +1701,9 @@ function KlarityApp() {
   const subscriptionsList = data?.subscriptions || [];
   const transactionsList = data?.transactions || [];
 
-  const checkingAccounts = accountsList.filter(a => a.type === 'depository');
-  const creditCards = accountsList.filter(a => a.type === 'credit');
+  const isCard = (a) => a.type === 'credit' || (a.subtype || '').toLowerCase().includes('credit') || (a.subtype || '').toLowerCase().includes('card') || (a.name || '').toLowerCase().includes('credit') || (a.name || '').toLowerCase().includes('card');
+  const creditCards = accountsList.filter(isCard);
+  const checkingAccounts = accountsList.filter(a => !isCard(a));
   const highestAprCard = (creditCards || [])
     .filter(a => Number(a.balance) > 0)
     .sort((a, b) => Number(b.apr || 0) - Number(a.apr || 0))[0] || null;
@@ -1958,14 +2031,25 @@ function KlarityApp() {
               <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-xs font-bold text-slate-900">Cards</h2>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddAccountOpen(true)}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
-                    >
-                      Add card
-                    </button>
+                    <h2 className="text-xs font-bold text-slate-900">Cards ({creditCards.length})</h2>
+                    <div className="flex items-center gap-2">
+                      {creditCards.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('cards')}
+                          className="text-xs text-slate-500 hover:text-slate-800 font-medium cursor-pointer"
+                        >
+                          View all
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setIsAddAccountOpen(true)}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
+                      >
+                        Add card
+                      </button>
+                    </div>
                   </div>
 
                   {creditCards.length === 0 ? (
@@ -1975,10 +2059,10 @@ function KlarityApp() {
                       <p className="text-[11px] text-slate-400 mt-0.5">Add cards manually or connect your bank via Plaid.</p>
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-3">
-                      {creditCards.slice(0, 2).map((card, idx) => {
+                    <div className="flex flex-col gap-3 max-h-80 overflow-y-auto pr-0.5">
+                      {creditCards.map((card, idx) => {
                       const util = card.limit > 0 ? Math.min(100, (card.balance / card.limit) * 100) : 0;
-                      const isTravel = idx === 1 || (card.name || '').toLowerCase().includes('travel');
+                      const isTravel = idx % 2 === 1 || (card.name || '').toLowerCase().includes('travel');
                       return (
                         <div
                           key={card.id}
@@ -1987,7 +2071,7 @@ function KlarityApp() {
                           }`}
                         >
                           <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold">{card.name}</span>
+                            <span className="font-bold">{card.institution ? `${card.institution} ` : ''}{card.name}</span>
                             <span className="font-mono text-[11px] opacity-80">•••• {card.mask}</span>
                           </div>
 
@@ -2226,49 +2310,102 @@ function KlarityApp() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {creditCards.map(card => {
-                const util = card.limit > 0 ? Math.min(100, (card.balance / card.limit) * 100) : 0;
-                return (
-                  <div key={card.id} className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between gap-4">
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs font-bold text-slate-900">{card.institution} {card.name}</p>
-                          <p className="text-[11px] text-slate-400 font-mono mt-0.5">•••• {card.mask}</p>
+            {creditCards.length === 0 ? (
+              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-10 text-center flex flex-col items-center justify-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+                  <CreditCard className="w-6 h-6 stroke-1" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-800">No cards connected yet</h3>
+                <p className="text-xs text-slate-500 max-w-sm">
+                  Connect your bank through Plaid to automatically import your credit cards, or add your cards manually.
+                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={initiatePlaidLink}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Building2 className="w-4 h-4" />
+                    <span>Connect with Plaid</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddAccountOpen(true)}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold shadow-2xs cursor-pointer"
+                  >
+                    Add Manually
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {creditCards.map(card => {
+                  const util = card.limit > 0 ? Math.min(100, (card.balance / card.limit) * 100) : 0;
+                  return (
+                    <div key={card.id} className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between gap-4">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs font-bold text-slate-900">{card.institution ? `${card.institution} ` : ''}{card.name}</p>
+                            <p className="text-[11px] text-slate-400 font-mono mt-0.5">•••• {card.mask}</p>
+                          </div>
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/60">
+                            {card.apr || 0}% APR
+                          </span>
                         </div>
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/60">
-                          {card.apr || 0}% APR
-                        </span>
+
+                        <div className="mt-4">
+                          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                            <span>Balance: ${Number(card.balance).toFixed(2)}</span>
+                            <span>Limit: ${Number(card.limit).toLocaleString()}</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${util > 50 ? 'bg-rose-500' : 'bg-[#18457c]'}`}
+                              style={{ width: `${util}%` }}
+                            ></div>
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="mt-4">
-                        <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                          <span>Balance: ${Number(card.balance).toFixed(2)}</span>
-                          <span>Limit: ${Number(card.limit).toLocaleString()}</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${util > 50 ? 'bg-rose-500' : 'bg-[#18457c]'}`}
-                            style={{ width: `${util}%` }}
-                          ></div>
-                        </div>
+                      <div className="flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAccount(card.id, card.name)}
+                          className="text-xs text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
+                        >
+                          Remove Card
+                        </button>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
+            )}
 
-                    <div className="flex items-center justify-end">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteAccount(card.id, card.name)}
-                        className="text-xs text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
-                      >
-                        Remove Card
-                      </button>
+            {/* Connected Bank Checking & Savings Accounts */}
+            {checkingAccounts.length > 0 && (
+              <div className="flex flex-col gap-3 mt-4">
+                <h3 className="font-serif-title text-lg font-bold text-slate-900">Checking & Savings ({checkingAccounts.length})</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {checkingAccounts.map(acc => (
+                    <div key={acc.id} className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-blue-600" />
+                          <p className="text-xs font-bold text-slate-900">{acc.institution ? `${acc.institution} ` : ''}{acc.name}</p>
+                        </div>
+                        <p className="text-[11px] text-slate-400 font-mono mt-1">•••• {acc.mask} • {acc.subtype || 'Depository'}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-slate-900">${Number(acc.balance).toFixed(2)}</p>
+                        <p className="text-[10px] text-emerald-600 font-semibold">Available Cash</p>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

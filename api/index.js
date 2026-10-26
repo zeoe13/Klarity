@@ -488,17 +488,36 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
 
     const addedAccounts = [];
     for (const acc of accountsResponse.data.accounts) {
+      const typeStr = (acc.type || '').toLowerCase();
+      const subtypeStr = (acc.subtype || '').toLowerCase();
+      const nameStr = (acc.name || '').toLowerCase();
+      const isCredit = typeStr === 'credit' ||
+                       subtypeStr.includes('credit') ||
+                       subtypeStr.includes('card') ||
+                       subtypeStr.includes('line of credit') ||
+                       subtypeStr.includes('loan') ||
+                       nameStr.includes('credit') ||
+                       nameStr.includes('card') ||
+                       nameStr.includes('visa') ||
+                       nameStr.includes('mastercard') ||
+                       nameStr.includes('amex');
+
+      const balanceNum = Math.abs(Number(acc.balances?.current || 0));
+      const limitNum = Number(acc.balances?.limit) || (isCredit ? 5000 : 0);
+
       const newAcc = {
         id: `acc-${acc.account_id}`,
         ownerId: userId || 'u-ziyad',
         institution: metadata?.institution?.name || 'Connected Bank',
         name: acc.name,
-        type: acc.type === 'credit' ? 'credit' : 'depository',
-        balance: acc.balances?.current || 0,
-        limit: acc.balances?.limit || (acc.type === 'credit' ? 3000 : 0),
-        apr: acc.type === 'credit' ? 22.9 : 0,
+        officialName: acc.official_name || acc.name,
+        type: isCredit ? 'credit' : 'depository',
+        subtype: acc.subtype || (isCredit ? 'credit card' : 'checking'),
+        balance: balanceNum,
+        limit: limitNum,
+        apr: isCredit ? 21.9 : 0,
         mask: acc.mask || '0000',
-        minPayment: acc.type === 'credit' ? Math.max(35, Math.round((acc.balances?.current || 0) * 0.025)) : 0
+        minPayment: isCredit ? Math.max(35, Math.round(balanceNum * 0.025)) : 0
       };
       addedAccounts.push(newAcc);
     }
@@ -549,10 +568,14 @@ app.delete('/api/plaid/items/:itemId', (req, res) => {
 
 // 4. Financial Data Overview
 app.get('/api/data', (req, res) => {
-  const { userId } = req.query;
+  const { userId, household } = req.query;
   const data = readData();
 
-  const userAccounts = (data.accounts || []).filter(a => !userId || a.ownerId === userId);
+  const userAccounts = (data.accounts || []).filter(a => {
+    if (household === 'true') return true;
+    if (!userId) return true;
+    return a.ownerId === userId || a.ownerId === 'u-ziyad' || !a.ownerId;
+  });
   const userChecking = userAccounts.filter(a => a.type === 'depository');
   const userCards = userAccounts.filter(a => a.type === 'credit');
 
@@ -580,6 +603,26 @@ app.get('/api/data', (req, res) => {
       netCash: totalChecking - totalCreditDebt
     }
   });
+});
+
+// Batch sync accounts from client cache if server cold started
+app.post('/api/accounts/batch-sync', (req, res) => {
+  const { accounts, userId } = req.body;
+  if (!Array.isArray(accounts) || accounts.length === 0) {
+    return res.json({ success: true, count: 0 });
+  }
+  const data = readData();
+  data.accounts = data.accounts || [];
+  for (const acc of accounts) {
+    if (!data.accounts.some(a => a.id === acc.id)) {
+      data.accounts.push({
+        ...acc,
+        ownerId: acc.ownerId || userId || 'u-ziyad'
+      });
+    }
+  }
+  writeData(data);
+  return res.json({ success: true, count: data.accounts.length });
 });
 
 // 5. Account Management
