@@ -295,7 +295,7 @@ function KlarityApp() {
   });
   const [showAiApiKey, setShowAiApiKey] = useState(false);
 
-  // AI Memory (e.g. "I am Muslim - do not mention interest", custom lifestyle constraints)
+  // AI Memory (e.g. custom financial rules, goals, lifestyle constraints)
   const [aiMemory, setAiMemory] = useState(() => {
     try {
       const saved = localStorage.getItem('klarity_ai_memory');
@@ -1976,7 +1976,7 @@ function KlarityApp() {
                     <span>AI Memory & Personal Preferences</span>
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Teach Klarity your personal financial values (e.g., Muslim / Halal finance, debt elimination) so it remembers them in every response.
+                    Teach Klarity your personal financial goals and preferences (e.g., debt payoff priority, savings targets) so it remembers them across conversations.
                   </p>
                 </div>
                 <button
@@ -1991,17 +1991,30 @@ function KlarityApp() {
               {aiMemory.length === 0 ? (
                 <div className="p-4 rounded-xl bg-[#080d19] border border-slate-800 text-center text-xs text-slate-500 flex flex-col items-center gap-3">
                   <span>No custom rules or memory saved yet.</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleAddMemory(
-                        'I am Muslim: Never recommend conventional interest (Riba), interest-bearing debt, or interest savings. Focus strictly on debt elimination, cash preservation, and Halal budgeting.'
-                      )
-                    }
-                    className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold cursor-pointer"
-                  >
-                    + Add Preset: I am Muslim (Halal Finance)
-                  </button>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleAddMemory(
+                          'Prioritize aggressive debt elimination: focus extra funds on clearing balances as fast as possible.'
+                        )
+                      }
+                      className="px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-semibold cursor-pointer"
+                    >
+                      + Rapid Debt Elimination
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleAddMemory(
+                          'Emergency savings priority: Maintain at least 3 months of emergency expenses before investing or discretionary spending.'
+                        )
+                      }
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold cursor-pointer"
+                    >
+                      + Emergency Fund First
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
@@ -2406,17 +2419,6 @@ function KlarityApp() {
                   type="button"
                   onClick={() =>
                     handleAddMemory(
-                      'I am Muslim: Never recommend conventional interest (Riba), interest-bearing debt, or interest savings. Focus strictly on debt elimination, cash preservation, and Halal budgeting.'
-                    )
-                  }
-                  className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold cursor-pointer transition-colors"
-                >
-                  + I am Muslim (Halal Finance)
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleAddMemory(
                       'Aggressive debt elimination: Prioritize clearing existing balances as rapidly as possible.'
                     )
                   }
@@ -2428,12 +2430,23 @@ function KlarityApp() {
                   type="button"
                   onClick={() =>
                     handleAddMemory(
-                      'High savings rate: Prioritize growing cash reserves and cutting unnecessary subscriptions.'
+                      'Emergency savings priority: Maintain at least 3 months of emergency expenses before investing or discretionary spending.'
+                    )
+                  }
+                  className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold cursor-pointer transition-colors"
+                >
+                  + Emergency Savings First
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleAddMemory(
+                      'Frugal budgeting: Help me identify recurring expenses and unnecessary subscriptions to reduce monthly overhead.'
                     )
                   }
                   className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold cursor-pointer transition-colors"
                 >
-                  + Frugal & High Savings
+                  + Frugal Budgeting
                 </button>
               </div>
             </div>
@@ -2442,7 +2455,7 @@ function KlarityApp() {
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Add custom memory (e.g., 'I am Muslim', 'I have two kids')..."
+                placeholder="Add custom memory (e.g., 'Save for a down payment', 'Avoid new credit cards')..."
                 value={newMemoryInput}
                 onChange={e => setNewMemoryInput(e.target.value)}
                 onKeyDown={e => {
@@ -2484,7 +2497,7 @@ function KlarityApp() {
 
               {aiMemory.length === 0 ? (
                 <div className="p-4 rounded-xl bg-[#080d19] border border-slate-800 text-center text-xs text-slate-500">
-                  No memory rules saved yet. Add one above or pick a preset like "I am Muslim".
+                  No memory rules saved yet. Add one above or choose a preset.
                 </div>
               ) : (
                 <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
