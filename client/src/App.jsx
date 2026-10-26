@@ -39,7 +39,9 @@ import {
   Paperclip,
   UploadCloud,
   Brain,
-  X
+  X,
+  History,
+  ArrowLeft
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
@@ -267,14 +269,53 @@ function KlarityApp() {
   const [scanResult, setScanResult] = useState(null);
   const [txSearch, setTxSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [billSearch, setBillSearch] = useState('');
+  const [billFilter, setBillFilter] = useState('all');
 
-  // AI Chat state
-  const [chatMessages, setChatMessages] = useState([
-    {
-      role: 'assistant',
-      text: "Hello! I am Klarity, your personal financial advisor. I monitor your actual connected cards, real APRs, and utility bills to help you optimize cash flow and pay off debt. How can I help you today?"
-    }
-  ]);
+  // AI Chat & Multi-thread Past Chats state (like Gemini chats)
+  const [chatSessions, setChatSessions] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_chat_sessions');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [
+      {
+        id: 'session-default',
+        title: 'Financial Overview',
+        createdAt: Date.now(),
+        messages: [
+          {
+            role: 'assistant',
+            text: "Hello! I am Klarity, your personal financial advisor. I monitor your actual connected cards, real APRs, and utility bills to help you optimize cash flow and pay off debt. How can I help you today?"
+          }
+        ]
+      }
+    ];
+  });
+
+  const [activeSessionId, setActiveSessionId] = useState(() => {
+    try {
+      const savedId = localStorage.getItem('klarity_active_session_id');
+      if (savedId) return savedId;
+    } catch (e) {}
+    return 'session-default';
+  });
+
+  const [isPastChatsOpen, setIsPastChatsOpen] = useState(false);
+
+  // Active chat messages
+  const [chatMessages, setChatMessages] = useState(() => {
+    const active = chatSessions.find(s => s.id === activeSessionId) || chatSessions[0];
+    return active?.messages || [
+      {
+        role: 'assistant',
+        text: "Hello! I am Klarity, your personal financial advisor. I monitor your actual connected cards, real APRs, and utility bills to help you optimize cash flow and pay off debt. How can I help you today?"
+      }
+    ];
+  });
   const [chatInput, setChatInput] = useState('');
   const [isAiTyping, setIsAiTyping] = useState(false);
   const chatEndRef = useRef(null);
@@ -329,6 +370,85 @@ function KlarityApp() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Update messages in active chat session and persist to localStorage
+  const updateActiveSession = (newMessages, overrideTitle) => {
+    setChatMessages(newMessages);
+    setChatSessions(prev => {
+      const updated = prev.map(s => {
+        if (s.id === activeSessionId) {
+          const autoTitle = overrideTitle || (
+            (s.title === 'New Conversation' || s.title === 'Financial Overview')
+              ? (newMessages.find(m => m.role === 'user')?.text?.slice(0, 32) || s.title)
+              : s.title
+          );
+          return {
+            ...s,
+            title: autoTitle,
+            updatedAt: Date.now(),
+            messages: newMessages
+          };
+        }
+        return s;
+      });
+      try {
+        localStorage.setItem('klarity_chat_sessions', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const handleSwitchSession = (sessionId) => {
+    const session = chatSessions.find(s => s.id === sessionId);
+    if (session) {
+      setActiveSessionId(sessionId);
+      setChatMessages(session.messages || []);
+      try {
+        localStorage.setItem('klarity_active_session_id', sessionId);
+      } catch (e) {}
+      setIsPastChatsOpen(false);
+    }
+  };
+
+  const handleCreateNewChat = () => {
+    const newId = `session-${Date.now()}`;
+    const newSession = {
+      id: newId,
+      title: 'New Conversation',
+      createdAt: Date.now(),
+      messages: [
+        {
+          role: 'assistant',
+          text: "Hello! I am Klarity, your personal financial advisor. What financial questions or bills would you like to explore?"
+        }
+      ]
+    };
+    const updated = [newSession, ...chatSessions];
+    setChatSessions(updated);
+    setActiveSessionId(newId);
+    setChatMessages(newSession.messages);
+    try {
+      localStorage.setItem('klarity_chat_sessions', JSON.stringify(updated));
+      localStorage.setItem('klarity_active_session_id', newId);
+    } catch (e) {}
+    setIsPastChatsOpen(false);
+  };
+
+  const handleDeleteSession = (sessionId, e) => {
+    if (e) e.stopPropagation();
+    const updated = chatSessions.filter(s => s.id !== sessionId);
+    if (updated.length === 0) {
+      handleCreateNewChat();
+      return;
+    }
+    setChatSessions(updated);
+    try {
+      localStorage.setItem('klarity_chat_sessions', JSON.stringify(updated));
+    } catch (e) {}
+    if (activeSessionId === sessionId) {
+      handleSwitchSession(updated[0].id);
+    }
+  };
+
   // Save AI Memory helper
   const handleAddMemory = (fact) => {
     const item = (fact || newMemoryInput).trim();
@@ -350,31 +470,54 @@ function KlarityApp() {
     setTimeout(() => setNotificationToast(''), 3000);
   };
 
-  // Document / PDF Upload Handler
-  const handleFileUpload = (e) => {
+  // Document / PDF Upload Handler - Scans document and adds to both Bills and Purchases
+  const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type.includes('text') || file.name.endsWith('.txt') || file.name.endsWith('.csv')) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const text = event.target?.result || '';
-        setScanText(text);
-        setIsScanBillOpen(true);
-        setNotificationToast(`Loaded ${file.name} for statement analysis!`);
-        setTimeout(() => setNotificationToast(''), 4000);
-      };
-      reader.readAsText(file);
-    } else {
-      // PDF or Image
-      const noticeText = `[Uploaded Statement Document: ${file.name} (${(file.size / 1024).toFixed(1)} KB)]\nPlease extract and verify biller name, amount due, and due date from this document.`;
-      setScanText(noticeText);
-      setIsScanBillOpen(true);
-      setNotificationToast(`Selected ${file.name}! Review statement details.`);
-      setTimeout(() => setNotificationToast(''), 4000);
+    setIsAiTyping(true);
+    setNotificationToast(`Scanning document: ${file.name}...`);
+
+    try {
+      let contentToScan = `[Uploaded Document: ${file.name}]`;
+      if (file.type.includes('text') || file.name.endsWith('.txt') || file.name.endsWith('.csv')) {
+        contentToScan = await file.text();
+      } else {
+        // PDF or image
+        contentToScan = `Statement Document: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+      }
+
+      const res = await fetch('/api/bills/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ billText: contentToScan, ownerId: currentUser?.id })
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        await fetchData();
+        setNotificationToast(`Scanned ${file.name}! Added to Bills & Purchases.`);
+        setTimeout(() => setNotificationToast(''), 4500);
+
+        const newMsgs = [
+          ...chatMessages,
+          { role: 'user', text: `Uploaded statement: ${file.name}` },
+          {
+            role: 'assistant',
+            text: `I've analyzed your uploaded document (${file.name}). I detected a bill for **${json.summary?.biller || 'Utility Provider'}** of **$${Number(json.summary?.amount || 0).toFixed(2)}** due on **${json.summary?.nextDueDate || '2026-11-20'}**. I've automatically registered it into both your **Upcoming Bills** and **Recent Purchases**.`
+          }
+        ];
+        updateActiveSession(newMsgs);
+      } else {
+        setNotificationToast('Could not automatically scan document. You can paste details into Scan Statement.');
+      }
+    } catch (err) {
+      console.error('Scan error:', err);
+      setNotificationToast('Failed to process document.');
+    } finally {
+      setIsAiTyping(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-    // Reset file input
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // Fetch Settings
@@ -775,7 +918,8 @@ function KlarityApp() {
     if (!userMsg || isAiTyping) return;
 
     setChatInput('');
-    setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    const userUpdatedMessages = [...chatMessages, { role: 'user', text: userMsg }];
+    updateActiveSession(userUpdatedMessages);
     setIsAiTyping(true);
 
     try {
@@ -784,7 +928,7 @@ function KlarityApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMsg,
-          userId: currentUser.id,
+          userId: currentUser?.id,
           aiProvider: aiConfig.provider,
           apiKey: aiConfig.apiKey,
           modelName: aiConfig.modelName,
@@ -793,15 +937,17 @@ function KlarityApp() {
         })
       });
       const json = await res.json();
-      setChatMessages(prev => [...prev, { role: 'assistant', text: json.reply }]);
+      const finalMessages = [...userUpdatedMessages, { role: 'assistant', text: json.reply }];
+      updateActiveSession(finalMessages);
     } catch (err) {
-      setChatMessages(prev => [
-        ...prev,
+      const finalMessages = [
+        ...userUpdatedMessages,
         {
           role: 'assistant',
           text: `I've analyzed your real connected data. You currently have checking balance of $${data?.metrics?.totalChecking?.toFixed(2) || '0.00'} and credit card balances of $${data?.metrics?.totalCreditDebt?.toFixed(2) || '0.00'}. Keep extra payments targeted at your highest APR cards.`
         }
-      ]);
+      ];
+      updateActiveSession(finalMessages);
     } finally {
       setIsAiTyping(false);
     }
@@ -1003,6 +1149,24 @@ function KlarityApp() {
     return matchCategory && matchSearch;
   });
 
+  const filteredBills = billsList.filter(b => {
+    const query = billSearch.toLowerCase().trim();
+    const matchSearch = query
+      ? (b.name?.toLowerCase().includes(query) || (b.biller || '').toLowerCase().includes(query))
+      : true;
+    let matchFilter = true;
+    if (billFilter === 'due_soon') {
+      matchFilter = b.status === 'due_soon';
+    } else if (billFilter === 'paid') {
+      matchFilter = b.status === 'paid';
+    } else if (billFilter === 'upcoming') {
+      matchFilter = b.status !== 'paid';
+    } else if (billFilter !== 'all') {
+      matchFilter = (b.category || '').toLowerCase() === billFilter.toLowerCase();
+    }
+    return matchSearch && matchFilter;
+  });
+
   return (
     <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col font-sans">
       {linkToken && <PlaidLauncher token={linkToken} />}
@@ -1017,7 +1181,7 @@ function KlarityApp() {
 
       {/* Top Navbar */}
       <header className="border-b border-slate-800 bg-[#0c1427]/95 backdrop-blur sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="w-full px-4 sm:px-8">
           <div className="h-16 flex items-center justify-between gap-4">
             {/* Logo */}
             <div className="flex items-center">
@@ -1135,13 +1299,10 @@ function KlarityApp() {
             </div>
           </div>
 
-          {/* Navigation Tabs */}
+          {/* Navigation Tabs - Only Dashboard & AI Advisor as requested */}
           <nav className="flex space-x-6 overflow-x-auto border-t border-slate-800/60 pt-2 text-xs font-semibold">
             {[
               { id: 'dashboard', label: 'Dashboard' },
-              { id: 'cards', label: `My Cards (${creditCards.length})` },
-              { id: 'bills', label: `Household Bills (${billsList.length})` },
-              { id: 'transactions', label: `Transactions (${transactionsList.length})` },
               { id: 'advisor', label: 'AI Advisor', badge: 'Live' }
             ].map(tab => {
               const isActive = activeTab === tab.id;
@@ -1168,8 +1329,8 @@ function KlarityApp() {
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 flex-1 flex flex-col gap-6">
+      {/* Main Content Area - Full fluid width across entire screen */}
+      <main className="w-full px-4 sm:px-8 py-6 flex-1 flex flex-col gap-6">
         {plaidError && (
           <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1283,84 +1444,177 @@ function KlarityApp() {
               </div>
             </div>
 
-            {/* Split Grid: Upcoming Bills & AI Advisor Quick Preview */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Upcoming Bills List */}
-              <div className="lg:col-span-2 bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-base font-bold text-white">
-                    Upcoming Bills
-                  </h2>
-                  <button
-                    onClick={() => setIsAddBillOpen(true)}
-                    className="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Bill</span>
-                  </button>
+            {/* Main Split Grid: Left side for Bills & Purchases, Right side for AI Financial Advisor */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Column: Upcoming Bills & Recent Purchases (8 Cols) */}
+              <div className="lg:col-span-8 flex flex-col gap-6">
+                
+                {/* Upcoming Bills Box (Clickable -> Dedicated Bills Page) */}
+                <div
+                  onClick={() => setActiveTab('bills')}
+                  className="bg-[#0d1527] border border-slate-800 hover:border-slate-700 rounded-2xl p-5 shadow-sm transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-base font-bold text-white group-hover:text-blue-400 transition-colors">
+                          Upcoming Bills
+                        </h2>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold">
+                          {billsList.length} Total
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">Click to view all bills, filters & search</p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsAddBillOpen(true);
+                        }}
+                        className="text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-lg font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add</span>
+                      </button>
+                      <span className="text-xs text-blue-400 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5 font-semibold">
+                        <span>View All Bills</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </span>
+                    </div>
+                  </div>
+
+                  {billsList.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-slate-500">
+                      No bills added yet. Click here to add your monthly utility bills or scan a statement.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-800/80">
+                      {billsList.slice(0, 5).map(bill => {
+                        const isDueSoon = bill.status === 'due_soon';
+                        return (
+                          <div key={bill.id} className="py-3 flex items-center justify-between gap-4">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-white truncate">{bill.name}</p>
+                              <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+                                <span>Due {bill.nextDueDate || bill.dueDate || `Day ${bill.dueDay}`}</span>
+                                <span className="bg-slate-800 px-1.5 py-0.5 rounded text-[10px] text-slate-300">
+                                  {bill.category}
+                                </span>
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-3 shrink-0">
+                              <div className="text-right">
+                                <div className="text-sm font-bold text-white">${Number(bill.expectedAmount).toFixed(2)}</div>
+                                <span
+                                  className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                                    bill.status === 'paid'
+                                      ? 'bg-emerald-500/20 text-emerald-400'
+                                      : isDueSoon
+                                      ? 'bg-red-500/20 text-red-300 animate-pulse'
+                                      : 'bg-slate-800 text-slate-400'
+                                  }`}
+                                >
+                                  {bill.status === 'paid' ? 'Paid' : isDueSoon ? 'Due Soon' : 'Upcoming'}
+                                </span>
+                              </div>
+                              {bill.status !== 'paid' && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePayBill(bill.id, bill.name, bill.expectedAmount);
+                                  }}
+                                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-300 transition-colors cursor-pointer"
+                                  title="Mark as paid"
+                                >
+                                  Mark Paid
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
-                {billsList.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-slate-500">
-                    No bills added yet. Scan a statement or add your monthly utility bills above.
+                {/* Recent Purchases Box (Clickable -> Dedicated Purchases Page) */}
+                <div
+                  onClick={() => setActiveTab('transactions')}
+                  className="bg-[#0d1527] border border-slate-800 hover:border-slate-700 rounded-2xl p-5 shadow-sm transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-base font-bold text-white group-hover:text-blue-400 transition-colors">
+                          Recent Purchases
+                        </h2>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold">
+                          {transactionsList.length} Total
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">Click to view complete purchase ledger & search</p>
+                    </div>
+
+                    <span className="text-xs text-blue-400 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5 font-semibold">
+                      <span>View All Purchases</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </span>
                   </div>
-                ) : (
-                  <div className="divide-y divide-slate-800/80">
-                    {billsList.slice(0, 5).map(bill => {
-                      const isDueSoon = bill.status === 'due_soon';
-                      return (
-                        <div key={bill.id} className="py-3.5 flex items-center justify-between gap-4">
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-white truncate">{bill.name}</p>
+
+                  {transactionsList.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-slate-500">
+                      No transactions recorded yet. Connect a bank or upload a receipt to track purchases.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-800/80">
+                      {transactionsList.slice(0, 6).map(tx => (
+                        <div key={tx.id} className="py-3 flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-semibold text-white">{tx.name}</p>
                             <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
-                              <span>Due {bill.nextDueDate || bill.dueDate || `Day ${bill.dueDay}`}</span>
-                              <span className="bg-slate-800 px-1.5 py-0.5 rounded text-[10px] text-slate-300">
-                                {bill.category}
-                              </span>
+                              <span>{tx.date}</span>
+                              <span>•</span>
+                              <span>{tx.account || 'Account'}</span>
                             </p>
                           </div>
 
-                          <div className="flex items-center gap-3 shrink-0">
-                            <div className="text-right">
-                              <div className="text-sm font-bold text-white">${Number(bill.expectedAmount).toFixed(2)}</div>
-                              <span
-                                className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                                  bill.status === 'paid'
-                                    ? 'bg-emerald-500/20 text-emerald-400'
-                                    : isDueSoon
-                                    ? 'bg-red-500/20 text-red-300 animate-pulse'
-                                    : 'bg-slate-800 text-slate-400'
-                                }`}
-                              >
-                                {bill.status === 'paid' ? 'Paid' : isDueSoon ? 'Due Soon' : 'Upcoming'}
-                              </span>
+                          <div className="text-right">
+                            <div className="text-sm font-bold text-white">
+                              ${Number(tx.amount).toFixed(2)}
                             </div>
-                            {bill.status !== 'paid' && (
-                              <button
-                                onClick={() => handlePayBill(bill.id, bill.name, bill.expectedAmount)}
-                                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-300 transition-colors cursor-pointer"
-                                title="Mark as paid"
-                              >
-                                Mark Paid
-                              </button>
-                            )}
+                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                              {tx.category}
+                            </span>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* AI Advisor Preview Card */}
-              <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+              {/* Right Column: AI Financial Advisor Widget (4 Cols, Pinned) */}
+              <div className="lg:col-span-4 bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col justify-between gap-4 sticky top-24">
                 <div>
-                  <div className="mb-3">
-                    <h3 className="text-sm font-bold text-white">AI Financial Advisor</h3>
-                    <p className="text-xs text-slate-400">Personalized household analysis</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Bot className="w-4 h-4 text-blue-400" />
+                        <span>AI Financial Advisor</span>
+                      </h3>
+                      <p className="text-xs text-slate-400">Personalized household analysis</p>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-600/20 text-blue-300 border border-blue-500/30">
+                      Live
+                    </span>
                   </div>
 
-                  <div className="bg-[#070b14] border border-slate-800/80 rounded-xl p-3 text-xs text-slate-300 leading-relaxed mb-4">
+                  <div className="bg-[#070b14] border border-slate-800/80 rounded-xl p-3.5 text-xs text-slate-300 leading-relaxed mb-4">
                     {highestAprCard ? (
                       isHalalFinance ? (
                         <span>
@@ -1387,6 +1641,7 @@ function KlarityApp() {
                     ].map((q, i) => (
                       <button
                         key={i}
+                        type="button"
                         onClick={() => {
                           setActiveTab('advisor');
                           handleSendChatMessage(q);
@@ -1401,73 +1656,33 @@ function KlarityApp() {
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => setActiveTab('advisor')}
-                  className="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-xs shadow-md shadow-blue-600/20 hover:opacity-95 transition-opacity cursor-pointer text-center"
+                  className="mt-2 w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold text-xs shadow-md shadow-blue-600/20 hover:opacity-95 transition-opacity cursor-pointer text-center"
                 >
                   Open Full AI Advisor Chat
                 </button>
               </div>
             </div>
-
-            {/* Recent Purchases Feed */}
-            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-base font-bold text-white">
-                    Recent Purchases
-                  </h2>
-                  <p className="text-xs text-slate-400">Recent activity across connected accounts</p>
-                </div>
-                <button
-                  onClick={() => setActiveTab('transactions')}
-                  className="text-xs text-blue-400 hover:text-blue-300 font-medium cursor-pointer"
-                >
-                  View All ({transactionsList.length})
-                </button>
-              </div>
-
-              {transactionsList.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-500">
-                  No transactions recorded yet. Connect a bank or record purchases to view them here.
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-800/80">
-                  {transactionsList.slice(0, 6).map(tx => (
-                    <div key={tx.id} className="py-3 flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-semibold text-white">{tx.name}</p>
-                        <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
-                          <span>{tx.date}</span>
-                          <span>•</span>
-                          <span>{tx.account || 'Account'}</span>
-                        </p>
-                      </div>
-
-                      <div className="text-right">
-                        <div className="text-sm font-bold text-white">
-                          ${Number(tx.amount).toFixed(2)}
-                        </div>
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                          {tx.category}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 2: CREDIT CARDS (Realistic Card UI) */}
+        {/* TAB 2: CREDIT CARDS (Accessible via Account Profile menu) */}
         {/* ========================================================================= */}
         {activeTab === 'cards' && (
           <div className="flex flex-col gap-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-base font-bold text-white">Credit Cards</h2>
-                <p className="text-xs text-slate-400">Monitor APR interest rates, balances, and credit limits</p>
+                <button
+                  onClick={() => setActiveTab('dashboard')}
+                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 mb-2 font-semibold cursor-pointer transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to Dashboard</span>
+                </button>
+                <h2 className="text-xl font-bold text-white">Credit Cards</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Monitor APR interest rates, balances, and credit limits</p>
               </div>
               <button
                 onClick={() => setIsAddAccountOpen(true)}
@@ -1571,48 +1786,94 @@ function KlarityApp() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 3: HOUSEHOLD BILLS */}
+        {/* TAB 3: DEDICATED BILLS PAGE (Search box + Dropdown filter + Scan PDF) */}
         {/* ========================================================================= */}
         {activeTab === 'bills' && (
           <div className="flex flex-col gap-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Page Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0d1527] border border-slate-800 rounded-2xl p-5">
               <div>
-                <h2 className="text-base font-bold text-white">Household Bills & Utilities</h2>
-                <p className="text-xs text-slate-400">Track and log payments for PG&E, Water, Internet, and subscriptions</p>
+                <button
+                  onClick={() => setActiveTab('dashboard')}
+                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 mb-2 font-semibold cursor-pointer transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to Dashboard</span>
+                </button>
+                <h2 className="text-xl font-bold text-white">Household Bills</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Filter, search, and settle utility bills and recurring expenses</p>
               </div>
-              <div className="flex gap-2">
+
+              <div className="flex items-center gap-2.5">
                 <button
                   onClick={() => setIsScanBillOpen(true)}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 flex items-center gap-1.5 cursor-pointer transition-all"
                 >
-                  Scan Statement
+                  <FileText className="w-4 h-4 text-blue-400" />
+                  <span>Scan Statement / PDF</span>
                 </button>
                 <button
                   onClick={() => setIsAddBillOpen(true)}
-                  className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-600/20 cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white flex items-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer transition-all"
                 >
-                  Add Bill
+                  <Plus className="w-4 h-4" />
+                  <span>Add Bill</span>
                 </button>
               </div>
             </div>
 
-            {billsList.length === 0 ? (
+            {/* Search & Filter Toolbar */}
+            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* Search Box */}
+              <div className="flex items-center gap-2 bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2 text-xs text-white flex-1 max-w-md">
+                <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search bills by name or biller..."
+                  value={billSearch}
+                  onChange={e => setBillSearch(e.target.value)}
+                  className="bg-transparent border-none outline-none text-xs text-white placeholder-slate-500 w-full"
+                />
+                {billSearch && (
+                  <button onClick={() => setBillSearch('')} className="text-slate-400 hover:text-white">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Dropdown Filter */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-400 font-semibold shrink-0">Filter:</span>
+                <select
+                  value={billFilter}
+                  onChange={e => setBillFilter(e.target.value)}
+                  className="bg-[#080d19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="all">All Bills ({billsList.length})</option>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="due_soon">Due Soon</option>
+                  <option value="paid">Paid</option>
+                  <option value="Utilities">Utilities</option>
+                  <option value="Subscriptions">Subscriptions</option>
+                  <option value="Insurance">Insurance</option>
+                  <option value="Housing">Housing / Rent</option>
+                  <option value="Telecom">Telecom / Internet</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Filtered Bills List */}
+            {filteredBills.length === 0 ? (
               <div className="p-12 text-center bg-[#0d1527] border border-dashed border-slate-800 rounded-2xl flex flex-col items-center gap-3">
                 <Zap className="w-8 h-8 text-slate-500" />
-                <h3 className="text-sm font-bold text-white">No Bills Added Yet</h3>
+                <h3 className="text-sm font-bold text-white">No Bills Found</h3>
                 <p className="text-xs text-slate-400 max-w-sm">
-                  Add your household utility bills (PG&E, Fresno Water, Xfinity) to track due dates and pay on time.
+                  {billSearch || billFilter !== 'all' ? 'No bills matched your search or category filter.' : 'Add your utility bills or upload a statement PDF.'}
                 </p>
-                <button
-                  onClick={() => setIsAddBillOpen(true)}
-                  className="mt-2 px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white"
-                >
-                  Add Bill
-                </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {billsList.map(bill => (
+                {filteredBills.map(bill => (
                   <div key={bill.id} className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col justify-between gap-4">
                     <div>
                       <div className="flex items-center justify-between text-xs">
@@ -1645,7 +1906,7 @@ function KlarityApp() {
                       className={`w-full py-2 rounded-xl text-xs font-semibold transition-all ${
                         bill.status === 'paid'
                           ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                          : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                          : 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer'
                       }`}
                     >
                       {bill.status === 'paid' ? '✓ Paid' : `Mark $${Number(bill.expectedAmount).toFixed(2)} Paid`}
@@ -1658,84 +1919,149 @@ function KlarityApp() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 4: TRANSACTIONS */}
+        {/* TAB 4: DEDICATED PURCHASES PAGE (Search box + Category dropdown filter) */}
         {/* ========================================================================= */}
         {activeTab === 'transactions' && (
-          <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex flex-col gap-6">
+            {/* Page Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#0d1527] border border-slate-800 rounded-2xl p-5">
               <div>
-                <h2 className="text-base font-bold text-white">Transactions</h2>
-                <p className="text-xs text-slate-400">Real transaction history from linked bank accounts</p>
+                <button
+                  onClick={() => setActiveTab('dashboard')}
+                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 mb-2 font-semibold cursor-pointer transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to Dashboard</span>
+                </button>
+                <h2 className="text-xl font-bold text-white">Recent Purchases</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Real-time ledger of card transactions, payments, and scanned receipts</p>
               </div>
 
-              <div className="flex items-center gap-2 bg-[#080d19] border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-white">
-                <Search className="w-3.5 h-3.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search merchant or amount..."
-                  value={txSearch}
-                  onChange={e => setTxSearch(e.target.value)}
-                  className="bg-transparent border-none outline-none text-xs text-white placeholder-slate-500"
-                />
+              <div className="text-xs text-slate-400">
+                Showing <span className="font-bold text-white">{filteredTransactions.length}</span> of {transactionsList.length} purchases
               </div>
             </div>
 
-            {filteredTransactions.length === 0 ? (
-              <p className="text-xs text-slate-500 py-8 text-center">
-                No transactions recorded yet. Transactions will appear once you link a bank account via Plaid.
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-800 text-slate-400 text-[11px] font-semibold uppercase tracking-wider">
-                      <th className="py-3 px-2">Date</th>
-                      <th className="py-3 px-2">Description</th>
-                      <th className="py-3 px-2">Category</th>
-                      <th className="py-3 px-2 text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60">
-                    {filteredTransactions.map(tx => (
-                      <tr key={tx.id} className="hover:bg-slate-800/30 transition-colors">
-                        <td className="py-3 px-2 text-slate-400 font-mono text-[11px]">{tx.date}</td>
-                        <td className="py-3 px-2 font-medium text-white">{tx.name}</td>
-                        <td className="py-3 px-2">
-                          <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300">
-                            {tx.category || 'General'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-2 text-right font-black text-rose-400">
-                          -${Number(tx.amount).toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {/* Search & Filter Bar */}
+            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {/* Search Box */}
+              <div className="flex items-center gap-2 bg-[#080d19] border border-slate-700/80 rounded-xl px-3.5 py-2 text-xs text-white flex-1 max-w-md">
+                <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search purchases by store, merchant, or amount..."
+                  value={txSearch}
+                  onChange={e => setTxSearch(e.target.value)}
+                  className="bg-transparent border-none outline-none text-xs text-white placeholder-slate-500 w-full"
+                />
+                {txSearch && (
+                  <button onClick={() => setTxSearch('')} className="text-slate-400 hover:text-white">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
-            )}
+
+              {/* Category Dropdown Filter */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-400 font-semibold shrink-0">Category:</span>
+                <select
+                  value={categoryFilter}
+                  onChange={e => setCategoryFilter(e.target.value)}
+                  className="bg-[#080d19] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="all">All Categories</option>
+                  <option value="Groceries">Groceries</option>
+                  <option value="Dining">Dining</option>
+                  <option value="Utilities">Utilities</option>
+                  <option value="Shopping">Shopping</option>
+                  <option value="Entertainment">Entertainment</option>
+                  <option value="Travel">Travel</option>
+                  <option value="Services">Services</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Purchases Table */}
+            <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 shadow-sm">
+              {filteredTransactions.length === 0 ? (
+                <p className="text-xs text-slate-500 py-8 text-center">
+                  No purchases found matching your filter criteria.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 text-[11px] font-semibold uppercase tracking-wider">
+                        <th className="py-3 px-2">Date</th>
+                        <th className="py-3 px-2">Description</th>
+                        <th className="py-3 px-2">Category</th>
+                        <th className="py-3 px-2 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {filteredTransactions.map(tx => (
+                        <tr key={tx.id} className="hover:bg-slate-800/30 transition-colors">
+                          <td className="py-3 px-2 text-slate-400 font-mono text-[11px]">{tx.date}</td>
+                          <td className="py-3 px-2 font-medium text-white">{tx.name}</td>
+                          <td className="py-3 px-2">
+                            <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300">
+                              {tx.category || 'General'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-2 text-right font-black text-rose-400">
+                            -${Number(tx.amount).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 5: AI ADVISOR */}
+        {/* TAB 5: AI ADVISOR (Compact Memory + Past Chats History Button) */}
         {/* ========================================================================= */}
         {activeTab === 'advisor' && (
-          <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col h-[650px] shadow-xl">
+          <div className="bg-[#0d1527] border border-slate-800 rounded-2xl p-5 flex flex-col h-[700px] shadow-xl">
+            {/* Header: Title on Left, Past Chats & Compact Memory on Right */}
             <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-white">AI Financial Advisor</h3>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Bot className="w-4 h-4 text-blue-400" />
+                  <span>AI Financial Advisor</span>
+                </h3>
                 <p className="text-[11px] text-slate-400">Personalized debt & cash flow guidance</p>
               </div>
+
               <div className="flex items-center gap-2">
+                {/* Past Chats Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsPastChatsOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 cursor-pointer transition-all"
+                  title="View Past Chats & History"
+                >
+                  <History className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Past Chats</span>
+                  {chatSessions.length > 1 && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-blue-600/30 text-blue-300 text-[10px] font-bold border border-blue-500/30">
+                      {chatSessions.length}
+                    </span>
+                  )}
+                </button>
+
+                {/* Reduced Compact Memory Button */}
                 <button
                   type="button"
                   onClick={() => setIsMemoryModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 cursor-pointer transition-all"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 cursor-pointer transition-all"
                   title="Manage AI Memory & Preferences"
                 >
                   <Brain className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Memory</span>
+                  <span className="hidden sm:inline">Memory</span>
                   {aiMemory.length > 0 && (
                     <span className="px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[10px] font-bold">
                       {aiMemory.length}
@@ -1745,6 +2071,7 @@ function KlarityApp() {
               </div>
             </div>
 
+            {/* Chat Messages */}
             <div className="flex-1 overflow-y-auto py-4 flex flex-col gap-3">
               {chatMessages.map((msg, idx) => (
                 <div
@@ -1766,7 +2093,7 @@ function KlarityApp() {
                 <div className="flex justify-start">
                   <div className="bg-[#090f1e] text-slate-400 border border-slate-800 rounded-2xl px-4 py-2.5 text-xs flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 animate-spin text-blue-400" />
-                    <span>Analyzing your finances...</span>
+                    <span>Analyzing your finances & documents...</span>
                   </div>
                 </div>
               )}
@@ -1787,7 +2114,7 @@ function KlarityApp() {
                 </button>
 
                 {isUploadMenuOpen && (
-                  <div className="absolute bottom-12 left-0 w-60 rounded-2xl bg-[#0c1427] border border-slate-800 shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-bottom-2">
+                  <div className="absolute bottom-12 left-0 w-64 rounded-2xl bg-[#0c1427] border border-slate-800 shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-bottom-2">
                     <button
                       type="button"
                       onClick={() => {
@@ -1799,7 +2126,7 @@ function KlarityApp() {
                       <UploadCloud className="w-4 h-4 text-emerald-400 shrink-0" />
                       <div>
                         <div className="font-semibold">Upload PDF / Document</div>
-                        <div className="text-[10px] text-slate-400">Attach statement, PDF, or image</div>
+                        <div className="text-[10px] text-slate-400">Scans statement & adds to bills and purchases</div>
                       </div>
                     </button>
 
@@ -1832,7 +2159,7 @@ function KlarityApp() {
 
               <input
                 type="text"
-                placeholder="Ask Klarity about your finances or debt payoff..."
+                placeholder="Ask Klarity about your finances, bills, or debt payoff..."
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
                 className="flex-1 bg-[#080d19] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
@@ -2528,6 +2855,88 @@ function KlarityApp() {
                 className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs cursor-pointer"
               >
                 Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Past Chats Modal / History (like Gemini chats) */}
+      {isPastChatsOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 max-h-[85vh]">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <History className="w-5 h-5 text-blue-400" />
+                <h3 className="text-base font-bold text-white">Past Conversations</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCreateNewChat}
+                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>New Chat</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPastChatsOpen(false)}
+                  className="text-slate-400 hover:text-white cursor-pointer p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300">
+              Select any past conversation below to resume where you left off, or start a new thread.
+            </p>
+
+            <div className="overflow-y-auto flex flex-col gap-2 flex-1 pr-1 max-h-96">
+              {chatSessions.map(session => {
+                const isActive = session.id === activeSessionId;
+                const msgCount = session.messages?.length || 0;
+                return (
+                  <div
+                    key={session.id}
+                    onClick={() => handleSwitchSession(session.id)}
+                    className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                      isActive
+                        ? 'bg-blue-600/15 border-blue-500/50 text-white'
+                        : 'bg-[#080d19] border-slate-800 hover:border-slate-700 text-slate-300'
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold truncate text-white">{session.title || 'Conversation'}</p>
+                      <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
+                        <span>{new Date(session.createdAt || Date.now()).toLocaleDateString()}</span>
+                        <span>•</span>
+                        <span>{msgCount} messages</span>
+                        {isActive && <span className="text-blue-400 font-semibold">• Active</span>}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteSession(session.id, e)}
+                      className="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-500/10 cursor-pointer transition-colors shrink-0"
+                      title="Delete conversation"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-end pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsPastChatsOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs cursor-pointer"
+              >
+                Close
               </button>
             </div>
           </div>

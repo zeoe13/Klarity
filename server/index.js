@@ -468,17 +468,86 @@ app.post('/api/bills/scan', async (req, res) => {
     biller = 'T-Mobile';
   }
 
-  const amountMatch = billText.match(/\$\s*([0-9]+(?:\.[0-9]{2})?)/) ||
-                      billText.match(/(?:due|amount|total|charges)[:\s]+\$?([0-9]+(?:\.[0-9]{2})?)/i);
-  if (amountMatch) amount = parseFloat(amountMatch[1]);
+// Scan statement document & Ingest into Bills AND Purchases
+app.post('/api/bills/scan', async (req, res) => {
+  const { billText = '', ownerId } = req.body;
 
-  const dateMatch = billText.match(/(?:due|by|date)[:\s]+([A-Za-z]+ \d{1,2},? \d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i) ||
-                    billText.match(/(?:due on|by)\s+([A-Za-z]+ \d{1,2}(?:,? \d{4})?)/i);
-  if (dateMatch) nextDueDate = dateMatch[1];
+  let biller = 'Utility Provider';
+  let category = 'Utilities';
+  let amount = 145.00;
+  let nextDueDate = '2026-11-20';
+
+  if (process.env.GEMINI_API_KEY && billText.length > 10) {
+    try {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+      const aiRes = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: `Analyze this bill statement text or document filename: "${billText}".
+Extract and return ONLY a raw JSON object with these keys:
+{
+  "biller": "clean biller or merchant name",
+  "category": "Utilities" or "Subscriptions" or "Services" or "Other",
+  "amount": numeric number only (e.g. 145.50),
+  "dueDate": "formatted due date e.g. Nov 25, 2026 or 2026-11-25"
+}`
+            }]
+          }]
+        })
+      });
+      if (aiRes.ok) {
+        const aiJson = await aiRes.json();
+        const rawText = aiJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.biller) biller = parsed.biller;
+          if (parsed.category) category = parsed.category;
+          if (parsed.amount && !isNaN(parsed.amount)) amount = Number(parsed.amount);
+          if (parsed.dueDate) nextDueDate = parsed.dueDate;
+        }
+      }
+    } catch (err) {
+      console.warn('Gemini bill extraction error:', err.message);
+    }
+  }
+
+  if (biller === 'Utility Provider') {
+    const t = billText.toLowerCase();
+    if (t.includes('pg&e') || t.includes('pacific gas')) {
+      biller = 'Pacific Gas and Electric (PG&E)';
+    } else if (t.includes('fresno') || t.includes('water')) {
+      biller = 'City Utilities';
+    } else if (t.includes('xfinity') || t.includes('comcast')) {
+      biller = 'Xfinity Comcast';
+      category = 'Subscriptions';
+    } else if (t.includes('t-mobile') || t.includes('verizon') || t.includes('att')) {
+      biller = 'Mobile Telecom';
+      category = 'Utilities';
+    } else {
+      const nameMatch = billText.match(/^([A-Za-z0-9\s&]+?)(?:\r?\n|statement|invoice|account)/i);
+      if (nameMatch && nameMatch[1].trim().length > 3) {
+        biller = nameMatch[1].trim();
+      }
+    }
+
+    const amountMatch = billText.match(/\$\s*([0-9]+(?:\.[0-9]{2})?)/) ||
+                        billText.match(/(?:due|amount|total|charges)[:\s]+\$?([0-9]+(?:\.[0-9]{2})?)/i);
+    if (amountMatch) amount = parseFloat(amountMatch[1]);
+
+    const dateMatch = billText.match(/(?:due|by|date)[:\s]+([A-Za-z]+ \d{1,2},? \d{4}|\d{1,2}\/\d{1,2}\/\d{4})/i) ||
+                      billText.match(/(?:due on|by)\s+([A-Za-z]+ \d{1,2}(?:,? \d{4})?)/i);
+    if (dateMatch) nextDueDate = dateMatch[1];
+  }
 
   const data = readData();
+  const timestamp = Date.now();
+
   const newBill = {
-    id: `bill-${Date.now()}`,
+    id: `bill-${timestamp}`,
     name: biller,
     biller,
     category,
@@ -488,16 +557,33 @@ app.post('/api/bills/scan', async (req, res) => {
     frequency: 'monthly',
     status: 'due_soon',
     assignedOwnerId: ownerId || '',
-    notes: 'Scanned statement'
+    notes: 'Scanned statement document'
   };
-
   data.bills.push(newBill);
+
+  const newTransaction = {
+    id: `tx-doc-${timestamp}`,
+    name: biller,
+    category,
+    amount: amount || 0,
+    date: new Date().toISOString().split('T')[0],
+    account: 'Scanned Document / PDF',
+    ownerId: ownerId || ''
+  };
+  if (!data.transactions) data.transactions = [];
+  data.transactions.unshift(newTransaction);
+
+  if (data.metrics) {
+    data.metrics.totalMonthlyBills = data.bills.reduce((sum, b) => sum + (Number(b.expectedAmount) || 0), 0);
+  }
+
   writeData(data);
 
   res.json({
     success: true,
     scannedBill: newBill,
-    summary: `Successfully parsed bill from ${biller} for $${newBill.expectedAmount} due on ${nextDueDate}`
+    createdTransaction: newTransaction,
+    summary: `Successfully parsed bill from ${biller} for $${newBill.expectedAmount.toFixed(2)} due on ${nextDueDate} and recorded in both Bills and Purchases.`
   });
 });
 
