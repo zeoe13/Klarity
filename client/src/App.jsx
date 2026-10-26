@@ -1265,6 +1265,17 @@ function KlarityApp() {
       const json = await res.json();
       let replyText = json.reply || "I've reviewed your request.";
 
+      // Handle AI action execution (e.g. adding subscriptions or bills)
+      if (json.actionExecuted) {
+        fetchData(currentUser, viewHousehold);
+        const act = json.actionExecuted;
+        setNotificationToast(`Added ${act.item?.name || 'item'} to ${act.type}!`);
+        setTimeout(() => setNotificationToast(''), 4000);
+      }
+
+      // Strip any [ACTION:...] tags from display text
+      replyText = replyText.replace(/\[ACTION:[a-zA-Z0-9_-]+:[\s\S]*?\]/gi, '').trim();
+
       // Handle AI navigation tags: [NAVIGATE:target]
       const navMatch = replyText.match(/\[NAVIGATE:([a-zA-Z0-9_-]+)\]/i);
       if (navMatch) {
@@ -1652,22 +1663,7 @@ function KlarityApp() {
                 <p className="text-xs text-slate-500 mt-0.5">Here's where your money stands today.</p>
               </div>
 
-              <div className="flex items-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setIsAddAccountOpen(true)}
-                  className="px-4 py-2 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
-                >
-                  Add card
-                </button>
-                <button
-                  type="button"
-                  onClick={initiatePlaidLink}
-                  className="px-4 py-2 rounded-lg bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-2xs transition-all cursor-pointer"
-                >
-                  Connect bank
-                </button>
-              </div>
+
             </div>
 
             {/* Top 3-Metric Summary Card */}
@@ -3160,13 +3156,25 @@ function KlarityApp() {
                           </div>
 
                           <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
-                            <button
-                              type="button"
-                              onClick={initiatePlaidLink}
-                              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-                            >
-                              Link a bank
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={initiatePlaidLink}
+                                className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                              >
+                                Connect bank
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsSettingsOpen(false);
+                                  setIsAddAccountOpen(true);
+                                }}
+                                className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                              >
+                                Add card manually
+                              </button>
+                            </div>
                             <button
                               type="submit"
                               className="px-4 py-2 rounded-xl bg-[#1B4B91] hover:bg-[#153a70] text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"

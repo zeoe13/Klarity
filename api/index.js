@@ -830,6 +830,11 @@ Actual Connected Finances for ${currentUser.name} (strictly respecting permissio
 
 Rules:
 1. Provide concise, clear, and empathetic financial guidance based strictly on real numbers.
+2. AUTOMATED ACTIONS: If the user asks you to add, track, or record a subscription, bill, or purchase (e.g. "add a subscription that i pay for about 20 bucks a month on netflix"), you MUST execute it by outputting an ACTION tag in your response:
+   - For Subscriptions: [ACTION:ADD_SUBSCRIPTION:{"name":"Netflix","amount":20,"billingCycle":"monthly"}]
+   - For Bills: [ACTION:ADD_BILL:{"name":"Bill Name","expectedAmount":50,"dueDay":15}]
+   - For Purchases: [ACTION:ADD_TRANSACTION:{"name":"Store Name","amount":25,"category":"General"}]
+   Always warmly confirm in your response that you have automatically added it to their records.
 2. If the user asks to view or go to a page or section in the app (e.g. "show me my subscriptions", "go to bills", "open cards", "show purchases", "overview", or "settings"), you MUST include a navigation tag at the end of your response:
    - For Subscriptions: [NAVIGATE:subscriptions]
    - For Bills: [NAVIGATE:bills]
@@ -926,7 +931,90 @@ Rules:
       reply = "I was unable to retrieve a response from your AI provider. Please verify your API key and model settings in Settings.";
     }
 
-    return res.json({ reply });
+    let actionExecuted = null;
+
+    // Execute Subscription Action
+    const subActionMatch = reply.match(/\[ACTION:ADD_SUBSCRIPTION:([\s\S]*?)\]/i);
+    if (subActionMatch) {
+      try {
+        const subData = JSON.parse(subActionMatch[1]);
+        const newSub = {
+          id: `sub-${Date.now()}`,
+          name: subData.name || 'Subscription',
+          amount: parseFloat(subData.amount || 0),
+          renewDay: parseInt(subData.renewDay || 1),
+          billingCycle: subData.billingCycle || 'monthly',
+          account: subData.account || 'Everyday Rewards',
+          active: true
+        };
+        data.subscriptions = data.subscriptions || [];
+        data.subscriptions.push(newSub);
+        writeData(data);
+        actionExecuted = { type: 'subscription', item: newSub };
+      } catch (err) {
+        console.error('Error parsing subscription action:', err);
+      }
+    }
+
+    // Execute Bill Action
+    const billActionMatch = reply.match(/\[ACTION:ADD_BILL:([\s\S]*?)\]/i);
+    if (billActionMatch) {
+      try {
+        const billData = JSON.parse(billActionMatch[1]);
+        const newBill = {
+          id: `bill-${Date.now()}`,
+          name: billData.name || 'Utility Bill',
+          category: billData.category || 'Utilities',
+          expectedAmount: parseFloat(billData.expectedAmount || billData.amount || 0),
+          dueDay: parseInt(billData.dueDay || 15),
+          nextDueDate: billData.nextDueDate || calculateNextDueDate(parseInt(billData.dueDay || 15)),
+          autopay: false,
+          status: 'pending',
+          recurrence: 'monthly'
+        };
+        data.bills = data.bills || [];
+        data.bills.push(newBill);
+        writeData(data);
+        actionExecuted = { type: 'bill', item: newBill };
+      } catch (err) {
+        console.error('Error parsing bill action:', err);
+      }
+    }
+
+    // Natural Language Fallback: if user specifically asks to add subscription (e.g. "add a subscription that i pay for about 20 bucks a month on netflix")
+    if (!actionExecuted) {
+      const msgLower = (message || '').toLowerCase();
+      if ((msgLower.includes('add') || msgLower.includes('track') || msgLower.includes('record')) && msgLower.includes('subscription')) {
+        // extract amount
+        const amtMatch = message.match(/(?:\$|bucks|dollars|\b)([0-9]+(?:\.[0-9]{2})?)(?:\s*(?:bucks|dollars|\/mo|a month|per month))?/i);
+        const parsedAmount = amtMatch ? parseFloat(amtMatch[1]) : 20.00;
+        
+        // extract service name
+        let serviceName = 'Subscription';
+        ['netflix', 'spotify', 'icloud', 'apple', 'chatgpt', 'hulu', 'disney', 'youtube', 'amazon prime', 'gym'].forEach(k => {
+          if (msgLower.includes(k)) {
+            serviceName = k === 'chatgpt' ? 'ChatGPT Plus' : (k.charAt(0).toUpperCase() + k.slice(1));
+          }
+        });
+
+        const newSub = {
+          id: `sub-${Date.now()}`,
+          name: serviceName,
+          amount: parsedAmount,
+          renewDay: 1,
+          billingCycle: 'monthly',
+          account: 'Everyday Rewards',
+          active: true
+        };
+        data.subscriptions = data.subscriptions || [];
+        data.subscriptions.push(newSub);
+        writeData(data);
+        actionExecuted = { type: 'subscription', item: newSub };
+        reply += `\n\nI've automatically added **${serviceName}** (${parsedAmount.toFixed(2)}/mo) to your Subscriptions!`;
+      }
+    }
+
+    return res.json({ reply, actionExecuted });
   } catch (err) {
     console.error('AI chat route error:', err);
     return res.json({ reply: `Advisor error: ${err.message}` });
