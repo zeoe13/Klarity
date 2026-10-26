@@ -273,8 +273,8 @@ app.get('/api/settings', (req, res) => {
       email: user.email || 'zeoe13@gmail.com'
     },
     ai: {
-      provider: ai.provider || 'anthropic',
-      model: ai.model || 'claude-3-7-sonnet-20250219',
+      provider: ai.provider || 'gemini',
+      model: ai.model || 'gemini-3.8-flash',
       hasKey: Boolean(ai.encryptedKey),
       maskedKey: ai.encryptedKey ? maskSecret(decrypt(ai.encryptedKey)) : '',
       status: ai.encryptedKey ? (ai.status || 'connected') : 'not_connected',
@@ -780,14 +780,18 @@ app.post('/api/bills/scan', async (req, res) => {
 // Live Web Search Helper for Market Research & Real-Time Card/Bank Offers
 async function performWebSearch(query) {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
     const res = await fetch('https://lite.duckduckgo.com/lite/', {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       },
       body: `q=${encodeURIComponent(query)}`
     });
+    clearTimeout(timeoutId);
     if (!res.ok) return '';
     const html = await res.text();
     const tdRe = /<td[^>]*>([\s\S]*?)<\/td>/g;
@@ -990,35 +994,31 @@ Rules:
             { role: 'user', parts: [{ text: `${systemContext}\n\nUser Question: ${message}` }] }
           ]
         };
-        if (shouldPerformWebSearch(message)) {
-          geminiPayload.tools = [{ googleSearch: {} }];
-        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
 
         let aiRes = await fetch(geminiUrl, {
           method: 'POST',
+          signal: controller.signal,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(geminiPayload)
-        });
+        }).catch(err => ({ ok: false, status: 504, errorText: err.message }));
 
-        if (!aiRes.ok && geminiPayload.tools) {
-          delete geminiPayload.tools;
-          aiRes = await fetch(geminiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(geminiPayload)
-          });
-        }
+        clearTimeout(timeoutId);
 
-        if (aiRes.ok) {
+        if (aiRes && aiRes.ok) {
           const aiJson = await aiRes.json();
           reply = aiJson.candidates?.[0]?.content?.parts?.[0]?.text;
           if (reply) break;
-        } else {
-          const errJson = await aiRes.json().catch(() => ({}));
-          const errMsg = errJson?.error?.message || `HTTP ${aiRes.status}`;
-          lastGeminiError = errMsg;
-          // If model is discontinued or not found, proceed to next model in list
-          if (aiRes.status === 404 || errMsg.includes('not found') || errMsg.includes('no longer available')) {
+        } else if (aiRes) {
+          let errMsg = aiRes.errorText;
+          if (!errMsg && typeof aiRes.json === 'function') {
+            const errJson = await aiRes.json().catch(() => ({}));
+            errMsg = errJson?.error?.message || `HTTP ${aiRes.status}`;
+          }
+          lastGeminiError = errMsg || 'Unknown request error';
+          if (aiRes.status === 404 || errMsg?.includes('not found') || errMsg?.includes('no longer available') || errMsg?.includes('not supported')) {
             continue;
           }
           reply = `Gemini API error: ${errMsg}`;
