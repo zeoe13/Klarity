@@ -1018,7 +1018,17 @@ Rules:
             errMsg = errJson?.error?.message || `HTTP ${aiRes.status}`;
           }
           lastGeminiError = errMsg || 'Unknown request error';
-          if (aiRes.status === 404 || errMsg?.includes('not found') || errMsg?.includes('no longer available') || errMsg?.includes('not supported')) {
+          if (
+            aiRes.status === 404 ||
+            aiRes.status === 503 ||
+            errMsg?.includes('not found') ||
+            errMsg?.includes('no longer available') ||
+            errMsg?.includes('not supported') ||
+            errMsg?.includes('high demand') ||
+            errMsg?.includes('overloaded') ||
+            errMsg?.includes('capacity') ||
+            errMsg?.includes('aborted')
+          ) {
             continue;
           }
           reply = `Gemini API error: ${errMsg}`;
