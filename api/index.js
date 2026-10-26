@@ -995,6 +995,7 @@ Rules:
           break;
         }
       }
+    }
 
     if (!reply) {
       reply = "I was unable to retrieve a response from your AI provider. Please verify your API key and model settings in Settings.";
