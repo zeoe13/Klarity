@@ -3569,42 +3569,44 @@ function KlarityApp() {
                   {/* TAB 3: BANK CONNECTION */}
                   {settingsActiveTab === 'plaid' && (
                     <div key="settings-tab-plaid" className="flex flex-col gap-5">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-100">
+                      <div className="flex flex-col gap-3 pb-0 border-b border-slate-200">
                         <div>
                           <h2 className="font-serif-title text-2xl font-bold text-slate-900">Bank connection</h2>
                           <p className="text-xs text-slate-500 mt-0.5">Manage connected banks and link new accounts.</p>
                         </div>
 
-                        {/* Top sub-tabs: Connected banks vs Connect a bank */}
-                        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl self-start sm:self-auto">
-                          <button
-                            type="button"
-                            onClick={() => setBankTab('connected')}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                              bankTab === 'connected'
-                                ? 'bg-white text-slate-900 shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900'
-                            }`}
-                          >
-                            <Building2 className="w-3.5 h-3.5" />
-                            <span>Connected banks</span>
-                            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700">
-                              {(data?.accounts || []).filter(a => a.institution).length > 0
-                                ? new Set((data?.accounts || []).map(a => a.institution)).size
-                                : 0}
-                            </span>
-                          </button>
+                        {/* Sub-tabs placed directly under the title: Connect a bank on the left, Connected banks on the right with underline indicator */}
+                        <div className="flex items-center gap-6 mt-1 -mb-px">
                           <button
                             type="button"
                             onClick={() => setBankTab('connect')}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            className={`pb-2.5 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 border-b-2 ${
                               bankTab === 'connect'
-                                ? 'bg-white text-slate-900 shadow-2xs'
-                                : 'text-slate-600 hover:text-slate-900'
+                                ? 'text-[#18457c] border-[#18457c]'
+                                : 'text-slate-500 hover:text-slate-800 border-transparent'
                             }`}
                           >
                             <Plus className="w-3.5 h-3.5" />
                             <span>Connect a bank</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBankTab('connected')}
+                            className={`pb-2.5 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                              bankTab === 'connected'
+                                ? 'text-[#18457c] border-[#18457c]'
+                                : 'text-slate-500 hover:text-slate-800 border-transparent'
+                            }`}
+                          >
+                            <Building2 className="w-3.5 h-3.5" />
+                            <span>Connected banks</span>
+                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                              bankTab === 'connected' ? 'bg-blue-100 text-[#18457c]' : 'bg-slate-200 text-slate-600'
+                            }`}>
+                              {(data?.accounts || []).filter(a => a.institution).length > 0
+                                ? new Set((data?.accounts || []).map(a => a.institution)).size
+                                : 0}
+                            </span>
                           </button>
                         </div>
                       </div>
