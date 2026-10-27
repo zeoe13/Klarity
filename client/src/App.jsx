@@ -49,6 +49,33 @@ import {
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
+import { marked } from 'marked';
+
+// Configure marked with GitHub-flavored markdown and automatic line breaks
+marked.setOptions({
+  breaks: true,
+  gfm: true
+});
+
+// Gemini-style Markdown Formatter Component
+function FormattedChatMessage({ text, isUser }) {
+  if (!text) return null;
+  if (isUser) {
+    return <div className="whitespace-pre-wrap leading-relaxed text-white">{text}</div>;
+  }
+  let html = '';
+  try {
+    html = marked.parse(text, { breaks: true, gfm: true });
+  } catch (err) {
+    return <div className="whitespace-pre-wrap leading-relaxed">{text}</div>;
+  }
+  return (
+    <div
+      className="gemini-markdown text-slate-800"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || ['207624653160', 'vbp60vuujhl2h8jshvnosad9m2ft75jq.apps.googleusercontent.com'].join('-');
 
@@ -2917,7 +2944,7 @@ function KlarityApp() {
                         </div>
                       )
                     )}
-                    {msg.text && <div className="whitespace-pre-wrap">{msg.text}</div>}
+                    {msg.text && <FormattedChatMessage text={msg.text} isUser={msg.role === 'user'} />}
                   </div>
                 </div>
               ))}
@@ -3217,7 +3244,7 @@ function KlarityApp() {
                     </div>
                   )
                 )}
-                {msg.text && <div className="whitespace-pre-wrap">{msg.text}</div>}
+                {msg.text && <FormattedChatMessage text={msg.text} isUser={msg.role === 'user'} />}
               </div>
             </div>
           ))}

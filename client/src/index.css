@@ -27,3 +27,127 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Gemini-style Markdown Chat Formatting */
+.gemini-markdown {
+  word-break: break-word;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+.gemini-markdown > *:first-child {
+  margin-top: 0 !important;
+}
+.gemini-markdown > *:last-child {
+  margin-bottom: 0 !important;
+}
+.gemini-markdown p {
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+}
+.gemini-markdown h1,
+.gemini-markdown h2,
+.gemini-markdown h3,
+.gemini-markdown h4 {
+  font-weight: 700;
+  line-height: 1.35;
+  margin-top: 0.85rem;
+  margin-bottom: 0.35rem;
+  color: #0f172a;
+}
+.gemini-markdown h1 { font-size: 1rem; }
+.gemini-markdown h2 { font-size: 0.925rem; }
+.gemini-markdown h3 { font-size: 0.875rem; }
+.gemini-markdown h4 { font-size: 0.8125rem; }
+
+.gemini-markdown strong,
+.gemini-markdown b {
+  font-weight: 650;
+  color: #0f172a;
+}
+
+.gemini-markdown ul {
+  list-style-type: disc;
+  margin-left: 1.25rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+.gemini-markdown ol {
+  list-style-type: decimal;
+  margin-left: 1.25rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+.gemini-markdown li {
+  margin-bottom: 0.25rem;
+  line-height: 1.55;
+  padding-left: 0.15rem;
+}
+.gemini-markdown li::marker {
+  color: currentColor;
+  opacity: 0.75;
+}
+
+.gemini-markdown code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85em;
+  padding: 0.12rem 0.35rem;
+  border-radius: 0.35rem;
+  background-color: rgba(0, 0, 0, 0.07);
+  color: #0f172a;
+}
+.gemini-markdown pre {
+  margin: 0.5rem 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.5rem;
+  background-color: #0f172a;
+  color: #f8fafc;
+  overflow-x: auto;
+}
+.gemini-markdown pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font-size: 0.8em;
+}
+
+.gemini-markdown a {
+  color: #18457c;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+.gemini-markdown a:hover {
+  color: #0f2c52;
+}
+
+.gemini-markdown hr {
+  margin: 0.75rem 0;
+  border: 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.gemini-markdown blockquote {
+  border-left: 3px solid #cbd5e1;
+  padding-left: 0.65rem;
+  margin: 0.5rem 0;
+  color: #475569;
+  font-style: italic;
+}
+
+.gemini-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0;
+  font-size: 0.8em;
+}
+.gemini-markdown th,
+.gemini-markdown td {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+}
+.gemini-markdown th {
+  background-color: rgba(0, 0, 0, 0.04);
+  font-weight: 600;
+}
+
