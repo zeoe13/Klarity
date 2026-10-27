@@ -1480,9 +1480,14 @@ function KlarityApp() {
       const json = await res.json();
       let replyText = json.reply || "I've reviewed your request.";
 
-      // Handle AI action execution (e.g. adding subscriptions or bills)
-      if (json.actionExecuted) {
-        fetchData(currentUser, viewHousehold);
+      // Handle AI action execution (e.g. adding subscriptions, bills, purchases from statements)
+      if (json.actionsExecuted && json.actionsExecuted.length > 0) {
+        await fetchData(currentUser, viewHousehold);
+        const count = json.actionsExecuted.length;
+        setNotificationToast(`Auto-added ${count} item${count > 1 ? 's' : ''} to your records!`);
+        setTimeout(() => setNotificationToast(''), 4500);
+      } else if (json.actionExecuted) {
+        await fetchData(currentUser, viewHousehold);
         const act = json.actionExecuted;
         setNotificationToast(`Added ${act.item?.name || 'item'} to ${act.type}!`);
         setTimeout(() => setNotificationToast(''), 4000);

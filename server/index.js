@@ -936,11 +936,13 @@ Actual Connected Finances for ${currentUser.name} (strictly respecting permissio
 
 Rules:
 1. Provide concise, clear, and empathetic financial guidance based strictly on real numbers.
-2. AUTOMATED ACTIONS: If the user asks you to add, track, or record a subscription, bill, or purchase (e.g. "add a subscription that i pay for about 20 bucks a month on netflix"), you MUST execute it by outputting an ACTION tag in your response:
-   - For Subscriptions: [ACTION:ADD_SUBSCRIPTION:{"name":"Netflix","amount":20,"billingCycle":"monthly"}]
-   - For Bills: [ACTION:ADD_BILL:{"name":"Bill Name","expectedAmount":50,"dueDay":15}]
-   - For Purchases: [ACTION:ADD_TRANSACTION:{"name":"Store Name","amount":25,"category":"General"}]
-   Always warmly confirm in your response that you have automatically added it to their records.
+2. AUTOMATED ACTIONS & STATEMENT EXTRACTION:
+   If the user asks you to add, track, or record items, or uploads/pastes a bank statement or receipt to extract bills, subscriptions, or purchases, you MUST output ACTION tags for EACH discovered item so Klarity registers them in their database:
+   - For Subscriptions: [ACTION:ADD_SUBSCRIPTION:{"name":"Netflix","amount":22.99,"billingCycle":"monthly"}]
+   - For Bills: [ACTION:ADD_BILL:{"name":"ConEdison","expectedAmount":148.60,"dueDay":3}]
+   - For Purchases: [ACTION:ADD_TRANSACTION:{"name":"Trader Joe's","amount":78.45,"category":"Groceries"}]
+   You can output multiple ACTION tags in a single response to add all detected items at once!
+   Always summarize the items added in clean bullet points.
 2. If the user asks to view or go to a page or section in the app (e.g. "show me my subscriptions", "go to bills", "open cards", "show purchases", "overview", or "settings"), you MUST include a navigation tag at the end of your response:
    - For Subscriptions: [NAVIGATE:subscriptions]
    - For Bills: [NAVIGATE:bills]
@@ -1098,65 +1100,90 @@ Rules:
       reply = "I was unable to retrieve a response from your AI provider. Please verify your API key and model settings in Settings.";
     }
 
-    let actionExecuted = null;
+    const actionsExecuted = [];
+    data.subscriptions = data.subscriptions || [];
+    data.bills = data.bills || [];
+    data.transactions = data.transactions || [];
 
-    // Execute Subscription Action
-    const subActionMatch = reply.match(/\[ACTION:ADD_SUBSCRIPTION:([\s\S]*?)\]/i);
-    if (subActionMatch) {
+    // 1. Process all multiple [ACTION:ADD_SUBSCRIPTION:...] tags
+    const subRegex = /\[ACTION:ADD_SUBSCRIPTION:([\s\S]*?)\]/gi;
+    let sMatch;
+    while ((sMatch = subRegex.exec(reply)) !== null) {
       try {
-        const subData = JSON.parse(subActionMatch[1]);
-        const newSub = {
-          id: `sub-${Date.now()}`,
-          name: subData.name || 'Subscription',
-          amount: parseFloat(subData.amount || 0),
-          renewDay: parseInt(subData.renewDay || 1),
-          billingCycle: subData.billingCycle || 'monthly',
-          account: subData.account || 'Everyday Rewards',
-          active: true
-        };
-        data.subscriptions = data.subscriptions || [];
-        data.subscriptions.push(newSub);
-        writeData(data);
-        actionExecuted = { type: 'subscription', item: newSub };
-      } catch (err) {
-        console.error('Error parsing subscription action:', err);
+        const subData = JSON.parse(sMatch[1]);
+        if (!data.subscriptions.some(s => s.name.toLowerCase() === (subData.name || '').toLowerCase())) {
+          const newSub = {
+            id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            name: subData.name || 'Subscription',
+            amount: parseFloat(subData.amount || 0),
+            renewDay: parseInt(subData.renewDay || subData.dueDay || 1),
+            billingCycle: subData.billingCycle || 'monthly',
+            account: subData.account || 'Checking • 4821',
+            active: true
+          };
+          data.subscriptions.push(newSub);
+          actionsExecuted.push({ type: 'subscription', item: newSub });
+        }
+      } catch (e) {
+        console.error('Error parsing subscription tag:', e);
       }
     }
 
-    // Execute Bill Action
-    const billActionMatch = reply.match(/\[ACTION:ADD_BILL:([\s\S]*?)\]/i);
-    if (billActionMatch) {
+    // 2. Process all multiple [ACTION:ADD_BILL:...] tags
+    const billRegex = /\[ACTION:ADD_BILL:([\s\S]*?)\]/gi;
+    let bMatch;
+    while ((bMatch = billRegex.exec(reply)) !== null) {
       try {
-        const billData = JSON.parse(billActionMatch[1]);
-        const newBill = {
-          id: `bill-${Date.now()}`,
-          name: billData.name || 'Utility Bill',
-          category: billData.category || 'Utilities',
-          expectedAmount: parseFloat(billData.expectedAmount || billData.amount || 0),
-          dueDay: parseInt(billData.dueDay || 15),
-          nextDueDate: billData.nextDueDate || calculateNextDueDate(parseInt(billData.dueDay || 15)),
-          autopay: false,
-          status: 'pending',
-          recurrence: 'monthly'
+        const billData = JSON.parse(bMatch[1]);
+        if (!data.bills.some(b => b.name.toLowerCase() === (billData.name || '').toLowerCase())) {
+          const day = parseInt(billData.dueDay || 15);
+          const newBill = {
+            id: `bill-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            name: billData.name || 'Utility Bill',
+            category: billData.category || 'Utilities',
+            expectedAmount: parseFloat(billData.expectedAmount || billData.amount || 0),
+            dueDay: day,
+            nextDueDate: billData.nextDueDate || calculateNextDueDate(day),
+            autopay: false,
+            status: 'pending',
+            recurrence: 'monthly'
+          };
+          data.bills.push(newBill);
+          actionsExecuted.push({ type: 'bill', item: newBill });
+        }
+      } catch (e) {
+        console.error('Error parsing bill tag:', e);
+      }
+    }
+
+    // 3. Process all multiple [ACTION:ADD_TRANSACTION:...] tags
+    const txRegex = /\[ACTION:ADD_TRANSACTION:([\s\S]*?)\]/gi;
+    let tMatch;
+    while ((tMatch = txRegex.exec(reply)) !== null) {
+      try {
+        const txData = JSON.parse(tMatch[1]);
+        const newTx = {
+          id: `tx-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          name: txData.name || 'Store Purchase',
+          category: txData.category || 'General',
+          amount: parseFloat(txData.amount || 0),
+          date: txData.date || new Date().toISOString().split('T')[0],
+          account: txData.account || 'Checking • 4821'
         };
-        data.bills = data.bills || [];
-        data.bills.push(newBill);
-        writeData(data);
-        actionExecuted = { type: 'bill', item: newBill };
-      } catch (err) {
-        console.error('Error parsing bill action:', err);
+        data.transactions.unshift(newTx);
+        actionsExecuted.push({ type: 'transaction', item: newTx });
+      } catch (e) {
+        console.error('Error parsing transaction tag:', e);
       }
     }
 
     // Natural Language Fallback: if user specifically asks to add subscription (e.g. "add a subscription that i pay for about 20 bucks a month on netflix")
-    if (!actionExecuted) {
+    if (actionsExecuted.length === 0) {
       const msgLower = (message || '').toLowerCase();
       if ((msgLower.includes('add') || msgLower.includes('track') || msgLower.includes('record')) && msgLower.includes('subscription')) {
-        // extract amount
         const amtMatch = message.match(/(?:\$|bucks|dollars|\b)([0-9]+(?:\.[0-9]{2})?)(?:\s*(?:bucks|dollars|\/mo|a month|per month))?/i);
         const parsedAmount = amtMatch ? parseFloat(amtMatch[1]) : 20.00;
         
-        // extract service name
         let serviceName = 'Subscription';
         ['netflix', 'spotify', 'icloud', 'apple', 'chatgpt', 'hulu', 'disney', 'youtube', 'amazon prime', 'gym'].forEach(k => {
           if (msgLower.includes(k)) {
@@ -1173,15 +1200,20 @@ Rules:
           account: 'Everyday Rewards',
           active: true
         };
-        data.subscriptions = data.subscriptions || [];
         data.subscriptions.push(newSub);
-        writeData(data);
-        actionExecuted = { type: 'subscription', item: newSub };
+        actionsExecuted.push({ type: 'subscription', item: newSub });
         reply += `\n\nI've automatically added **${serviceName}** (${parsedAmount.toFixed(2)}/mo) to your Subscriptions!`;
       }
     }
 
-    return res.json({ reply, actionExecuted });
+    if (actionsExecuted.length > 0) {
+      writeData(data);
+    }
+
+    // Strip raw ACTION tags from visible chat text for clean formatting
+    reply = reply.replace(/\[ACTION:[A-Z_]+:[\s\S]*?\]/gi, '').trim();
+
+    return res.json({ reply, actionsExecuted, actionExecuted: actionsExecuted[0] || null });
   } catch (err) {
     console.error('AI chat route error:', err);
     return res.json({ reply: `Advisor error: ${err.message}` });
