@@ -2276,46 +2276,49 @@ function KlarityApp() {
             </div>
 
             {/* 3. Upcoming bills Card */}
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-xs font-bold text-slate-900">Upcoming bills</h2>
-                <button
-                  type="button"
-                  onClick={() => setIsAddBillOpen(true)}
-                  className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
-                >
-                  Add bill
-                </button>
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 overflow-hidden flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xs font-bold text-slate-900">Upcoming bills</h2>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddBillOpen(true)}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
+                  >
+                    Add bill
+                  </button>
+                </div>
+
+                <div className="divide-y divide-slate-100">
+                  {displayBills.slice(0, 3).map((bill) => {
+                    const isUrgent = bill.daysUntil != null && bill.daysUntil <= 3;
+                    return (
+                      <div key={bill.id} className="py-3 flex items-center justify-between gap-4 first:pt-1">
+                        <div>
+                          <p className="text-xs font-semibold text-slate-900">{bill.name}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{bill.dueText}</p>
+                        </div>
+                        <div className="flex items-center gap-4 shrink-0">
+                          <span
+                            className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${
+                              isUrgent ? 'bg-[#fef3c7] text-[#92400e]' : 'bg-[#e0e7ff] text-[#3730a3]'
+                            }`}
+                          >
+                            In {bill.daysUntil} days
+                          </span>
+                          <span className="text-xs font-bold text-slate-900 min-w-16 text-right">
+                            ${Number(bill.amount).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className="divide-y divide-slate-100">
-                {displayBills.slice(0, 3).map((bill) => {
-                  const isUrgent = bill.daysUntil != null && bill.daysUntil <= 3;
-                  return (
-                    <div key={bill.id} className="py-3 flex items-center justify-between gap-4 first:pt-1">
-                      <div>
-                        <p className="text-xs font-semibold text-slate-900">{bill.name}</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">{bill.dueText}</p>
-                      </div>
-                      <div className="flex items-center gap-4 shrink-0">
-                        <span
-                          className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${
-                            isUrgent ? 'bg-[#fef3c7] text-[#92400e]' : 'bg-[#e0e7ff] text-[#3730a3]'
-                          }`}
-                        >
-                          In {bill.daysUntil} days
-                        </span>
-                        <span className="text-xs font-bold text-slate-900 min-w-16 text-right">
-                          ${Number(bill.amount).toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs mt-1">
-                <span className="text-slate-500">Monthly bills</span>
+              {/* Shaded Total Section */}
+              <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 border-t border-slate-100 rounded-b-xl flex items-center justify-between text-xs mt-3.5">
+                <span className="text-slate-500 font-medium">Monthly bills</span>
                 <span className="font-bold text-slate-900">
                   ${Number(displayTotalMonthlyBills).toFixed(2)}
                 </span>
@@ -2325,7 +2328,7 @@ function KlarityApp() {
             {/* 4. Bottom 2-Column Row for Subscriptions & Recent purchases */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {/* Subscriptions Card */}
-              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between">
+              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between overflow-hidden">
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h2 className="text-xs font-bold text-slate-900">Subscriptions</h2>
@@ -2353,8 +2356,9 @@ function KlarityApp() {
                   </div>
                 </div>
 
-                <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs mt-3">
-                  <span className="text-slate-500">Total per month</span>
+                {/* Shaded Total Section */}
+                <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 border-t border-slate-100 rounded-b-xl flex items-center justify-between text-xs mt-4">
+                  <span className="text-slate-500 font-medium">Total per month</span>
                   <span className="font-bold text-slate-900">
                     ${Number(displayTotalSubs).toFixed(2)}
                   </span>
@@ -2362,7 +2366,7 @@ function KlarityApp() {
               </div>
 
               {/* Recent purchases Card */}
-              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between">
+              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between overflow-hidden">
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h2 className="text-xs font-bold text-slate-900">Recent purchases</h2>
@@ -2392,6 +2396,14 @@ function KlarityApp() {
                       );
                     })}
                   </div>
+                </div>
+
+                {/* Shaded Total Section */}
+                <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 border-t border-slate-100 rounded-b-xl flex items-center justify-between text-xs mt-4">
+                  <span className="text-slate-500 font-medium">Recent transactions</span>
+                  <span className="font-bold text-slate-900">
+                    {displayTxs.length} items shown
+                  </span>
                 </div>
               </div>
             </div>
@@ -2461,25 +2473,33 @@ function KlarityApp() {
             </div>
 
             {/* Bills List */}
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 divide-y divide-slate-100">
-              {filteredBills.map(bill => (
-                <div key={bill.id} className="py-3.5 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">{bill.name}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{bill.nextDueDate || `Due Day ${bill.dueDay} • Checking`}</p>
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 overflow-hidden">
+              <div className="divide-y divide-slate-100">
+                {filteredBills.map(bill => (
+                  <div key={bill.id} className="py-3.5 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">{bill.name}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{bill.nextDueDate || `Due Day ${bill.dueDay} • Checking`}</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-xs font-bold text-slate-900">${Number(bill.expectedAmount).toFixed(2)}</span>
+                      <button
+                        type="button"
+                        onClick={() => handlePayBill(bill.id, bill.name, bill.expectedAmount)}
+                        className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-emerald-600 hover:text-white text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                      >
+                        {bill.status === 'paid' ? 'Paid' : 'Mark Paid'}
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-xs font-bold text-slate-900">${Number(bill.expectedAmount).toFixed(2)}</span>
-                    <button
-                      type="button"
-                      onClick={() => handlePayBill(bill.id, bill.name, bill.expectedAmount)}
-                      className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-emerald-600 hover:text-white text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
-                    >
-                      {bill.status === 'paid' ? 'Paid' : 'Mark Paid'}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
+
+              {/* Shaded Total Section */}
+              <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 border-t border-slate-100 rounded-b-xl flex items-center justify-between text-xs mt-3">
+                <span className="text-slate-500 font-medium">Total Monthly Bills ({filteredBills.length} active)</span>
+                <span className="font-bold text-slate-900">${Number(totalMonthlyBills).toFixed(2)}</span>
+              </div>
             </div>
           </div>
         )}
@@ -2510,26 +2530,34 @@ function KlarityApp() {
               </button>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 divide-y divide-slate-100">
-              {subscriptionsList.map(sub => (
-                <div key={sub.id} className="py-3.5 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">{sub.name}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">{sub.renewalDate || 'Renews monthly'} • {sub.category}</p>
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 overflow-hidden">
+              <div className="divide-y divide-slate-100">
+                {subscriptionsList.map(sub => (
+                  <div key={sub.id} className="py-3.5 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">{sub.name}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{sub.renewalDate || 'Renews monthly'} • {sub.category}</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-xs font-bold text-slate-900">${Number(sub.amount).toFixed(2)}/mo</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSubscription(sub.id, sub.name)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"
+                        title="Delete subscription"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-xs font-bold text-slate-900">${Number(sub.amount).toFixed(2)}/mo</span>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteSubscription(sub.id, sub.name)}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"
-                      title="Delete subscription"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
+
+              {/* Shaded Total Section */}
+              <div className="-mx-5 -mb-5 px-5 py-3.5 bg-slate-50 border-t border-slate-100 rounded-b-xl flex items-center justify-between text-xs mt-3">
+                <span className="text-slate-500 font-medium">Total Monthly Subscriptions ({subscriptionsList.length} active)</span>
+                <span className="font-bold text-slate-900">${Number(totalMonthlySubscriptions).toFixed(2)}/mo</span>
+              </div>
             </div>
           </div>
         )}
@@ -2559,6 +2587,23 @@ function KlarityApp() {
                 <span>Add Card</span>
               </button>
             </div>
+
+            {/* Shaded Total Summary Card for Cards */}
+            {creditCards.length > 0 && (
+              <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5">
+                  <CreditCard className="w-4 h-4 text-[#18457c]" />
+                  <span className="font-semibold text-slate-700">Total Card Balances ({creditCards.length} {creditCards.length === 1 ? 'card' : 'cards'})</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="font-bold text-slate-900 text-sm">
+                    ${Number(cardBalances).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-slate-500 font-medium">Total Limit: ${creditCards.reduce((s, c) => s + Number(c.limit || 0), 0).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
 
             {creditCards.length === 0 ? (
               <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-10 text-center flex flex-col items-center justify-center gap-3">
@@ -2755,6 +2800,17 @@ function KlarityApp() {
                   })}
                 </tbody>
               </table>
+
+              {/* Shaded Total Section */}
+              <div className="bg-slate-50 px-5 py-3.5 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-medium">Total Purchases ({filteredTransactions.length} recorded)</span>
+                <span className="font-bold text-slate-900">
+                  ${filteredTransactions
+                    .filter(t => t.category !== 'Income' && Number(t.amount) > 0)
+                    .reduce((sum, t) => sum + Number(t.amount || 0), 0)
+                    .toFixed(2)}
+                </span>
+              </div>
             </div>
           </div>
         )}
@@ -2775,7 +2831,13 @@ function KlarityApp() {
                   >
                     <ArrowLeft className="w-4 h-4" />
                   </button>
-                  <h2 className="font-serif-title text-xl font-bold text-slate-900">Advisor</h2>
+                  <div className="flex items-center gap-2.5">
+                    <h2 className="font-serif-title text-xl font-bold text-slate-900">Advisor</h2>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <Globe className="w-3 h-3 text-emerald-600" />
+                      <span>Internet Connected</span>
+                    </span>
+                  </div>
                 </div>
                 <p className="text-xs text-slate-500">Reads your bills, cards and spending to answer questions.</p>
               </div>
@@ -3023,9 +3085,9 @@ function KlarityApp() {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-bold text-slate-900">Advisor</h2>
-              <span className="inline-flex items-center gap-1 text-[10px] text-blue-700 bg-blue-50 border border-blue-200/80 px-2 py-0.5 rounded-full font-medium">
-                <Globe className="w-2.5 h-2.5 text-blue-600" />
-                Live web
+              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-medium">
+                <Globe className="w-2.5 h-2.5 text-emerald-600" />
+                Internet connected
               </span>
             </div>
             <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
@@ -4003,6 +4065,27 @@ function KlarityApp() {
                               </button>
                             );
                           })}
+                        </div>
+                      </div>
+
+                      {/* Card: Live Internet & Web Browsing Access */}
+                      <div className="border border-slate-200 rounded-2xl p-6 flex flex-col gap-3 bg-white shadow-2xs">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shadow-2xs shrink-0">
+                              <Globe className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="text-xs font-bold text-slate-900">Live Internet Access</h4>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  Active
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 mt-0.5">Allows the AI to browse Google and search the web in real-time for live rates, card promotions, and market benchmarks.</p>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>

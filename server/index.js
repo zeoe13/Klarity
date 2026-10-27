@@ -979,48 +979,96 @@ app.post('/api/bills/scan', async (req, res) => {
 });
 
 
-// Live Web Search Helper for Market Research & Real-Time Card/Bank Offers
+// Live Web Search Helper for Market Research, Live Internet Browsing & Real-Time Card/Bank Offers
 async function performWebSearch(query) {
+  if (!query || query.trim().length === 0) return '';
+  const cleanQuery = query.replace(/[^\w\s\$\%\.\,\-\+]/gi, ' ').replace(/\s+/g, ' ').trim();
+
+  // Try 1: DuckDuckGo HTML Lite search
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
     const res = await fetch('https://lite.duckduckgo.com/lite/', {
       method: 'POST',
       signal: controller.signal,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       },
-      body: `q=${encodeURIComponent(query)}`
+      body: `q=${encodeURIComponent(cleanQuery)}`
     });
     clearTimeout(timeoutId);
-    if (!res.ok) return '';
-    const html = await res.text();
-    const tdRe = /<td[^>]*>([\s\S]*?)<\/td>/g;
-    let matches = [];
-    let m;
-    while ((m = tdRe.exec(html)) !== null && matches.length < 12) {
-      const text = m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-      if (text.length > 35 && !text.includes('DuckDuckGo') && !text.includes('Sponsored link')) {
-        matches.push(text);
+    if (res.ok) {
+      const html = await res.text();
+      const tdRe = /<td[^>]*class=['"]result-snippet['"][^>]*>([\s\S]*?)<\/td>/gi;
+      let matches = [];
+      let m;
+      while ((m = tdRe.exec(html)) !== null && matches.length < 8) {
+        const text = m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+        if (text.length > 30 && !text.includes('DuckDuckGo') && !text.includes('Sponsored')) {
+          matches.push(text);
+        }
+      }
+      if (matches.length === 0) {
+        const genTdRe = /<td[^>]*>([\s\S]*?)<\/td>/g;
+        while ((m = genTdRe.exec(html)) !== null && matches.length < 8) {
+          const text = m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+          if (text.length > 35 && !text.includes('DuckDuckGo') && !text.includes('Sponsored')) {
+            matches.push(text);
+          }
+        }
+      }
+      if (matches.length > 0) {
+        return matches.slice(0, 6).map(item => `- ${item}`).join('\n');
       }
     }
-    return matches.slice(0, 5).map(item => `- ${item}`).join('\n');
   } catch (err) {
-    console.warn('Web search lookup note:', err.message);
-    return '';
+    console.warn('Web search (Lite) error:', err.message);
   }
+
+  // Try 2: DuckDuckGo Instant Answer API (JSON)
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(cleanQuery)}&format=json&no_html=1&skip_disambig=1`, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      const snippets = [];
+      if (data.AbstractText) snippets.push(`- ${data.Heading ? data.Heading + ': ' : ''}${data.AbstractText} (Source: ${data.AbstractSource || 'Web'})`);
+      if (Array.isArray(data.RelatedTopics)) {
+        for (const topic of data.RelatedTopics.slice(0, 4)) {
+          if (topic.Text) snippets.push(`- ${topic.Text}`);
+        }
+      }
+      if (snippets.length > 0) return snippets.join('\n');
+    }
+  } catch (err) {
+    console.warn('Web search (API) error:', err.message);
+  }
+
+  return '';
 }
 
 function shouldPerformWebSearch(message) {
-  const m = (message || '').toLowerCase();
+  if (!message || message.trim().length === 0) return false;
+  const m = message.toLowerCase().trim();
+  if (['hi', 'hello', 'hey', 'clear', 'reset', 'help'].includes(m)) return false;
+
   const searchKeywords = [
     'card', 'offer', 'apr', 'transfer', 'rate', 'recommend', 'compare', 'deal', 
     'best', 'zero', '0%', '0 apr', 'signup', 'bonus', 'bank', 'savings', 
     'high yield', 'hysa', 'loan', 'promo', 'current', 'today', 'market', 
-    'utility', 'rebate', 'tax', 'cost', 'alternative', 'cheaper', 'funds'
+    'utility', 'rebate', 'tax', 'cost', 'alternative', 'cheaper', 'funds',
+    'search', 'internet', 'online', 'google', 'look up', 'find', 'price', 
+    'what is', 'who is', 'how much', 'inflation', 'fed', 'interest', 'yield',
+    'stock', 'crypto', 'sub', 'subscription', 'plan', 'phone', 'electric', 'gas'
   ];
-  return searchKeywords.some(k => m.includes(k));
+  return searchKeywords.some(k => m.includes(k)) || m.includes('?') || m.startsWith('how') || m.startsWith('what') || m.startsWith('where');
 }
 
 // 10. AI Advisor Chat with Navigation Capabilities & User Key Encryption
@@ -1118,6 +1166,7 @@ app.post('/api/ai/chat', async (req, res) => {
 
   const systemContext = `
 You are Klarity, the personal AI Financial Advisor for ${currentUser.name}.
+You have active live internet access. When advising ${currentUser.name}, you can search the web in real-time for current credit card promotions (e.g. 0% intro APR balance transfers), bank savings yields, utility rate updates, market benchmarks, and subscription plans.
 Actual Connected Finances for ${currentUser.name} (strictly respecting permissions):
 - Checking Accounts (${permissions.cards ? 'Permitted' : 'Access Restricted'}): ${userChecking.length > 0 ? userChecking.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)}`).join(' | ') : 'None connected'}
 - Credit Cards (${permissions.cards ? 'Permitted' : 'Access Restricted'}): ${userCards.length > 0 ? userCards.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)} @ ${c.apr}% APR (Min: $${c.minPayment || 0})`).join(' | ') : 'None connected'}
@@ -1126,8 +1175,9 @@ Actual Connected Finances for ${currentUser.name} (strictly respecting permissio
 - Recent Purchases (${permissions.purchases ? 'Permitted' : 'Access Restricted'}): ${userTransactions.length > 0 ? userTransactions.map(t => `${t.name}: $${Math.abs(Number(t.amount)).toFixed(2)} on ${t.date}`).join(' | ') : 'None recorded'}${memoryContext}${liveWebSearchContext}
 
 Rules:
-1. Provide concise, clear, and empathetic financial guidance based strictly on real numbers.
-2. AUTOMATED ACTIONS, SENTENCE COMPREHENSION & DOCUMENT/STATEMENT EXTRACTION:
+1. Provide concise, clear, and empathetic financial guidance based strictly on real numbers and current web knowledge.
+2. LIVE INTERNET & WEB KNOWLEDGE: Incorporate real-time web facts to recommend specific credit card promotions (e.g. Citi Simplicity, Wells Fargo Reflect, Chase Freedom), balance transfer fees, current HYSA yields, and ways to save money.
+3. AUTOMATED ACTIONS, SENTENCE COMPREHENSION & DOCUMENT/STATEMENT EXTRACTION:
    Whenever the user pastes sentences describing bills, subscriptions, or purchases (e.g., via Scan Document or chat) OR uploads any file/statement/receipt, you MUST carefully comprehend every item mentioned and output an ACTION tag for EACH item so Klarity automatically registers them:
    - For Subscriptions (streaming, software, gym, recurring memberships): [ACTION:ADD_SUBSCRIPTION:{"name":"Netflix","amount":22.99,"billingCycle":"monthly"}]
    - For Bills (utilities, electric, water, gas, internet, phone, insurance, rent): [ACTION:ADD_BILL:{"name":"ConEdison Electric","expectedAmount":148.60,"dueDay":3}]
@@ -1278,8 +1328,10 @@ Rules:
           }
         }
 
-        const geminiPayload = {
-          contents: [{ role: 'user', parts }]
+        // Try first with Google Search Grounding enabled for live internet search
+        let geminiPayload = {
+          contents: [{ role: 'user', parts }],
+          tools: [{ googleSearch: {} }]
         };
 
         const controller = new AbortController();
@@ -1291,6 +1343,17 @@ Rules:
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(geminiPayload)
         }).catch(err => ({ ok: false, status: 504, errorText: err.message }));
+
+        // If tools is not supported by a legacy model, retry without tools
+        if (!aiRes.ok && (aiRes.status === 400 || aiRes.status === 404)) {
+          geminiPayload = { contents: [{ role: 'user', parts }] };
+          aiRes = await fetch(geminiUrl, {
+            method: 'POST',
+            signal: controller.signal,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(geminiPayload)
+          }).catch(err => ({ ok: false, status: 504, errorText: err.message }));
+        }
 
         clearTimeout(timeoutId);
 
