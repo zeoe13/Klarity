@@ -44,7 +44,8 @@ import {
   ArrowLeft,
   Layers,
   Globe,
-  Maximize2
+  Maximize2,
+  Landmark
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
