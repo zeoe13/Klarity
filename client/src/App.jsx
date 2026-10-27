@@ -245,8 +245,26 @@ function KlarityApp() {
       metrics: { totalChecking: 0, totalCreditDebt: 0, totalMonthlyBills: 0, netWorthEstimate: 0 }
     };
   });
+  const VALID_TABS = ['dashboard', 'cards', 'bills', 'subscriptions', 'transactions', 'advisor'];
+
+  const getInitialTab = () => {
+    try {
+      const hash = window.location.hash.replace(/^#/, '').trim().toLowerCase();
+      if (VALID_TABS.includes(hash)) {
+        return hash;
+      }
+      const saved = localStorage.getItem('klarity_active_tab');
+      if (saved && VALID_TABS.includes(saved)) {
+        return saved;
+      }
+    } catch (e) {}
+    return 'dashboard';
+  };
+
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('dashboard'); // dashboard | cards | bills | transactions | advisor | settings
+  const [activeTab, setActiveTab] = useState(getInitialTab); // dashboard | cards | bills | subscriptions | transactions | advisor
+  const isNavigatingFromHistory = useRef(false);
+  const settingsModalRef = useRef(null);
   const [viewHousehold, setViewHousehold] = useState(false);
 
   // Settings & Plaid state
@@ -583,10 +601,92 @@ function KlarityApp() {
       if (fullUploadMenuRef.current && !fullUploadMenuRef.current.contains(e.target)) {
         setIsFullUploadMenuOpen(false);
       }
+      if (isSettingsOpen && settingsModalRef.current && !settingsModalRef.current.contains(e.target)) {
+        setIsSettingsOpen(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (isSettingsOpen) setIsSettingsOpen(false);
+        if (isUserMenuOpen) setIsUserMenuOpen(false);
+        if (isUploadMenuOpen) setIsUploadMenuOpen(false);
+        if (isFullUploadMenuOpen) setIsFullUploadMenuOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isSettingsOpen, isUserMenuOpen, isUploadMenuOpen, isFullUploadMenuOpen]);
+
+  // Synchronize activeTab with URL hash and browser history (supports page refresh & mouse back/forward buttons)
+  useEffect(() => {
+    const handleHistoryChange = (e) => {
+      let targetTab = e.state?.tab;
+      if (!targetTab) {
+        const hash = window.location.hash.replace(/^#/, '').trim().toLowerCase();
+        if (VALID_TABS.includes(hash)) {
+          targetTab = hash;
+        }
+      }
+      if (targetTab && VALID_TABS.includes(targetTab)) {
+        isNavigatingFromHistory.current = true;
+        setActiveTab(targetTab);
+        try {
+          localStorage.setItem('klarity_active_tab', targetTab);
+        } catch (err) {}
+      }
+    };
+
+    window.addEventListener('popstate', handleHistoryChange);
+    window.addEventListener('hashchange', handleHistoryChange);
+
+    // Mouse back (button 3) and mouse forward (button 4) event listener
+    const handleMouseNav = (e) => {
+      if (e.button === 3) {
+        e.preventDefault();
+        window.history.back();
+      } else if (e.button === 4) {
+        e.preventDefault();
+        window.history.forward();
+      }
+    };
+    window.addEventListener('mouseup', handleMouseNav);
+
+    // Ensure initial entry exists in history state
+    const currentHash = `#${activeTab}`;
+    if (window.location.hash !== currentHash || !window.history.state?.tab) {
+      try {
+        window.history.replaceState({ tab: activeTab }, '', currentHash);
+      } catch (err) {}
+    }
+
+    return () => {
+      window.removeEventListener('popstate', handleHistoryChange);
+      window.removeEventListener('hashchange', handleHistoryChange);
+      window.removeEventListener('mouseup', handleMouseNav);
+    };
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_active_tab', activeTab);
+    } catch (e) {}
+
+    if (isNavigatingFromHistory.current) {
+      isNavigatingFromHistory.current = false;
+      return;
+    }
+
+    const targetHash = `#${activeTab}`;
+    if (window.location.hash !== targetHash) {
+      try {
+        window.history.pushState({ tab: activeTab }, '', targetHash);
+      } catch (e) {}
+    }
+  }, [activeTab]);
 
   // Update messages in active chat session and persist to localStorage
   const updateActiveSession = (newMessages, overrideTitle) => {
@@ -3197,8 +3297,14 @@ function KlarityApp() {
 
       {/* Add Card Modal */}
       {isAddAccountOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setIsAddAccountOpen(false); }}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-slate-900">Add Credit Card</h3>
               <button onClick={() => setIsAddAccountOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
@@ -3283,8 +3389,14 @@ function KlarityApp() {
 
       {/* Add Bill Modal */}
       {isAddBillOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setIsAddBillOpen(false); }}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-slate-900">Add Upcoming Bill</h3>
               <button onClick={() => setIsAddBillOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
@@ -3355,8 +3467,14 @@ function KlarityApp() {
 
       {/* Add Subscription Modal */}
       {isAddSubOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setIsAddSubOpen(false); }}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-slate-900">Add Subscription</h3>
               <button onClick={() => setIsAddSubOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
@@ -3426,8 +3544,14 @@ function KlarityApp() {
 
       {/* Add Purchase Modal */}
       {isAddTxOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setIsAddTxOpen(false); }}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-slate-900">Add Purchase</h3>
               <button onClick={() => setIsAddTxOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
@@ -3498,8 +3622,14 @@ function KlarityApp() {
 
       {/* Scan Document Modal */}
       {isScanBillOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setIsScanBillOpen(false); }}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-[#18457c]" />
@@ -3534,8 +3664,15 @@ function KlarityApp() {
 
       {/* Settings Modal - Redesigned matching reference mockup */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-[880px] w-full min-h-[580px] h-[640px] flex flex-col overflow-hidden">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setIsSettingsOpen(false); }}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div
+            ref={settingsModalRef}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-[880px] w-full min-h-[580px] h-[640px] flex flex-col overflow-hidden cursor-default"
+          >
             
             {/* Modal Body: Left Tabs + Right Content */}
             <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
@@ -4118,8 +4255,14 @@ function KlarityApp() {
       )}
       {/* AI Memory Modal */}
       {isMemoryModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setIsMemoryModalOpen(false); }}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-serif-title text-lg font-bold text-slate-900">AI Advisor Memory</h3>
               <button onClick={() => setIsMemoryModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
@@ -4154,8 +4297,14 @@ function KlarityApp() {
 
       {/* Past Chats Modal */}
       {isPastChatsOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95">
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setIsPastChatsOpen(false); }}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
+          >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-serif-title text-lg font-bold text-slate-900">Past Conversations</h3>
               <button onClick={() => setIsPastChatsOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
