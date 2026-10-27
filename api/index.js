@@ -819,7 +819,7 @@ app.delete('/api/accounts/:id', (req, res) => {
 
 // 6. Bills Management
 app.post('/api/bills', (req, res) => {
-  const { name, category, expectedAmount, dueDay, nextDueDate, autopay, recurrence } = req.body;
+  const { name, category, expectedAmount, dueDay, nextDueDate, autopay, recurrence, account, cardId } = req.body;
   const data = readData();
 
   const newBill = {
@@ -831,7 +831,9 @@ app.post('/api/bills', (req, res) => {
     nextDueDate: nextDueDate || calculateNextDueDate(parseInt(dueDay || 15)),
     autopay: Boolean(autopay),
     status: 'pending',
-    recurrence: recurrence || 'monthly'
+    recurrence: recurrence || 'monthly',
+    account: account || 'Checking •••• 4821',
+    cardId: cardId || ''
   };
 
   data.bills = data.bills || [];
@@ -839,6 +841,24 @@ app.post('/api/bills', (req, res) => {
   writeData(data);
 
   res.json({ success: true, bill: newBill });
+});
+
+app.patch('/api/bills/:id', (req, res) => {
+  const { id } = req.params;
+  const data = readData();
+  const bill = (data.bills || []).find(b => b.id === id);
+  if (!bill) return res.status(404).json({ error: 'Bill not found' });
+  Object.assign(bill, req.body);
+  writeData(data);
+  res.json({ success: true, bill });
+});
+
+app.delete('/api/bills/:id', (req, res) => {
+  const { id } = req.params;
+  const data = readData();
+  data.bills = (data.bills || []).filter(b => b.id !== id);
+  writeData(data);
+  res.json({ success: true });
 });
 
 app.post('/api/bills/:id/pay', (req, res) => {
@@ -858,7 +878,8 @@ app.post('/api/bills/:id/pay', (req, res) => {
     category: bill.category || 'Utilities',
     amount: bill.expectedAmount,
     date: new Date().toISOString().split('T')[0],
-    account: 'Checking'
+    account: bill.account || 'Checking •••• 4821',
+    cardId: bill.cardId || ''
   });
 
   writeData(data);
@@ -867,16 +888,18 @@ app.post('/api/bills/:id/pay', (req, res) => {
 
 // 7. Transactions Management
 app.post('/api/transactions', (req, res) => {
-  const { name, amount, category, date, account } = req.body;
+  const { name, amount, category, date, account, cardId, notes } = req.body;
   const data = readData();
 
   const newTx = {
-    id: `tx-${Date.now()}`,
+    id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     name: name || 'Purchase',
     amount: parseFloat(amount || 0),
     category: category || categorizeTransaction(name),
     date: date || new Date().toISOString().split('T')[0],
-    account: account || 'Checking'
+    account: account || 'Everyday Rewards •••• 4417',
+    cardId: cardId || '',
+    notes: notes || ''
   };
 
   data.transactions = data.transactions || [];
@@ -884,6 +907,16 @@ app.post('/api/transactions', (req, res) => {
   writeData(data);
 
   res.json({ success: true, transaction: newTx });
+});
+
+app.patch('/api/transactions/:id', (req, res) => {
+  const { id } = req.params;
+  const data = readData();
+  const tx = (data.transactions || []).find(t => t.id === id);
+  if (!tx) return res.status(404).json({ error: 'Transaction not found' });
+  Object.assign(tx, req.body);
+  writeData(data);
+  res.json({ success: true, transaction: tx });
 });
 
 app.delete('/api/transactions/:id', (req, res) => {
@@ -901,7 +934,7 @@ app.get('/api/subscriptions', (req, res) => {
 });
 
 app.post('/api/subscriptions', (req, res) => {
-  const { name, amount, renewDay, account } = req.body;
+  const { name, amount, renewDay, renewalDate, billingCycle, category, account, cardId } = req.body;
   const data = readData();
 
   const newSub = {
@@ -909,7 +942,11 @@ app.post('/api/subscriptions', (req, res) => {
     name: name || 'Subscription',
     amount: parseFloat(amount || 0),
     renewDay: parseInt(renewDay || 1),
-    account: account || 'Everyday Rewards',
+    renewalDate: renewalDate || 'Renews monthly',
+    billingCycle: billingCycle || 'monthly',
+    category: category || 'Entertainment',
+    account: account || 'Everyday Rewards •••• 4417',
+    cardId: cardId || '',
     active: true
   };
 
@@ -918,6 +955,16 @@ app.post('/api/subscriptions', (req, res) => {
   writeData(data);
 
   res.json({ success: true, subscription: newSub });
+});
+
+app.patch('/api/subscriptions/:id', (req, res) => {
+  const { id } = req.params;
+  const data = readData();
+  const sub = (data.subscriptions || []).find(s => s.id === id);
+  if (!sub) return res.status(404).json({ error: 'Subscription not found' });
+  Object.assign(sub, req.body);
+  writeData(data);
+  res.json({ success: true, subscription: sub });
 });
 
 app.delete('/api/subscriptions/:id', (req, res) => {
@@ -1182,16 +1229,19 @@ Rules:
    - For Subscriptions (streaming, software, gym, recurring memberships): [ACTION:ADD_SUBSCRIPTION:{"name":"Netflix","amount":22.99,"billingCycle":"monthly"}]
    - For Bills (utilities, electric, water, gas, internet, phone, insurance, rent): [ACTION:ADD_BILL:{"name":"ConEdison Electric","expectedAmount":148.60,"dueDay":3}]
    - For Store Purchases / One-Time Transactions (groceries, dining, retail, gas, rideshare): [ACTION:ADD_TRANSACTION:{"name":"Trader Joe's","amount":78.45,"category":"Groceries"}]
+   - For Setting a Monthly Category Budget: [ACTION:SET_BUDGET:{"category":"Groceries","limit":400}]
+   - For Creating a Savings Goal: [ACTION:ADD_GOAL:{"name":"Emergency Fund","targetAmount":3000,"currentAmount":500,"monthlyContribution":250}]
    You MUST output multiple ACTION tags in a single response to add ALL detected bills, subscriptions, and purchases at once!
-   Always summarize the items you added in clean bullet points grouped by category.
+   Always summarize the items you added in clean bullet points grouped by category, and cite exact dollar amounts from the user's connected data.
 4. GEMINI-STYLE POLISHED FORMATTING:
    - Always structure your responses with elegant Markdown formatting just like Google Gemini.
    - Use bold font (**Name / Amount**) for merchant names, key figures, due dates, and action items so they are bold and prominent.
    - Use clean, distinct subheaders (### Bills, ### Subscriptions, ### Action Plan) to separate distinct sections.
    - Use clean bullet points and numbered lists for readability. Never output raw unstyled walls of text.
-5. If the user asks to view or go to a page or section in the app (e.g. "show me my subscriptions", "go to bills", "open cards", "show purchases", "overview", or "settings"), you MUST include a navigation tag at the end of your response:
+5. If the user asks to view or go to a page or section in the app (e.g. "show me my subscriptions", "go to bills", "open cards", "show purchases", "open budgets", "overview", or "settings"), you MUST include a navigation tag at the end of your response:
    - For Subscriptions: [NAVIGATE:subscriptions]
    - For Bills: [NAVIGATE:bills]
+   - For Budgets / Goals: [NAVIGATE:budgets]
    - For Cards: [NAVIGATE:cards]
    - For Transactions / Purchases: [NAVIGATE:transactions]
    - For Overview / Dashboard: [NAVIGATE:dashboard]
@@ -1477,6 +1527,24 @@ Rules:
       } catch (e) {
         console.error('Error parsing transaction tag:', e);
       }
+    }
+
+    // 3b. Process [ACTION:SET_BUDGET:...] and [ACTION:ADD_GOAL:...] tags
+    const budgetRegex = /\[ACTION:SET_BUDGET:([\s\S]*?)\]/gi;
+    let bgMatch;
+    while ((bgMatch = budgetRegex.exec(reply)) !== null) {
+      try {
+        const bData = JSON.parse(bgMatch[1]);
+        actionsExecuted.push({ type: 'budget', item: bData });
+      } catch (e) {}
+    }
+    const goalRegex = /\[ACTION:ADD_GOAL:([\s\S]*?)\]/gi;
+    let glMatch;
+    while ((glMatch = goalRegex.exec(reply)) !== null) {
+      try {
+        const gData = JSON.parse(glMatch[1]);
+        actionsExecuted.push({ type: 'goal', item: gData });
+      } catch (e) {}
     }
 
     // 4. Smart Fallback Comprehension for Uploaded Statements & Pasted Natural-Language Sentences
