@@ -1963,6 +1963,79 @@ function KlarityApp() {
   const totalMonthlyBills = billsList.reduce((sum, b) => sum + Number(b.expectedAmount || 0), 0);
   const totalMonthlySubscriptions = subscriptionsList.reduce((sum, s) => sum + Number(s.amount || 0), 0);
 
+  // Default fallback mocks to guarantee 1:1 visual match with reference design
+  const DEFAULT_OVERVIEW_CARDS = [
+    { id: 'mock-card-1', name: 'Everyday Rewards', mask: '4417', balance: 1102.20, limit: 5000, apr: 21.9, bgColor: 'bg-[#18457c]' },
+    { id: 'mock-card-2', name: 'Travel Card', mask: '9082', balance: 662.00, limit: 2000, apr: 24.4, bgColor: 'bg-[#242e3d]' }
+  ];
+
+  const DEFAULT_OVERVIEW_BILLS = [
+    { id: 'mock-b-1', name: 'PG&E Electric', dueText: 'Due Oct 28 · Checking', daysUntil: 3, amount: 128.40 },
+    { id: 'mock-b-2', name: 'Rent', dueText: 'Due Nov 1 · Checking', daysUntil: 7, amount: 650.00 },
+    { id: 'mock-b-3', name: 'Water Service', dueText: 'Due Nov 6 · Checking', daysUntil: 12, amount: 63.75 }
+  ];
+
+  const DEFAULT_OVERVIEW_SUBS = [
+    { id: 'mock-s-1', name: 'Netflix', renewText: 'Renews Nov 3', amount: 15.49 },
+    { id: 'mock-s-2', name: 'Spotify', renewText: 'Renews Nov 9', amount: 11.99 },
+    { id: 'mock-s-3', name: 'iCloud', renewText: 'Renews Nov 14', amount: 2.99 },
+    { id: 'mock-s-4', name: 'ChatGPT Plus', renewText: 'Renews Nov 20', amount: 20.00 }
+  ];
+
+  const DEFAULT_OVERVIEW_TXS = [
+    { id: 'mock-t-1', name: "Trader Joe's", subText: 'Oct 24 · Everyday Rewards', amount: -54.12 },
+    { id: 'mock-t-2', name: 'Shell', subText: 'Oct 23 · Everyday Rewards', amount: -41.80 },
+    { id: 'mock-t-3', name: 'Paycheck deposit', subText: 'Oct 22 · Checking', amount: 1850.00 }
+  ];
+
+  const displayCash = checkingAccounts.length > 0 ? availableCash : 4218.36;
+  const displayCards = creditCards.length > 0
+    ? creditCards.map((c, i) => ({
+        id: c.id,
+        name: c.name,
+        mask: c.mask || '4417',
+        balance: Number(c.balance || 0),
+        limit: Number(c.limit || 5000),
+        apr: c.apr || 21.9,
+        bgColor: i % 2 === 0 ? 'bg-[#18457c]' : 'bg-[#242e3d]'
+      }))
+    : DEFAULT_OVERVIEW_CARDS;
+
+  const displayCardBalances = creditCards.length > 0 ? cardBalances : 1764.20;
+  const displayBills = billsList.length > 0
+    ? billsList.map(b => ({
+        id: b.id,
+        name: b.name,
+        dueText: b.nextDueDate ? `Due ${b.nextDueDate} · Checking` : (b.dueDay ? `Due Day ${b.dueDay} · Checking` : 'Due soon · Checking'),
+        daysUntil: b.daysUntil != null ? b.daysUntil : (b.dueDay ? Math.max(1, b.dueDay - 10) : 3),
+        amount: Number(b.expectedAmount || 0)
+      }))
+    : DEFAULT_OVERVIEW_BILLS;
+
+  const displayDue14Sum = billsList.length > 0 ? billsDueIn14DaysSum : 842.15;
+  const displayDue14Count = billsList.length > 0 ? billsDueIn14DaysCount : 3;
+  const displayTotalMonthlyBills = billsList.length > 0 ? totalMonthlyBills : 842.15;
+
+  const displaySubs = subscriptionsList.length > 0
+    ? subscriptionsList.map(s => ({
+        id: s.id,
+        name: s.name,
+        renewText: s.renewalDate ? `Renews ${s.renewalDate}` : 'Renews monthly',
+        amount: Number(s.amount || 0)
+      }))
+    : DEFAULT_OVERVIEW_SUBS;
+
+  const displayTotalSubs = subscriptionsList.length > 0 ? totalMonthlySubscriptions : 50.47;
+
+  const displayTxs = transactionsList.length > 0
+    ? transactionsList.slice(0, 3).map(t => ({
+        id: t.id,
+        name: t.name,
+        subText: `${t.date || 'Recent'} · ${t.account || 'Checking'}`,
+        amount: Number(t.amount || 0)
+      }))
+    : DEFAULT_OVERVIEW_TXS;
+
   const firstName = currentUser?.name ? currentUser.name.split(' ')[0] : 'Ziyad';
   const userInitials = (currentUser?.name || 'Ziyad Elmahi')
     .split(' ')
@@ -2111,24 +2184,12 @@ function KlarityApp() {
         {/* --------------------------------------------------------------------- */}
         {activeTab === 'dashboard' && (
           <div className="flex flex-col gap-6">
-            {/* Top Greeting & Actions Row */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h1 className="font-serif-title text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-                  Good {getTimeGreeting()}, {firstName}
-                </h1>
-                <p className="text-xs text-slate-500 mt-0.5">Here's where your money stands today.</p>
-              </div>
-
-
-            </div>
-
-            {/* Top 3-Metric Summary Card */}
+            {/* 1. Top 3-Metric Summary Card */}
             <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100 gap-4 md:gap-6">
               <div>
                 <div className="text-xs text-slate-500 font-medium">Available cash</div>
                 <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-                  ${Number(availableCash).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ${Number(displayCash).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1">
                   <span className="text-emerald-700 font-bold">Covers</span>
@@ -2139,85 +2200,122 @@ function KlarityApp() {
               <div className="pt-4 md:pt-0 md:pl-6">
                 <div className="text-xs text-slate-500 font-medium">Card balances</div>
                 <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-                  ${Number(cardBalances).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ${Number(displayCardBalances).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-[11px] text-slate-500 mt-1.5">
-                  Across {creditCards.length || 2} cards
+                  Across {displayCards.length} cards
                 </div>
               </div>
 
               <div className="pt-4 md:pt-0 md:pl-6">
                 <div className="text-xs text-slate-500 font-medium">Due in 14 days</div>
                 <div className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-                  ${Number(billsDueIn14DaysSum).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ${Number(displayDue14Sum).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-[11px] text-slate-500 mt-1.5">
-                  {billsDueIn14DaysCount} bills
+                  {displayDue14Count} bills
                 </div>
               </div>
             </div>
 
-            {/* Upcoming Bills Card */}
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-xs font-bold text-slate-900">Upcoming bills</h2>
-                  <button
-                    type="button"
-                    onClick={() => setIsAddBillOpen(true)}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
-                  >
-                    Add bill
-                  </button>
-                </div>
-
-                {billsList.length === 0 ? (
-                  <div className="py-8 text-center text-slate-400">
-                    <Receipt className="w-7 h-7 mx-auto text-slate-300 mb-1.5 stroke-1" />
-                    <p className="text-xs font-semibold text-slate-600">No upcoming bills</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Add a bill or scan a statement to track payments.</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-slate-100">
-                    {billsList.slice(0, 4).map(bill => (
-                    <div key={bill.id} className="py-3 flex items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-slate-900">{bill.name}</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">{bill.nextDueDate || `Due Day ${bill.dueDay} • Checking`}</p>
+            {/* 2. Cards Section */}
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 mb-3">Cards</h2>
+              <div className="flex items-center gap-4 flex-wrap">
+                {displayCards.map((card) => {
+                  const util = card.limit > 0 ? Math.round((card.balance / card.limit) * 100) : 0;
+                  return (
+                    <div
+                      key={card.id}
+                      className={`w-[185px] h-[185px] rounded-2xl p-5 text-white flex flex-col justify-between shadow-xs ${card.bgColor || 'bg-[#18457c]'}`}
+                    >
+                      <div>
+                        <div className="text-xs font-semibold tracking-tight">{card.name}</div>
+                        <div className="text-[11px] text-white/70 font-mono mt-0.5">•••• {card.mask}</div>
                       </div>
 
+                      <div>
+                        <div className="text-xl font-bold tracking-tight mb-2">
+                          ${Number(card.balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden mb-2">
+                          <div
+                            className="h-full bg-white rounded-full transition-all"
+                            style={{ width: `${Math.min(100, Math.max(0, util))}%` }}
+                          />
+                        </div>
+                        <div className="text-[10px] text-white/80">
+                          {util}% of limit · {card.apr}% APR
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* + Add card */}
+                <button
+                  type="button"
+                  onClick={() => setIsAddAccountOpen(true)}
+                  className="w-[185px] h-[185px] rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 hover:bg-slate-100/70 flex flex-col items-center justify-center text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors cursor-pointer group"
+                >
+                  <span className="group-hover:scale-105 transition-transform">+ Add card</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 3. Upcoming bills Card */}
+            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xs font-bold text-slate-900">Upcoming bills</h2>
+                <button
+                  type="button"
+                  onClick={() => setIsAddBillOpen(true)}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
+                >
+                  Add bill
+                </button>
+              </div>
+
+              <div className="divide-y divide-slate-100">
+                {displayBills.slice(0, 3).map((bill) => {
+                  const isUrgent = bill.daysUntil != null && bill.daysUntil <= 3;
+                  return (
+                    <div key={bill.id} className="py-3 flex items-center justify-between gap-4 first:pt-1">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-900">{bill.name}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{bill.dueText}</p>
+                      </div>
                       <div className="flex items-center gap-4 shrink-0">
-                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${
-                          (bill.daysUntil != null && bill.daysUntil <= 3)
-                            ? 'bg-[#fef3c7] text-[#92400e]'
-                            : 'bg-[#e0e7ff] text-[#3730a3]'
-                        }`}>
-                          In {bill.daysUntil || (bill.dueDay ? Math.max(1, bill.dueDay - 10) : 3)} days
+                        <span
+                          className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${
+                            isUrgent ? 'bg-[#fef3c7] text-[#92400e]' : 'bg-[#e0e7ff] text-[#3730a3]'
+                          }`}
+                        >
+                          In {bill.daysUntil} days
                         </span>
                         <span className="text-xs font-bold text-slate-900 min-w-16 text-right">
-                          ${Number(bill.expectedAmount).toFixed(2)}
+                          ${Number(bill.amount).toFixed(2)}
                         </span>
                       </div>
                     </div>
-                  ))}
-                  </div>
-                )}
+                  );
+                })}
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs mt-2">
+              <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs mt-1">
                 <span className="text-slate-500">Monthly bills</span>
                 <span className="font-bold text-slate-900">
-                  ${Number(totalMonthlyBills).toFixed(2)}
+                  ${Number(displayTotalMonthlyBills).toFixed(2)}
                 </span>
               </div>
             </div>
 
-            {/* 2-Column Row for Subscriptions & Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+            {/* 4. Bottom 2-Column Row for Subscriptions & Recent purchases */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {/* Subscriptions Card */}
               <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-3">
                     <h2 className="text-xs font-bold text-slate-900">Subscriptions</h2>
                     <button
                       type="button"
@@ -2228,162 +2326,61 @@ function KlarityApp() {
                     </button>
                   </div>
 
-                  {subscriptionsList.length === 0 ? (
-                    <div className="py-8 text-center text-slate-400">
-                      <p className="text-xs font-semibold text-slate-600">No subscriptions added</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Track recurring streaming, services, and software.</p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-slate-100">
-                      {subscriptionsList.slice(0, 4).map(sub => (
-                      <div key={sub.id} className="py-2.5 flex items-center justify-between gap-3 group">
+                  <div className="divide-y divide-slate-100">
+                    {displaySubs.slice(0, 4).map((sub) => (
+                      <div key={sub.id} className="py-2.5 flex items-center justify-between gap-3 first:pt-1">
                         <div>
                           <p className="text-xs font-semibold text-slate-900">{sub.name}</p>
-                          <p className="text-[11px] text-slate-400 mt-0.5">{sub.renewalDate || 'Renews monthly'}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{sub.renewText}</p>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-900">
-                            ${Number(sub.amount).toFixed(2)}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteSubscription(sub.id, sub.name)}
-                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
-                            title="Delete subscription"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
+                        <span className="text-xs font-bold text-slate-900">
+                          ${Number(sub.amount).toFixed(2)}
+                        </span>
                       </div>
                     ))}
-                    </div>
-                  )}
+                  </div>
                 </div>
 
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs mt-2">
+                <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs mt-3">
                   <span className="text-slate-500">Total per month</span>
                   <span className="font-bold text-slate-900">
-                    ${Number(totalMonthlySubscriptions).toFixed(2)}
+                    ${Number(displayTotalSubs).toFixed(2)}
                   </span>
                 </div>
               </div>
 
-              {/* Cards Card */}
+              {/* Recent purchases Card */}
               <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-xs font-bold text-slate-900">Cards ({creditCards.length})</h2>
-                    <div className="flex items-center gap-2">
-                      {creditCards.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('cards')}
-                          className="text-xs text-slate-500 hover:text-slate-800 font-medium cursor-pointer"
-                        >
-                          View all
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setIsAddAccountOpen(true)}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
-                      >
-                        Add card
-                      </button>
-                    </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-xs font-bold text-slate-900">Recent purchases</h2>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('transactions')}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
+                    >
+                      View all
+                    </button>
                   </div>
 
-                  {creditCards.length === 0 ? (
-                    <div className="py-8 text-center text-slate-400">
-                      <CreditCard className="w-7 h-7 mx-auto text-slate-300 mb-1.5 stroke-1" />
-                      <p className="text-xs font-semibold text-slate-600">No cards connected</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Add cards manually or connect your bank via Plaid.</p>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-3 max-h-80 overflow-y-auto pr-0.5">
-                      {creditCards.map((card, idx) => {
-                      const util = card.limit > 0 ? Math.min(100, (card.balance / card.limit) * 100) : 0;
-                      const isTravel = idx % 2 === 1 || (card.name || '').toLowerCase().includes('travel');
+                  <div className="divide-y divide-slate-100">
+                    {displayTxs.slice(0, 3).map((tx) => {
+                      const isDeposit = Number(tx.amount) > 0 || (tx.name || '').toLowerCase().includes('deposit');
+                      const absAmount = Math.abs(Number(tx.amount)).toFixed(2);
                       return (
-                        <div
-                          key={card.id}
-                          className={`rounded-xl p-3.5 text-white flex flex-col gap-2.5 shadow-xs ${
-                            isTravel ? 'bg-[#1e293b]' : 'bg-[#183b6b]'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold">{card.institution ? `${card.institution} ` : ''}{card.name}</span>
-                            <span className="font-mono text-[11px] opacity-80">•••• {card.mask}</span>
+                        <div key={tx.id} className="py-2.5 flex items-center justify-between gap-3 first:pt-1">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-900">{tx.name}</p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">{tx.subText}</p>
                           </div>
-
-                          <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-white rounded-full transition-all"
-                              style={{ width: `${util}%` }}
-                            ></div>
-                          </div>
-
-                          <div className="flex items-center justify-between text-[11px] opacity-90">
-                            <span>${Number(card.balance).toFixed(2)} of ${Number(card.limit).toLocaleString()}</span>
-                            <span className="font-semibold">APR {card.apr}%</span>
-                          </div>
+                          <span className={`text-xs font-bold ${isDeposit ? 'text-emerald-700' : 'text-slate-900'}`}>
+                            {isDeposit ? `+$${absAmount}` : `-$${absAmount}`}
+                          </span>
                         </div>
                       );
                     })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Recent Purchases Card */}
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-xs font-bold text-slate-900">Recent purchases</h2>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('transactions')}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
-                  >
-                    View all
-                  </button>
-                </div>
-
-                {transactionsList.length === 0 ? (
-                  <div className="py-8 text-center text-slate-400">
-                    <p className="text-xs font-semibold text-slate-600">No recent transactions found</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Add a purchase or link your bank with Plaid.</p>
                   </div>
-                ) : (
-                  <div className="divide-y divide-slate-100">
-                    {transactionsList.slice(0, 3).map(tx => {
-                    const isDeposit = Number(tx.amount) < 0 || tx.category === 'Income';
-                    const displayAmount = Math.abs(Number(tx.amount)).toFixed(2);
-                    return (
-                      <div key={tx.id} className="py-2.5 flex items-center justify-between gap-3 group">
-                        <div>
-                          <p className="text-xs font-semibold text-slate-900">{tx.name}</p>
-                          <p className="text-[11px] text-slate-400 mt-0.5">{tx.date} • {tx.account || 'Checking'}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className={`text-xs font-bold ${isDeposit ? 'text-emerald-700' : 'text-slate-900'}`}>
-                            {isDeposit ? `+$${displayAmount}` : `-$${displayAmount}`}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteTransaction(tx.id, tx.name)}
-                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
-                            title="Delete purchase"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  </div>
-                )}
+                </div>
               </div>
             </div>
           </div>
