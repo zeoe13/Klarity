@@ -45,7 +45,10 @@ import {
   Layers,
   Globe,
   Maximize2,
-  Landmark
+  Landmark,
+  PanelLeftClose,
+  PanelLeftOpen,
+  LayoutDashboard
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
@@ -461,6 +464,21 @@ function KlarityApp() {
   });
 
   const [isPastChatsOpen, setIsPastChatsOpen] = useState(false);
+
+  // Left Sidebar Compact/Collapsed state
+  const [isSidebarCompact, setIsSidebarCompact] = useState(() => {
+    try {
+      return localStorage.getItem('klarity_sidebar_compact') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_sidebar_compact', isSidebarCompact ? 'true' : 'false');
+    } catch (e) {}
+  }, [isSidebarCompact]);
 
   // Resizable Right Advisor Sidebar state
   const [advisorWidth, setAdvisorWidth] = useState(() => {
@@ -2122,35 +2140,85 @@ function KlarityApp() {
       {/* ======================================================================= */}
       {/* 1. LEFT SIDEBAR (Overview, Bills, Subscriptions, Cards, Transactions, Advisor) */}
       {/* ======================================================================= */}
-      <aside className="w-56 shrink-0 border-r border-slate-200/80 bg-[#f8fafc] p-6 flex flex-col justify-between h-screen sticky top-0 hidden md:flex">
+      <aside className={`shrink-0 border-r border-slate-200/80 bg-[#f8fafc] flex flex-col justify-between h-screen sticky top-0 hidden md:flex transition-all duration-200 ease-in-out ${
+        isSidebarCompact ? 'w-[72px] px-2.5 py-6' : 'w-56 p-6'
+      }`}>
         <div>
-          {/* Logo Brand */}
-          <h1 className="font-serif-title text-2xl font-bold tracking-tight text-slate-900 cursor-pointer" onClick={() => setActiveTab('dashboard')}>
-            Klarity
-          </h1>
+          {/* Logo Brand & Compact Toggle Button */}
+          {!isSidebarCompact ? (
+            <div className="flex items-center justify-between">
+              <h1
+                className="font-serif-title text-2xl font-bold tracking-tight text-slate-900 cursor-pointer select-none"
+                onClick={() => setActiveTab('dashboard')}
+              >
+                Klarity
+              </h1>
+              <button
+                type="button"
+                onClick={() => setIsSidebarCompact(true)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 cursor-pointer transition-colors"
+                title="Compact sidebar"
+                aria-label="Compact sidebar"
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSidebarCompact(false)}
+                className="p-2 rounded-xl text-slate-500 hover:text-[#183b6b] hover:bg-slate-200/60 cursor-pointer transition-colors"
+                title="Expand sidebar"
+                aria-label="Expand sidebar"
+              >
+                <PanelLeftOpen className="w-5 h-5 text-[#183b6b]" />
+              </button>
+            </div>
+          )}
 
           {/* Navigation Links */}
-          <nav className="flex flex-col gap-1 mt-7">
+          <nav className={`flex flex-col ${isSidebarCompact ? 'items-center gap-1.5 mt-5' : 'gap-1 mt-7'}`}>
             {[
-              { id: 'dashboard', label: 'Overview' },
-              { id: 'bills', label: 'Bills' },
-              { id: 'subscriptions', label: 'Subscriptions' },
-              { id: 'cards', label: 'Cards' },
-              { id: 'transactions', label: 'Transactions' }
+              { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+              { id: 'bills', label: 'Bills', icon: Receipt },
+              { id: 'subscriptions', label: 'Subscriptions', icon: Zap },
+              { id: 'cards', label: 'Cards', icon: CreditCard },
+              { id: 'transactions', label: 'Transactions', icon: History }
             ].map(item => {
               const isActive = activeTab === item.id;
-              return (
+              const Icon = item.icon;
+              return !isSidebarCompact ? (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => setActiveTab(item.id)}
-                  className={`w-full text-left px-3.5 py-2 rounded-lg text-xs transition-all cursor-pointer ${
+                  className={`w-full text-left px-3.5 py-2 rounded-lg text-xs transition-all cursor-pointer flex items-center gap-2.5 ${
                     isActive
                       ? 'bg-[#e8edf5] text-[#1e3a8a] font-bold shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 font-medium'
                   }`}
                 >
-                  {item.label}
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#1e3a8a]' : 'text-slate-500'}`} />
+                  <span>{item.label}</span>
+                </button>
+              ) : (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveTab(item.id)}
+                  title={item.label}
+                  className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all cursor-pointer relative group ${
+                    isActive
+                      ? 'bg-[#e8edf5] text-[#1e3a8a] shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#1e3a8a]' : 'text-slate-500'}`} />
+                  {/* Tooltip on hover */}
+                  <span className="absolute left-full ml-2.5 px-2 py-1 bg-slate-900 text-white text-[11px] font-semibold rounded-md shadow-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">
+                    {item.label}
+                  </span>
                 </button>
               );
             })}
@@ -2158,21 +2226,34 @@ function KlarityApp() {
         </div>
 
         {/* User Profile Footer */}
-        <div className="pt-4 border-t border-slate-200/80 flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-[#183b6b] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-            {userInitials}
+        {!isSidebarCompact ? (
+          <div className="pt-4 border-t border-slate-200/80 flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-[#183b6b] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+              {userInitials}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-slate-900 truncate">{currentUser?.name || 'Ziyad Elmahi'}</p>
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen(true)}
+                className="text-[11px] text-slate-400 hover:text-slate-700 cursor-pointer transition-colors block"
+              >
+                Settings
+              </button>
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold text-slate-900 truncate">{currentUser?.name || 'Ziyad Elmahi'}</p>
+        ) : (
+          <div className="pt-4 border-t border-slate-200/80 flex flex-col items-center">
             <button
               type="button"
               onClick={() => setIsSettingsOpen(true)}
-              className="text-[11px] text-slate-400 hover:text-slate-700 cursor-pointer transition-colors block"
+              title={`Settings (${currentUser?.name || 'User'})`}
+              className="w-9 h-9 rounded-full bg-[#183b6b] hover:ring-2 hover:ring-[#183b6b]/40 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs cursor-pointer transition-all"
             >
-              Settings
+              {userInitials}
             </button>
           </div>
-        </div>
+        )}
       </aside>
 
       {/* ======================================================================= */}
