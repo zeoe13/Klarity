@@ -463,9 +463,74 @@ function KlarityApp() {
     ];
   });
   const [chatInput, setChatInput] = useState('');
-  const [chatImage, setChatImage] = useState(null); // { base64, mimeType, previewUrl, name }
+  const [chatFiles, setChatFiles] = useState([]); // Array of { id, name, size, mimeType, ext, isImage, previewUrl, base64, textContent }
   const [isAiTyping, setIsAiTyping] = useState(false);
   const chatEndRef = useRef(null);
+  const fullChatContainerRef = useRef(null);
+  const sidebarChatContainerRef = useRef(null);
+
+  const scrollChatToBottom = () => {
+    const scrollEl = (el) => {
+      if (el) {
+        el.scrollTop = el.scrollHeight;
+      }
+    };
+    scrollEl(fullChatContainerRef.current);
+    scrollEl(sidebarChatContainerRef.current);
+    requestAnimationFrame(() => {
+      scrollEl(fullChatContainerRef.current);
+      scrollEl(sidebarChatContainerRef.current);
+    });
+    setTimeout(() => {
+      scrollEl(fullChatContainerRef.current);
+      scrollEl(sidebarChatContainerRef.current);
+    }, 80);
+  };
+
+  // Multi-file reader supporting any file format
+  const handleAttachFiles = async (fileList) => {
+    if (!fileList || fileList.length === 0) return;
+    const filesArray = Array.from(fileList);
+    const processed = await Promise.all(
+      filesArray.map(async (file) => {
+        const name = file.name || 'Attached File';
+        const ext = (name.includes('.') ? name.split('.').pop() : (file.type?.split('/')[1] || 'FILE')).toUpperCase().slice(0, 6);
+        const mimeType = file.type || (name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream');
+        const isImage = mimeType.startsWith('image/');
+        const isTextLike =
+          mimeType.startsWith('text/') ||
+          /\.(txt|csv|tsv|json|md|xml|html|htm|log|yaml|yml|ini|conf|ofx|qfx|qif)$/i.test(name);
+
+        let textContent = '';
+        if (isTextLike) {
+          try {
+            textContent = await file.text();
+          } catch (e) {}
+        }
+
+        const dataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (evt) => resolve(evt.target?.result || '');
+          reader.onerror = () => resolve('');
+          reader.readAsDataURL(file);
+        });
+
+        const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : '';
+        return {
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          name,
+          size: file.size || 0,
+          mimeType,
+          ext,
+          isImage,
+          previewUrl: isImage ? dataUrl : null,
+          base64,
+          textContent
+        };
+      })
+    );
+    setChatFiles((prev) => [...prev, ...processed]);
+  };
 
   // AI Provider & BYOK configuration
   const [aiConfig, setAiConfig] = useState(() => {
@@ -497,7 +562,9 @@ function KlarityApp() {
 
   // Upload Menu & Document Scanner State
   const [isUploadMenuOpen, setIsUploadMenuOpen] = useState(false);
+  const [isFullUploadMenuOpen, setIsFullUploadMenuOpen] = useState(false);
   const uploadMenuRef = useRef(null);
+  const fullUploadMenuRef = useRef(null);
   const fileInputRef = useRef(null);
   const fullAdvisorFileInputRef = useRef(null);
 
@@ -512,6 +579,9 @@ function KlarityApp() {
       }
       if (uploadMenuRef.current && !uploadMenuRef.current.contains(e.target)) {
         setIsUploadMenuOpen(false);
+      }
+      if (fullUploadMenuRef.current && !fullUploadMenuRef.current.contains(e.target)) {
+        setIsFullUploadMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -875,42 +945,67 @@ function KlarityApp() {
     if (!user) return;
     setLoading(true);
     try {
-      const localCachedAccounts = (() => {
+      const getLocalList = (key) => {
         try {
-          const raw = localStorage.getItem('klarity_accounts');
+          const raw = localStorage.getItem(key);
           return raw ? JSON.parse(raw) : [];
         } catch { return []; }
-      })();
+      };
+      const localCachedAccounts = getLocalList('klarity_accounts');
+      const localCachedBills = getLocalList('klarity_bills');
+      const localCachedSubs = getLocalList('klarity_subscriptions');
+      const localCachedTxs = getLocalList('klarity_transactions');
 
       const res = await fetch(`/api/data?userId=${user.id}&household=${household}`);
       if (res.ok) {
         const json = await res.json();
-        if (json.accounts && json.accounts.length > 0) {
-          setData(json);
-          try {
-            localStorage.setItem('klarity_finance_data', JSON.stringify(json));
-            localStorage.setItem('klarity_accounts', JSON.stringify(json.accounts));
-          } catch (e) {}
-        } else if (localCachedAccounts.length > 0) {
-          // Cold serverless reset: preserve locally cached accounts and re-sync
-          const mergedAccounts = localCachedAccounts;
-          const restoredData = {
-            ...json,
-            accounts: mergedAccounts,
-            metrics: {
-              ...json.metrics,
-              totalCreditDebt: mergedAccounts.filter(a => a.type === 'credit').reduce((s, a) => s + Number(a.balance || 0), 0),
-              totalChecking: mergedAccounts.filter(a => a.type === 'depository').reduce((s, a) => s + Number(a.balance || 0), 0)
-            }
-          };
-          setData(restoredData);
+        const mergedAccounts = (json.accounts && json.accounts.length > 0) ? json.accounts : localCachedAccounts;
+        const mergedBills = (json.bills && json.bills.length > 0) ? json.bills : localCachedBills;
+        const mergedSubs = (json.subscriptions && json.subscriptions.length > 0) ? json.subscriptions : localCachedSubs;
+        const mergedTxs = (json.transactions && json.transactions.length > 0) ? json.transactions : localCachedTxs;
+
+        const needsSync =
+          (json.accounts?.length === 0 && localCachedAccounts.length > 0) ||
+          (json.bills?.length === 0 && localCachedBills.length > 0) ||
+          (json.subscriptions?.length === 0 && localCachedSubs.length > 0) ||
+          (json.transactions?.length === 0 && localCachedTxs.length > 0);
+
+        const finalData = {
+          ...json,
+          accounts: mergedAccounts,
+          bills: mergedBills,
+          subscriptions: mergedSubs,
+          transactions: mergedTxs,
+          metrics: {
+            ...json.metrics,
+            totalCreditDebt: mergedAccounts.filter(a => a.type === 'credit').reduce((s, a) => s + Number(a.balance || 0), 0),
+            totalChecking: mergedAccounts.filter(a => a.type === 'depository').reduce((s, a) => s + Number(a.balance || 0), 0),
+            totalMonthlyBills: mergedBills.reduce((s, b) => s + Number(b.expectedAmount || 0), 0),
+            totalSubscriptions: mergedSubs.reduce((s, sub) => s + Number(sub.amount || 0), 0)
+          }
+        };
+
+        setData(finalData);
+        try {
+          localStorage.setItem('klarity_finance_data', JSON.stringify(finalData));
+          if (mergedAccounts.length > 0) localStorage.setItem('klarity_accounts', JSON.stringify(mergedAccounts));
+          if (mergedBills.length > 0) localStorage.setItem('klarity_bills', JSON.stringify(mergedBills));
+          if (mergedSubs.length > 0) localStorage.setItem('klarity_subscriptions', JSON.stringify(mergedSubs));
+          if (mergedTxs.length > 0) localStorage.setItem('klarity_transactions', JSON.stringify(mergedTxs));
+        } catch (e) {}
+
+        if (needsSync) {
           fetch('/api/accounts/batch-sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accounts: mergedAccounts, userId: user.id })
+            body: JSON.stringify({
+              accounts: mergedAccounts,
+              bills: mergedBills,
+              subscriptions: mergedSubs,
+              transactions: mergedTxs,
+              userId: user.id
+            })
           }).catch(() => {});
-        } else {
-          setData(json);
         }
       }
     } catch (err) {
@@ -931,8 +1026,8 @@ function KlarityApp() {
   }, [currentUser, viewHousehold]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages, isAiTyping]);
+    scrollChatToBottom();
+  }, [chatMessages, isAiTyping, activeTab]);
 
   // ================= GOOGLE AUTHENTICATION HANDLERS =================
   const handleGoogleProfileSuccess = async (profile) => {
@@ -1301,24 +1396,16 @@ function KlarityApp() {
     }
   };
 
-  // Scan Statement
+  // Scan Document / Statement Sentences via AI Comprehension
   const handleScanBill = async () => {
-    try {
-      const res = await fetch('/api/bills/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ billText: scanText, ownerId: currentUser.id })
-      });
-      if (res.ok) {
-        const json = await res.json();
-        setScanResult(json.summary);
-        await fetchData();
-        setNotificationToast('Statement parsed and added to bills.');
-        setTimeout(() => setNotificationToast(''), 4000);
-      }
-    } catch (err) {
-      console.error(err);
-    }
+    const rawSentences = (scanText || '').trim();
+    if (!rawSentences) return;
+    setIsScanBillOpen(false);
+    setScanText('');
+    setScanResult(null);
+    await handleSendChatMessage(
+      `Please scan and comprehend these statement details/sentences and automatically add every bill, subscription, and purchase mentioned:\n\n${rawSentences}`
+    );
   };
 
   // Add Transaction Manually
@@ -1420,38 +1507,53 @@ function KlarityApp() {
       eOrText.preventDefault();
     }
     const userMsg = (typeof eOrText === 'string' ? eOrText : chatInput).trim();
-    if ((!userMsg && !chatImage) || isAiTyping) return;
+    const currentFiles = typeof eOrText === 'string' ? [] : chatFiles;
+    if ((!userMsg && currentFiles.length === 0) || isAiTyping) return;
 
-    const currentImg = chatImage;
-    setChatInput('');
-    setChatImage(null);
-
-    // Instant client-side intent navigation (e.g. "Show me my subscriptions")
-    const lower = userMsg.toLowerCase();
-    if (lower.includes('subscription')) {
-      setActiveTab('subscriptions');
-    } else if (lower.includes('bill')) {
-      setActiveTab('bills');
-    } else if (lower.includes('card')) {
-      setActiveTab('cards');
-    } else if (lower.includes('transaction') || lower.includes('purchase')) {
-      setActiveTab('transactions');
-    } else if (lower.includes('overview') || lower.includes('dashboard') || lower.includes('home')) {
-      setActiveTab('dashboard');
-    } else if (lower.includes('setting')) {
-      setSettingsActiveTab('ai');
-      setIsSettingsOpen(true);
+    if (typeof eOrText !== 'string') {
+      setChatInput('');
+      setChatFiles([]);
     }
+
+    // Instant client-side intent navigation (only if user explicitly asks to view/go to a tab without uploading files)
+    const lower = userMsg.toLowerCase();
+    if (currentFiles.length === 0 && !lower.includes('please scan and comprehend')) {
+      if ((lower.includes('show') || lower.includes('go to') || lower.includes('open') || lower.includes('view')) && lower.includes('subscription')) {
+        setActiveTab('subscriptions');
+      } else if ((lower.includes('show') || lower.includes('go to') || lower.includes('open') || lower.includes('view')) && lower.includes('bill')) {
+        setActiveTab('bills');
+      } else if ((lower.includes('show') || lower.includes('go to') || lower.includes('open') || lower.includes('view')) && lower.includes('card')) {
+        setActiveTab('cards');
+      } else if ((lower.includes('show') || lower.includes('go to') || lower.includes('open') || lower.includes('view')) && (lower.includes('transaction') || lower.includes('purchase'))) {
+        setActiveTab('transactions');
+      } else if ((lower.includes('show') || lower.includes('go to') || lower.includes('open') || lower.includes('view')) && (lower.includes('overview') || lower.includes('dashboard') || lower.includes('home'))) {
+        setActiveTab('dashboard');
+      } else if (lower.includes('setting')) {
+        setSettingsActiveTab('ai');
+        setIsSettingsOpen(true);
+      }
+    }
+
+    const displayAttachments = currentFiles.map(f => ({
+      id: f.id,
+      name: f.name,
+      size: f.size,
+      mimeType: f.mimeType,
+      ext: f.ext,
+      isImage: f.isImage,
+      previewUrl: f.isImage ? f.previewUrl : null
+    }));
 
     const newDisplayMsg = {
       role: 'user',
-      text: userMsg || (currentImg ? 'Uploaded an image for analysis' : ''),
-      image: currentImg ? currentImg.previewUrl : null
+      text: userMsg || (currentFiles.length === 1 ? `Submitted file: ${currentFiles[0].name}` : `Submitted ${currentFiles.length} files for analysis`),
+      attachments: displayAttachments
     };
 
     const userUpdatedMessages = [...chatMessages, newDisplayMsg];
     updateActiveSession(userUpdatedMessages);
     setIsAiTyping(true);
+    scrollChatToBottom();
 
     try {
       const cachedApiKey = settingsAiApiKey.trim() || localStorage.getItem('klarity_ai_api_key') || '';
@@ -1461,6 +1563,13 @@ function KlarityApp() {
         cachedModel = 'gemini-3.8-flash';
         try { localStorage.setItem('klarity_ai_model', 'gemini-3.8-flash'); } catch {}
       }
+
+      const payloadAttachments = currentFiles.map(f => ({
+        name: f.name,
+        mimeType: f.mimeType,
+        base64: f.base64,
+        textContent: f.textContent || ''
+      }));
 
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
@@ -1472,22 +1581,46 @@ function KlarityApp() {
           clientApiKey: cachedApiKey,
           clientProvider: cachedProvider,
           clientModel: cachedModel,
-          imageBase64: currentImg?.base64,
-          imageMimeType: currentImg?.mimeType
+          attachments: payloadAttachments
         })
       });
 
       const json = await res.json();
       let replyText = json.reply || "I've reviewed your request.";
 
-      // Handle AI action execution (e.g. adding subscriptions, bills, purchases from statements)
+      // Update local state and localStorage immediately if backend returned updatedData
+      if (json.updatedData) {
+        setData(prev => {
+          const nextBills = json.updatedData.bills || prev.bills || [];
+          const nextSubs = json.updatedData.subscriptions || prev.subscriptions || [];
+          const nextTxs = json.updatedData.transactions || prev.transactions || [];
+          const nextState = {
+            ...prev,
+            bills: nextBills,
+            subscriptions: nextSubs,
+            transactions: nextTxs,
+            metrics: {
+              ...prev.metrics,
+              totalMonthlyBills: nextBills.reduce((s, b) => s + Number(b.expectedAmount || 0), 0),
+              totalSubscriptions: nextSubs.reduce((s, sub) => s + Number(sub.amount || 0), 0)
+            }
+          };
+          try {
+            localStorage.setItem('klarity_finance_data', JSON.stringify(nextState));
+            localStorage.setItem('klarity_bills', JSON.stringify(nextBills));
+            localStorage.setItem('klarity_subscriptions', JSON.stringify(nextSubs));
+            localStorage.setItem('klarity_transactions', JSON.stringify(nextTxs));
+          } catch (e) {}
+          return nextState;
+        });
+      }
+
+      // Handle AI action execution notifications (e.g. adding subscriptions, bills, purchases from statements)
       if (json.actionsExecuted && json.actionsExecuted.length > 0) {
-        await fetchData(currentUser, viewHousehold);
         const count = json.actionsExecuted.length;
         setNotificationToast(`Auto-added ${count} item${count > 1 ? 's' : ''} to your records!`);
         setTimeout(() => setNotificationToast(''), 4500);
       } else if (json.actionExecuted) {
-        await fetchData(currentUser, viewHousehold);
         const act = json.actionExecuted;
         setNotificationToast(`Added ${act.item?.name || 'item'} to ${act.type}!`);
         setTimeout(() => setNotificationToast(''), 4000);
@@ -1515,14 +1648,17 @@ function KlarityApp() {
 
       const updated = [...userUpdatedMessages, { role: 'assistant', text: replyText }];
       updateActiveSession(updated);
+      scrollChatToBottom();
     } catch (err) {
       const updated = [
         ...userUpdatedMessages,
         { role: 'assistant', text: "Could not connect to AI advisor. Please verify your settings." }
       ];
       updateActiveSession(updated);
+      scrollChatToBottom();
     } finally {
       setIsAiTyping(false);
+      scrollChatToBottom();
     }
   };
 
@@ -2555,7 +2691,7 @@ function KlarityApp() {
             </div>
 
             {/* Chat Thread */}
-            <div className="flex-1 overflow-y-auto py-4 flex flex-col gap-3 pr-1">
+            <div ref={fullChatContainerRef} className="flex-1 overflow-y-auto py-4 flex flex-col gap-3 pr-1">
               {chatMessages.map((msg, i) => (
                 <div
                   key={i}
@@ -2568,73 +2704,93 @@ function KlarityApp() {
                         : 'bg-[#eff4f9] text-slate-800 border border-slate-200/60 shadow-2xs'
                     }`}
                   >
-                    {msg.image && (
-                      <img src={msg.image} alt="Uploaded attachment" className="max-h-48 rounded-lg object-contain bg-black/10 self-start" />
+                    {/* Render multiple attachments (images as thumbnails, non-images as File Cards) */}
+                    {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {msg.attachments.map((att, aIdx) =>
+                          att.isImage && att.previewUrl ? (
+                            <img
+                              key={att.id || aIdx}
+                              src={att.previewUrl}
+                              alt={att.name || 'Uploaded image'}
+                              className="max-h-48 rounded-lg object-contain bg-black/10 self-start"
+                            />
+                          ) : (
+                            <div
+                              key={att.id || aIdx}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/15 border border-white/25 text-white min-w-[180px]"
+                            >
+                              <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                                <FileText className="w-4 h-4 text-white" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[11px] font-semibold truncate">{att.name || 'Document'}</p>
+                                <p className="text-[10px] text-blue-100">
+                                  {att.ext || 'FILE'} {att.size ? `• ${(att.size / 1024).toFixed(1)} KB` : ''}
+                                </p>
+                              </div>
+                            </div>
+                          )
+                        )}
+                      </div>
                     )}
-                    {msg.text && <div>{msg.text}</div>}
+                    {/* Legacy single image field fallback: only render <img> if data:image/ */}
+                    {!msg.attachments && msg.image && (
+                      msg.image.startsWith('data:image/') ? (
+                        <img src={msg.image} alt="Uploaded attachment" className="max-h-48 rounded-lg object-contain bg-black/10 self-start" />
+                      ) : (
+                        <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/15 border border-white/25 text-white w-fit">
+                          <FileText className="w-4 h-4 text-white shrink-0" />
+                          <span className="text-[11px] font-semibold">Attached Document</span>
+                        </div>
+                      )
+                    )}
+                    {msg.text && <div className="whitespace-pre-wrap">{msg.text}</div>}
                   </div>
                 </div>
               ))}
               {isAiTyping && (
                 <div className="flex justify-start">
                   <div className="bg-[#eff4f9] rounded-2xl px-4 py-2.5 text-xs text-slate-500 animate-pulse border border-slate-200/60">
-                    Advisor is analyzing your cash flow...
+                    Advisor is reading and analyzing...
                   </div>
                 </div>
               )}
               <div ref={chatEndRef} />
             </div>
 
-            {/* Quick Suggestions (hidden while typing or if image attached) */}
-            {!chatInput && !chatImage && (
-              <div className="flex flex-wrap gap-2 pb-2">
-                <button
-                  type="button"
-                  onClick={() => handleSendChatMessage('What are the best 0% APR balance transfer cards right now?')}
-                  className="bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
-                >
-                  Best 0% APR balance transfer cards?
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSendChatMessage('What should I pay off first?')}
-                  className="bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
-                >
-                  What should I pay off first?
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSendChatMessage("What's due in 14 days?")}
-                  className="bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
-                >
-                  What's due in 14 days?
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSendChatMessage('Where can I cut subscriptions?')}
-                  className="bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
-                >
-                  Where can I cut subscriptions?
-                </button>
-              </div>
-            )}
-
-            {/* Image Preview Thumbnail if attached or pasted */}
-            {chatImage && (
-              <div className="flex items-center gap-2 p-2 mb-2 bg-slate-100/80 rounded-xl border border-slate-200 w-fit max-w-full">
-                <img src={chatImage.previewUrl} alt="Attachment" className="w-12 h-12 rounded-lg object-cover border border-slate-300" />
-                <div className="min-w-0 pr-2">
-                  <p className="text-xs font-semibold text-slate-800 truncate max-w-[200px]">{chatImage.name || 'Pasted image'}</p>
-                  <p className="text-[11px] text-slate-500">Ready to analyze with multimodal AI</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setChatImage(null)}
-                  className="p-1 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
-                  title="Remove image"
-                >
-                  ✕
-                </button>
+            {/* Multi-File Preview Bar if files attached */}
+            {chatFiles.length > 0 && (
+              <div className="flex flex-wrap gap-2 pb-2 max-h-32 overflow-y-auto">
+                {chatFiles.map((fileItem) => (
+                  <div
+                    key={fileItem.id}
+                    className="flex items-center gap-2.5 p-2 bg-slate-100/90 rounded-xl border border-slate-200 w-fit max-w-[260px]"
+                  >
+                    {fileItem.isImage && fileItem.previewUrl ? (
+                      <img src={fileItem.previewUrl} alt={fileItem.name} className="w-10 h-10 rounded-lg object-cover border border-slate-300 shrink-0" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-[#18457c]/10 border border-[#18457c]/20 flex flex-col items-center justify-center shrink-0">
+                        <FileText className="w-4 h-4 text-[#18457c]" />
+                        <span className="text-[8px] font-bold text-[#18457c] uppercase">{fileItem.ext || 'FILE'}</span>
+                      </div>
+                    )}
+                    <div className="min-w-0 pr-1 flex-1">
+                      <p className="text-xs font-semibold text-slate-800 truncate">{fileItem.name}</p>
+                      <p className="text-[10px] text-slate-500">
+                        {fileItem.ext || 'FILE'} • {(fileItem.size / 1024).toFixed(1)} KB
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setChatFiles(prev => prev.filter(f => f.id !== fileItem.id))}
+                      className="p-1 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer shrink-0"
+                      title="Remove file"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -2642,74 +2798,86 @@ function KlarityApp() {
             <form onSubmit={handleSendChatMessage} className="flex items-end gap-2 pt-3 border-t border-slate-100">
               <input
                 type="file"
+                multiple
                 ref={fullAdvisorFileInputRef}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = (loadEvt) => {
-                    const base64 = loadEvt.target.result.split(',')[1];
-                    setChatImage({
-                      base64,
-                      mimeType: file.type || 'image/jpeg',
-                      previewUrl: loadEvt.target.result,
-                      name: file.name
-                    });
-                  };
-                  reader.readAsDataURL(file);
+                onChange={async (e) => {
+                  await handleAttachFiles(e.target.files);
                   e.target.value = '';
                 }}
                 className="hidden"
-                accept="image/*,.pdf"
+                accept="*/*"
               />
-              <button
-                type="button"
-                onClick={() => fullAdvisorFileInputRef.current?.click()}
-                className="p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-800 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5"
-                title="Attach or Paste Image/Bill"
-              >
-                <Paperclip className="w-4 h-4" />
-              </button>
+              <div className="relative" ref={fullUploadMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsFullUploadMenuOpen(prev => !prev)}
+                  className="p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5 flex items-center justify-center"
+                  title="Add file or scan document"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+                {isFullUploadMenuOpen && (
+                  <div className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl border border-slate-200 shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsFullUploadMenuOpen(false);
+                        setIsScanBillOpen(true);
+                      }}
+                      className="w-full flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-slate-50 text-left transition-colors cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#18457c] flex items-center justify-center shrink-0 mt-0.5">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">Scan Document</p>
+                        <p className="text-[11px] text-slate-500 leading-snug">Paste sentences & AI auto-adds bills or subscriptions</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsFullUploadMenuOpen(false);
+                        fullAdvisorFileInputRef.current?.click();
+                      }}
+                      className="w-full flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-slate-50 text-left transition-colors cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                        <UploadCloud className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">Submit File</p>
+                        <p className="text-[11px] text-slate-500 leading-snug">Attach one or multiple files of any format for AI to read</p>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
               <textarea
                 rows={1}
-                placeholder="Ask about your money... (Shift+Enter for newline, or paste screenshot)"
+                placeholder="Ask about your money, or attach files..."
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    if ((chatInput.trim() || chatImage) && !isAiTyping) {
+                    if ((chatInput.trim() || chatFiles.length > 0) && !isAiTyping) {
                       handleSendChatMessage();
                     }
                   }
                 }}
-                onPaste={e => {
-                  const items = e.clipboardData?.items;
-                  if (items) {
-                    for (let i = 0; i < items.length; i++) {
-                      if (items[i].type.indexOf('image') !== -1) {
-                        const blob = items[i].getAsFile();
-                        const reader = new FileReader();
-                        reader.onload = (evt) => {
-                          const base64 = evt.target.result.split(',')[1];
-                          setChatImage({
-                            base64,
-                            mimeType: blob.type || 'image/png',
-                            previewUrl: evt.target.result,
-                            name: 'Pasted Screenshot'
-                          });
-                        };
-                        reader.readAsDataURL(blob);
-                        break;
-                      }
-                    }
+                onPaste={async e => {
+                  const files = e.clipboardData?.files;
+                  if (files && files.length > 0) {
+                    e.preventDefault();
+                    await handleAttachFiles(files);
                   }
                 }}
                 className="flex-1 min-w-0 max-h-36 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 shadow-2xs resize-none"
               />
               <button
                 type="submit"
-                disabled={isAiTyping || (!chatInput.trim() && !chatImage)}
+                disabled={isAiTyping || (!chatInput.trim() && chatFiles.length === 0)}
                 className="px-5 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5"
               >
                 Send
@@ -2787,7 +2955,7 @@ function KlarityApp() {
         </div>
 
         {/* Scrollable Conversation Stream */}
-        <div className="flex-1 overflow-y-auto py-3 space-y-3 min-h-0 pr-0.5">
+        <div ref={sidebarChatContainerRef} className="flex-1 overflow-y-auto py-3 space-y-3 min-h-0 pr-0.5">
           {/* Initial Advisor Insight Bubble */}
           {settingsAiStatus !== 'connected' && (
             <div className="bg-amber-50/90 border border-amber-200/90 rounded-2xl p-4 text-xs text-amber-900 flex flex-col gap-2 shadow-2xs">
@@ -2836,10 +3004,48 @@ function KlarityApp() {
                     : 'bg-[#eff4f9] text-slate-800 border border-slate-200/60 shadow-2xs'
                 }`}
               >
-                {msg.image && (
-                  <img src={msg.image} alt="Uploaded attachment" className="max-h-36 rounded-lg object-contain bg-black/10" />
+                {/* Render multiple attachments (images as thumbnails, non-images as File Cards) */}
+                {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    {msg.attachments.map((att, aIdx) =>
+                      att.isImage && att.previewUrl ? (
+                        <img
+                          key={att.id || aIdx}
+                          src={att.previewUrl}
+                          alt={att.name || 'Uploaded image'}
+                          className="max-h-36 rounded-lg object-contain bg-black/10"
+                        />
+                      ) : (
+                        <div
+                          key={att.id || aIdx}
+                          className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-white/15 border border-white/25 text-white"
+                        >
+                          <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                            <FileText className="w-3.5 h-3.5 text-white" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-semibold truncate">{att.name || 'Document'}</p>
+                            <p className="text-[9px] text-blue-100 uppercase">
+                              {att.ext || 'FILE'} {att.size ? `• ${(att.size / 1024).toFixed(1)} KB` : ''}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
                 )}
-                {msg.text && <div>{msg.text}</div>}
+                {/* Legacy single image field fallback: only render <img> if data:image/ */}
+                {!msg.attachments && msg.image && (
+                  msg.image.startsWith('data:image/') ? (
+                    <img src={msg.image} alt="Uploaded attachment" className="max-h-36 rounded-lg object-contain bg-black/10" />
+                  ) : (
+                    <div className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-white/15 border border-white/25 text-white">
+                      <FileText className="w-3.5 h-3.5 text-white shrink-0" />
+                      <span className="text-[11px] font-semibold">Attached Document</span>
+                    </div>
+                  )
+                )}
+                {msg.text && <div className="whitespace-pre-wrap">{msg.text}</div>}
               </div>
             </div>
           ))}
@@ -2855,132 +3061,127 @@ function KlarityApp() {
           )}
         </div>
 
-        {/* Bottom Actions: Suggestions (hidden while typing or if closed) + Chat Input Form */}
+        {/* Bottom Actions: Multi-File Preview + Chat Input Form */}
         <div className="pt-3 border-t border-slate-200/70 flex flex-col gap-2 shrink-0">
-          {/* Hide premade suggestion pills when user is typing text or has an image attached */}
-          {!chatInput && !chatImage && (
-            <div className="flex flex-col gap-1.5">
-              <button
-                type="button"
-                onClick={() => handleSendChatMessage('What are the best 0% APR balance transfer cards right now?')}
-                className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer truncate"
-              >
-                Best 0% APR balance transfer cards?
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSendChatMessage('What should I pay off first?')}
-                className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
-              >
-                What should I pay off first?
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSendChatMessage("What's due in 14 days?")}
-                className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
-              >
-                What's due in 14 days?
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSendChatMessage('Where can I cut subscriptions?')}
-                className="w-full text-left bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 text-xs px-3.5 py-1.5 rounded-full shadow-2xs transition-colors cursor-pointer"
-              >
-                Where can I cut subscriptions?
-              </button>
+          {/* Multi-File Preview Cards if attached or pasted */}
+          {chatFiles.length > 0 && (
+            <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-0.5">
+              {chatFiles.map((fileItem) => (
+                <div
+                  key={fileItem.id}
+                  className="flex items-center gap-2 p-2 bg-slate-100/90 rounded-xl border border-slate-200 w-full"
+                >
+                  {fileItem.isImage && fileItem.previewUrl ? (
+                    <img src={fileItem.previewUrl} alt={fileItem.name} className="w-9 h-9 rounded-lg object-cover border border-slate-300 shrink-0" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-lg bg-[#18457c]/10 border border-[#18457c]/20 flex flex-col items-center justify-center shrink-0">
+                      <FileText className="w-3.5 h-3.5 text-[#18457c]" />
+                      <span className="text-[8px] font-bold text-[#18457c] uppercase">{fileItem.ext || 'FILE'}</span>
+                    </div>
+                  )}
+                  <div className="min-w-0 pr-1 flex-1">
+                    <p className="text-[11px] font-semibold text-slate-800 truncate">{fileItem.name}</p>
+                    <p className="text-[10px] text-slate-500">
+                      {fileItem.ext || 'FILE'} • {(fileItem.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setChatFiles(prev => prev.filter(f => f.id !== fileItem.id))}
+                    className="p-1 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer shrink-0"
+                    title="Remove file"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Image Preview Thumbnail if attached or pasted */}
-          {chatImage && (
-            <div className="flex items-center gap-2 p-2 bg-slate-100/80 rounded-xl border border-slate-200 w-fit max-w-full">
-              <img src={chatImage.previewUrl} alt="Attachment" className="w-10 h-10 rounded-lg object-cover border border-slate-300" />
-              <div className="min-w-0 pr-1">
-                <p className="text-[11px] font-semibold text-slate-800 truncate max-w-[140px]">{chatImage.name || 'Pasted image'}</p>
-                <p className="text-[10px] text-slate-500">Ready to analyze</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setChatImage(null)}
-                className="p-1 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-
-          {/* Chat Form with Scan/Upload button and multiline Textarea */}
+          {/* Chat Form with Add File Menu (+ / Paperclip) and multiline Textarea */}
           <form onSubmit={handleSendChatMessage} className="flex items-end gap-2 mt-1">
             <input
               type="file"
+              multiple
               ref={fileInputRef}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (loadEvt) => {
-                  const base64 = loadEvt.target.result.split(',')[1];
-                  setChatImage({
-                    base64,
-                    mimeType: file.type || 'image/jpeg',
-                    previewUrl: loadEvt.target.result,
-                    name: file.name
-                  });
-                };
-                reader.readAsDataURL(file);
+              onChange={async (e) => {
+                await handleAttachFiles(e.target.files);
                 e.target.value = '';
               }}
               className="hidden"
-              accept="image/*,.pdf"
+              accept="*/*"
             />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="p-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-500 hover:text-slate-800 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5"
-              title="Attach or Paste Image/Bill"
-            >
-              <Paperclip className="w-4 h-4" />
-            </button>
+            <div className="relative" ref={uploadMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsUploadMenuOpen(prev => !prev)}
+                className="p-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-600 hover:text-slate-900 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5 flex items-center justify-center"
+                title="Add file or scan document"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+              {isUploadMenuOpen && (
+                <div className="absolute bottom-full left-0 mb-2 w-60 bg-white rounded-xl border border-slate-200 shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUploadMenuOpen(false);
+                      setIsScanBillOpen(true);
+                    }}
+                    className="w-full flex items-start gap-2.5 p-2 rounded-lg hover:bg-slate-50 text-left transition-colors cursor-pointer"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#18457c] flex items-center justify-center shrink-0 mt-0.5">
+                      <FileText className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">Scan Document</p>
+                      <p className="text-[10px] text-slate-500 leading-snug">Paste sentences & AI auto-adds bills or subscriptions</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUploadMenuOpen(false);
+                      fileInputRef.current?.click();
+                    }}
+                    className="w-full flex items-start gap-2.5 p-2 rounded-lg hover:bg-slate-50 text-left transition-colors cursor-pointer"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                      <UploadCloud className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">Submit File</p>
+                      <p className="text-[10px] text-slate-500 leading-snug">Attach one or multiple files of any format for AI to read</p>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
             <textarea
               rows={1}
-              placeholder="Ask anything... (Shift+Enter for newline)"
+              placeholder="Ask anything or attach files..."
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  if ((chatInput.trim() || chatImage) && !isAiTyping) {
+                  if ((chatInput.trim() || chatFiles.length > 0) && !isAiTyping) {
                     handleSendChatMessage();
                   }
                 }
               }}
-              onPaste={e => {
-                const items = e.clipboardData?.items;
-                if (items) {
-                  for (let i = 0; i < items.length; i++) {
-                    if (items[i].type.indexOf('image') !== -1) {
-                      const blob = items[i].getAsFile();
-                      const reader = new FileReader();
-                      reader.onload = (evt) => {
-                        const base64 = evt.target.result.split(',')[1];
-                        setChatImage({
-                          base64,
-                          mimeType: blob.type || 'image/png',
-                          previewUrl: evt.target.result,
-                          name: 'Pasted Screenshot'
-                        });
-                      };
-                      reader.readAsDataURL(blob);
-                      break;
-                    }
-                  }
+              onPaste={async e => {
+                const files = e.clipboardData?.files;
+                if (files && files.length > 0) {
+                  e.preventDefault();
+                  await handleAttachFiles(files);
                 }
               }}
               className="flex-1 min-w-0 max-h-32 bg-white border border-slate-200/90 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs resize-none"
             />
             <button
               type="submit"
-              disabled={isAiTyping || (!chatInput.trim() && !chatImage)}
+              disabled={isAiTyping || (!chatInput.trim() && chatFiles.length === 0)}
               className="px-3.5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5"
             >
               Send
@@ -3295,36 +3496,36 @@ function KlarityApp() {
         </div>
       )}
 
-      {/* Scan Statement Modal */}
+      {/* Scan Document Modal */}
       {isScanBillOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900">Scan Statement</h3>
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-[#18457c]" />
+                <h3 className="text-sm font-bold text-slate-900">Scan Document</h3>
+              </div>
               <button onClick={() => setIsScanBillOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
             </div>
-            <p className="text-xs text-slate-500">
-              Paste statement text or e-bill details below. Klarity will extract provider name, amount, and due date.
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Paste any sentences, statement lines, or bill details below. The AI Advisor will comprehend your text and automatically add every bill, subscription, or purchase mentioned.
             </p>
             <textarea
               rows={5}
+              placeholder="e.g. I pay $22.99 a month for Netflix, my ConEdison electric bill is $148.60 due on the 3rd, and I spent $84.32 at Trader Joe's..."
               value={scanText}
               onChange={e => setScanText(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 font-mono outline-none"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 outline-none focus:border-blue-500 focus:bg-white"
             />
-            {scanResult && (
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs">
-                {scanResult}
-              </div>
-            )}
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-              <button type="button" onClick={() => setIsScanBillOpen(false)} className="px-3 py-1.5 text-xs text-slate-500 cursor-pointer">Close</button>
+              <button type="button" onClick={() => setIsScanBillOpen(false)} className="px-3 py-1.5 text-xs text-slate-500 cursor-pointer">Cancel</button>
               <button
                 type="button"
+                disabled={!scanText.trim() || isAiTyping}
                 onClick={handleScanBill}
-                className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] disabled:opacity-50 text-white text-xs font-semibold cursor-pointer"
               >
-                Parse & Register Bill
+                Comprehend & Auto-Add
               </button>
             </div>
           </div>
