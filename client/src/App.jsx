@@ -2141,7 +2141,7 @@ function KlarityApp() {
       {/* 1. LEFT SIDEBAR (Overview, Bills, Subscriptions, Cards, Transactions, Advisor) */}
       {/* ======================================================================= */}
       <aside className={`shrink-0 border-r border-slate-200/80 bg-[#f8fafc] flex flex-col justify-between h-screen sticky top-0 hidden md:flex transition-all duration-200 ease-in-out ${
-        isSidebarCompact ? 'w-[72px] px-2.5 py-6' : 'w-56 p-6'
+        isSidebarCompact ? 'w-[72px] px-2.5 py-5' : 'w-60 p-5'
       }`}>
         <div>
           {/* Logo Brand & Compact Toggle Button */}
@@ -2156,11 +2156,11 @@ function KlarityApp() {
               <button
                 type="button"
                 onClick={() => setIsSidebarCompact(true)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 cursor-pointer transition-colors"
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 cursor-pointer transition-colors"
                 title="Compact sidebar"
                 aria-label="Compact sidebar"
               >
-                <PanelLeftClose className="w-4 h-4" />
+                <PanelLeftClose className="w-5 h-5" />
               </button>
             </div>
           ) : (
@@ -2178,7 +2178,7 @@ function KlarityApp() {
           )}
 
           {/* Navigation Links */}
-          <nav className={`flex flex-col ${isSidebarCompact ? 'items-center gap-1.5 mt-5' : 'gap-1 mt-7'}`}>
+          <nav className={`flex flex-col ${isSidebarCompact ? 'items-center gap-1.5 mt-5' : 'gap-1.5 mt-6'}`}>
             {[
               { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
               { id: 'bills', label: 'Bills', icon: Receipt },
@@ -2193,14 +2193,14 @@ function KlarityApp() {
                   key={item.id}
                   type="button"
                   onClick={() => setActiveTab(item.id)}
-                  className={`w-full text-left px-3.5 py-2 rounded-lg text-xs transition-all cursor-pointer flex items-center gap-2.5 ${
+                  className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-all cursor-pointer flex items-center gap-3 ${
                     isActive
-                      ? 'bg-[#e8edf5] text-[#1e3a8a] font-bold shadow-2xs'
+                      ? 'bg-[#e8edf5] text-[#1e3a8a] font-semibold shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 font-medium'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#1e3a8a]' : 'text-slate-500'}`} />
-                  <span>{item.label}</span>
+                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#1e3a8a]' : 'text-slate-500'}`} />
+                  <span className="leading-none">{item.label}</span>
                 </button>
               ) : (
                 <button
@@ -2227,16 +2227,16 @@ function KlarityApp() {
 
         {/* User Profile Footer */}
         {!isSidebarCompact ? (
-          <div className="pt-4 border-t border-slate-200/80 flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-[#183b6b] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+          <div className="pt-4 border-t border-slate-200/80 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-[#183b6b] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
               {userInitials}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-slate-900 truncate">{currentUser?.name || 'Ziyad Elmahi'}</p>
+              <p className="text-sm font-semibold text-slate-900 truncate leading-snug">{currentUser?.name || 'Ziyad Elmahi'}</p>
               <button
                 type="button"
                 onClick={() => setIsSettingsOpen(true)}
-                className="text-[11px] text-slate-400 hover:text-slate-700 cursor-pointer transition-colors block"
+                className="text-xs text-slate-400 hover:text-slate-700 cursor-pointer transition-colors block leading-none mt-0.5"
               >
                 Settings
               </button>
