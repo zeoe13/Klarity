@@ -349,6 +349,7 @@ function KlarityApp() {
 
   // Modals
   const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
+  const [addCardTab, setAddCardTab] = useState('plaid'); // 'plaid' | 'manual'
   const [isAddBillOpen, setIsAddBillOpen] = useState(false);
   const [isAddTxOpen, setIsAddTxOpen] = useState(false);
   const [isAddSubOpen, setIsAddSubOpen] = useState(false);
@@ -1315,12 +1316,15 @@ function KlarityApp() {
       const json = await res.json();
 
       if (json.needsKeys) {
+        setIsAddAccountOpen(false);
+        setSettingsActiveTab('plaid');
         setIsSettingsOpen(true);
         setPlaidError('Please enter your Plaid keys in Settings to connect live banks.');
         return;
       }
 
       if (json.link_token) {
+        setIsAddAccountOpen(false);
         setLinkToken(json.link_token);
       } else {
         setPlaidError(json.error || 'Could not initialize bank connection.');
@@ -2046,9 +2050,9 @@ function KlarityApp() {
 
   const getTimeGreeting = () => {
     const hr = new Date().getHours();
-    if (hr < 12) return 'morning';
-    if (hr < 17) return 'afternoon';
-    return 'evening';
+    if (hr >= 4 && hr < 12) return 'morning';
+    if (hr >= 12 && hr < 17) return 'afternoon';
+    return 'night';
   };
 
   const filteredTransactions = transactionsList.filter(t => {
@@ -2184,6 +2188,14 @@ function KlarityApp() {
         {/* --------------------------------------------------------------------- */}
         {activeTab === 'dashboard' && (
           <div className="flex flex-col gap-6">
+            {/* Top Greeting Message */}
+            <div>
+              <h1 className="font-serif-title text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+                Good {getTimeGreeting()}, {firstName}
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">Here's where your money stands today.</p>
+            </div>
+
             {/* 1. Top 3-Metric Summary Card */}
             <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100 gap-4 md:gap-6">
               <div>
@@ -3292,7 +3304,7 @@ function KlarityApp() {
       {/* 4. MODALS (Clean Light Theme) */}
       {/* ======================================================================= */}
 
-      {/* Add Card Modal */}
+      {/* Add Card Modal: Connect via Plaid or Add Manually */}
       {isAddAccountOpen && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) setIsAddAccountOpen(false); }}
@@ -3303,83 +3315,173 @@ function KlarityApp() {
             className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 text-slate-800 animate-in fade-in zoom-in-95 cursor-default"
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900">Add Credit Card</h3>
+              <h3 className="text-sm font-bold text-slate-900">Add or Connect Card</h3>
               <button onClick={() => setIsAddAccountOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
             </div>
-            <form onSubmit={handleAddAccount} className="flex flex-col gap-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700">Bank / Issuer</label>
-                <select
-                  value={newAccount.institution}
-                  onChange={e => setNewAccount(prev => ({ ...prev, institution: e.target.value }))}
-                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
-                >
-                  <option value="Everyday Rewards">Everyday Rewards</option>
-                  <option value="Travel Card">Travel Card</option>
-                  <option value="Capital One">Capital One</option>
-                  <option value="Chase">Chase</option>
-                  <option value="Citi">Citi</option>
-                  <option value="Discover">Discover</option>
-                  <option value="Bank">Bank</option>
-                </select>
-              </div>
 
-              <div>
-                <label className="font-semibold text-slate-700">Card Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Everyday Rewards, Travel Card"
-                  value={newAccount.name}
-                  onChange={e => setNewAccount(prev => ({ ...prev, name: e.target.value }))}
-                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 placeholder-slate-400 outline-none"
-                />
-              </div>
+            {/* Mode selection tabs */}
+            <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setAddCardTab('plaid')}
+                className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  addCardTab === 'plaid'
+                    ? 'bg-white text-[#18457c] shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <Landmark className="w-3.5 h-3.5" />
+                <span>Connect with Plaid</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddCardTab('manual')}
+                className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  addCardTab === 'manual'
+                    ? 'bg-white text-[#18457c] shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>Add Card Manually</span>
+              </button>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
+            {addCardTab === 'plaid' ? (
+              <div className="flex flex-col gap-4 text-xs pt-1">
+                <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/70 flex flex-col gap-2">
+                  <div className="flex items-center gap-2 text-slate-900 font-bold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Instant Bank & Card Sync</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Connect through Plaid Sandbox or your bank to instantly import your credit cards, real-time balances, credit limits, and APRs.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    disabled={isConnectingPlaid}
+                    onClick={() => {
+                      setIsAddAccountOpen(false);
+                      initiatePlaidLink();
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-2xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{isConnectingPlaid ? 'Connecting to Plaid...' : 'Connect Bank via Plaid'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddAccountOpen(false);
+                      setSettingsActiveTab('plaid');
+                      setIsSettingsOpen(true);
+                    }}
+                    className="w-full py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer text-center"
+                  >
+                    Manage Plaid Keys & Bank Connections
+                  </button>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Want to enter credit card details directly?</span>
+                  <button
+                    type="button"
+                    onClick={() => setAddCardTab('manual')}
+                    className="text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
+                  >
+                    Manual entry →
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleAddAccount} className="flex flex-col gap-3 text-xs">
                 <div>
-                  <label className="font-semibold text-slate-700">Balance ($)</label>
+                  <label className="font-semibold text-slate-700">Bank / Issuer</label>
+                  <select
+                    value={newAccount.institution}
+                    onChange={e => setNewAccount(prev => ({ ...prev, institution: e.target.value }))}
+                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
+                  >
+                    <option value="Everyday Rewards">Everyday Rewards</option>
+                    <option value="Travel Card">Travel Card</option>
+                    <option value="Capital One">Capital One</option>
+                    <option value="Chase">Chase</option>
+                    <option value="Citi">Citi</option>
+                    <option value="Discover">Discover</option>
+                    <option value="Bank">Bank</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-semibold text-slate-700">Card Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Everyday Rewards, Travel Card"
+                    value={newAccount.name}
+                    onChange={e => setNewAccount(prev => ({ ...prev, name: e.target.value }))}
+                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 placeholder-slate-400 outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-semibold text-slate-700">Balance ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      placeholder="0.00"
+                      value={newAccount.balance}
+                      onChange={e => setNewAccount(prev => ({ ...prev, balance: e.target.value }))}
+                      className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-semibold text-slate-700">Credit Limit ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g. 5000"
+                      value={newAccount.limit}
+                      onChange={e => setNewAccount(prev => ({ ...prev, limit: e.target.value }))}
+                      className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-semibold text-slate-700">Interest APR (%)</label>
                   <input
                     type="number"
                     step="0.01"
                     required
-                    placeholder="0.00"
-                    value={newAccount.balance}
-                    onChange={e => setNewAccount(prev => ({ ...prev, balance: e.target.value }))}
+                    placeholder="e.g. 21.9"
+                    value={newAccount.apr}
+                    onChange={e => setNewAccount(prev => ({ ...prev, apr: e.target.value }))}
                     className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
                   />
                 </div>
-                <div>
-                  <label className="font-semibold text-slate-700">Credit Limit ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="e.g. 5000"
-                    value={newAccount.limit}
-                    onChange={e => setNewAccount(prev => ({ ...prev, limit: e.target.value }))}
-                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
-                  />
+
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setAddCardTab('plaid')}
+                    className="text-blue-600 hover:text-blue-800 text-[11px] font-medium cursor-pointer"
+                  >
+                    ← Connect through Plaid
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setIsAddAccountOpen(false)} className="px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-pointer">Cancel</button>
+                    <button type="submit" className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold cursor-pointer">Save Card</button>
+                  </div>
                 </div>
-              </div>
-
-              <div>
-                <label className="font-semibold text-slate-700">Interest APR (%)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  placeholder="e.g. 21.9"
-                  value={newAccount.apr}
-                  onChange={e => setNewAccount(prev => ({ ...prev, apr: e.target.value }))}
-                  className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsAddAccountOpen(false)} className="px-3.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-semibold cursor-pointer">Cancel</button>
-                <button type="submit" className="px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white font-semibold cursor-pointer">Save Card</button>
-              </div>
-            </form>
+              </form>
+            )}
           </div>
         </div>
       )}
