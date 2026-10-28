@@ -57,7 +57,8 @@ import {
   Check,
   SlidersHorizontal,
   Calculator,
-  RefreshCw
+  RefreshCw,
+  Square
 } from 'lucide-react';
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
@@ -821,6 +822,15 @@ function KlarityApp() {
   const chatEndRef = useRef(null);
   const fullChatContainerRef = useRef(null);
   const sidebarChatContainerRef = useRef(null);
+  const chatAbortControllerRef = useRef(null);
+
+  const handleStopGeneration = () => {
+    if (chatAbortControllerRef.current) {
+      chatAbortControllerRef.current.abort();
+      chatAbortControllerRef.current = null;
+    }
+    setIsAiTyping(false);
+  };
 
   const scrollChatToBottom = () => {
     const scrollEl = (el) => {
@@ -2311,6 +2321,12 @@ function KlarityApp() {
     setIsAiTyping(true);
     scrollChatToBottom();
 
+    if (chatAbortControllerRef.current) {
+      chatAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    chatAbortControllerRef.current = controller;
+
     try {
       const cachedApiKey = settingsAiApiKey.trim() || localStorage.getItem('klarity_ai_api_key') || '';
       const cachedProvider = settingsAiProvider || localStorage.getItem('klarity_ai_provider') || 'gemini';
@@ -2330,6 +2346,7 @@ function KlarityApp() {
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           message: userMsg,
           userId: currentUser?.id,
@@ -2459,6 +2476,23 @@ function KlarityApp() {
       updateActiveSession(updated);
       scrollChatToBottom();
     } catch (err) {
+      if (err.name === 'AbortError' || err.message?.toLowerCase().includes('abort')) {
+        const updated = [
+          ...userUpdatedMessages,
+          {
+            role: 'assistant',
+            text: 'Response generation stopped.',
+            suggestedActions: [
+              { label: 'Create a $400 Groceries budget', type: 'set_budget', category: 'Groceries', limit: 400 },
+              { label: 'Set a payment reminder', type: 'payment_reminder' },
+              { label: 'Open Debt Payoff Planner', type: 'navigate', tab: 'cards' }
+            ]
+          }
+        ];
+        updateActiveSession(updated);
+        scrollChatToBottom();
+        return;
+      }
       const updated = [
         ...userUpdatedMessages,
         { role: 'assistant', text: "Could not connect to AI advisor. Please verify your settings." }
@@ -2466,6 +2500,7 @@ function KlarityApp() {
       updateActiveSession(updated);
       scrollChatToBottom();
     } finally {
+      chatAbortControllerRef.current = null;
       setIsAiTyping(false);
       scrollChatToBottom();
     }
@@ -3742,13 +3777,25 @@ function KlarityApp() {
                       onChange={e => setChatInput(e.target.value)}
                       className="flex-1 bg-slate-100/90 border border-slate-200/90 rounded-full px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500"
                     />
-                    <button
-                      type="submit"
-                      disabled={isAiTyping || (!chatInput.trim() && chatFiles.length === 0)}
-                      className="px-4 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 cursor-pointer shrink-0"
-                    >
-                      Send
-                    </button>
+                    {isAiTyping ? (
+                      <button
+                        type="button"
+                        onClick={handleStopGeneration}
+                        className="w-9 h-9 rounded-full bg-slate-900 hover:bg-slate-800 active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-sm animate-in fade-in zoom-in-90"
+                        title="Stop response"
+                        aria-label="Stop generating response"
+                      >
+                        <Square className="w-3.5 h-3.5 fill-current text-white" />
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={!chatInput.trim() && chatFiles.length === 0}
+                        className="px-4 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 cursor-pointer shrink-0"
+                      >
+                        Send
+                      </button>
+                    )}
                   </form>
                 </div>
               )}
@@ -5615,13 +5662,26 @@ function KlarityApp() {
                 }}
                 className="flex-1 min-w-0 max-h-36 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 shadow-2xs resize-none"
               />
-              <button
-                type="submit"
-                disabled={isAiTyping || (!chatInput.trim() && chatFiles.length === 0)}
-                className="px-5 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5"
-              >
-                Send
-              </button>
+              {isAiTyping ? (
+                <button
+                  type="button"
+                  onClick={handleStopGeneration}
+                  className="h-[38px] px-4 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer shrink-0 mb-0.5 animate-in fade-in zoom-in-90"
+                  title="Stop response"
+                  aria-label="Stop generating response"
+                >
+                  <Square className="w-3.5 h-3.5 fill-current text-white" />
+                  <span className="text-xs font-semibold">Stop</span>
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!chatInput.trim() && chatFiles.length === 0}
+                  className="px-5 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5"
+                >
+                  Send
+                </button>
+              )}
             </form>
           </div>
         )}
@@ -5997,13 +6057,26 @@ function KlarityApp() {
               }}
               className="flex-1 min-w-0 max-h-32 bg-white border border-slate-200/90 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs resize-none"
             />
-            <button
-              type="submit"
-              disabled={isAiTyping || (!chatInput.trim() && chatFiles.length === 0)}
-              className="px-3.5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5"
-            >
-              Send
-            </button>
+            {isAiTyping ? (
+              <button
+                type="button"
+                onClick={handleStopGeneration}
+                className="h-[34px] px-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer shrink-0 mb-0.5 animate-in fade-in zoom-in-90"
+                title="Stop response"
+                aria-label="Stop generating response"
+              >
+                <Square className="w-3 h-3 fill-current text-white" />
+                <span className="text-xs font-semibold">Stop</span>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!chatInput.trim() && chatFiles.length === 0}
+                className="px-3.5 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 transition-colors shadow-2xs cursor-pointer shrink-0 mb-0.5"
+              >
+                Send
+              </button>
+            )}
           </form>
         </div>
       </aside>
