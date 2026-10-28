@@ -1792,28 +1792,60 @@ function KlarityApp() {
     e.preventDefault();
     if (!newBill.name.trim() || !newBill.expectedAmount) return;
 
+    const chosenAccount = newBill.account || allFilterableCards[0]?.fullLabel || 'Checking •••• 4821';
+    const createdBillPayload = {
+      ...newBill,
+      account: chosenAccount,
+      assignedOwnerId: currentUser?.id
+    };
+
     try {
       const res = await fetch('/api/bills', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...newBill,
-          assignedOwnerId: currentUser.id
-        })
+        body: JSON.stringify(createdBillPayload)
       });
+      let savedBill = null;
       if (res.ok) {
-        setIsAddBillOpen(false);
-        setNewBill({
-          name: '',
-          biller: '',
-          category: 'Utilities',
-          expectedAmount: '',
-          dueDay: '15'
-        });
-        await fetchData();
-        setNotificationToast(`Bill added: ${newBill.name}`);
-        setTimeout(() => setNotificationToast(''), 4000);
+        try {
+          const json = await res.json();
+          savedBill = json?.bill || json;
+        } catch (err) {}
       }
+      const billItem = savedBill && savedBill.id ? savedBill : {
+        id: `bill-${Date.now()}`,
+        name: newBill.name.trim(),
+        biller: newBill.name.trim(),
+        category: newBill.category || 'Utilities',
+        expectedAmount: parseFloat(newBill.expectedAmount),
+        amount: parseFloat(newBill.expectedAmount),
+        dueDay: parseInt(newBill.dueDay || '15', 10),
+        account: chosenAccount,
+        status: 'upcoming'
+      };
+
+      setData(prev => {
+        const baseBills = (prev.bills && prev.bills.length > 0) ? prev.bills : DEFAULT_OVERVIEW_BILLS;
+        const nextBills = [billItem, ...baseBills.filter(b => b.id !== billItem.id)];
+        const nextState = { ...prev, bills: nextBills };
+        try {
+          localStorage.setItem('klarity_bills', JSON.stringify(nextBills));
+          localStorage.setItem('klarity_finance_data', JSON.stringify(nextState));
+        } catch (err) {}
+        return nextState;
+      });
+
+      setIsAddBillOpen(false);
+      setNewBill({
+        name: '',
+        biller: '',
+        category: 'Utilities',
+        expectedAmount: '',
+        dueDay: '15',
+        account: ''
+      });
+      setNotificationToast(`Bill added: ${billItem.name}`);
+      setTimeout(() => setNotificationToast(''), 4000);
     } catch (err) {
       console.error(err);
     }
@@ -1849,27 +1881,57 @@ function KlarityApp() {
   const handleAddTransaction = async (e) => {
     e.preventDefault();
     if (!newTx.name.trim() || !newTx.amount) return;
+    const chosenAccount = newTx.account || allFilterableCards.find(c => c.type === 'credit')?.fullLabel || 'Everyday Rewards •••• 4417';
+    const payload = {
+      ...newTx,
+      account: chosenAccount,
+      ownerId: currentUser?.id
+    };
     try {
       const res = await fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...newTx,
-          ownerId: currentUser?.id
-        })
+        body: JSON.stringify(payload)
       });
+      let savedTx = null;
       if (res.ok) {
-        setIsAddTxOpen(false);
-        setNewTx({
-          name: '',
-          amount: '',
-          category: 'Groceries',
-          date: new Date().toISOString().split('T')[0]
-        });
-        await fetchData();
-        setNotificationToast(`Added purchase: ${newTx.name}`);
-        setTimeout(() => setNotificationToast(''), 3500);
+        try {
+          const json = await res.json();
+          savedTx = json?.transaction || json;
+        } catch (err) {}
       }
+      const txItem = savedTx && savedTx.id ? savedTx : {
+        id: `tx-${Date.now()}`,
+        name: newTx.name.trim(),
+        amount: parseFloat(newTx.amount),
+        category: newTx.category || 'Groceries',
+        date: newTx.date || new Date().toISOString().split('T')[0],
+        account: chosenAccount,
+        notes: newTx.notes || ''
+      };
+
+      setData(prev => {
+        const baseTxs = (prev.transactions && prev.transactions.length > 0) ? prev.transactions : DEFAULT_OVERVIEW_TXS;
+        const nextTxs = [txItem, ...baseTxs.filter(t => t.id !== txItem.id)];
+        const nextState = { ...prev, transactions: nextTxs };
+        try {
+          localStorage.setItem('klarity_transactions', JSON.stringify(nextTxs));
+          localStorage.setItem('klarity_finance_data', JSON.stringify(nextState));
+        } catch (err) {}
+        return nextState;
+      });
+
+      setIsAddTxOpen(false);
+      setNewTx({
+        name: '',
+        amount: '',
+        category: 'Groceries',
+        date: new Date().toISOString().split('T')[0],
+        account: '',
+        notes: ''
+      });
+      setNotificationToast(`Added purchase: ${txItem.name}`);
+      setTimeout(() => setNotificationToast(''), 3500);
     } catch (err) {
       console.error(err);
     }
@@ -1896,28 +1958,58 @@ function KlarityApp() {
     const subToSave = (eOrSub && eOrSub.name) ? eOrSub : newSub;
     if (!subToSave.name || !subToSave.amount) return;
 
+    const chosenAccount = subToSave.account || allFilterableCards.find(c => c.type === 'credit')?.fullLabel || 'Everyday Rewards •••• 4417';
+    const payload = {
+      ...subToSave,
+      account: chosenAccount,
+      ownerId: currentUser?.id
+    };
+
     try {
       const res = await fetch('/api/subscriptions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...subToSave,
-          ownerId: currentUser?.id
-        })
+        body: JSON.stringify(payload)
       });
+      let savedSub = null;
       if (res.ok) {
-        setIsAddSubOpen(false);
-        setNewSub({
-          name: '',
-          amount: '',
-          billingCycle: 'monthly',
-          renewalDate: '1st of month',
-          category: 'Entertainment'
-        });
-        await fetchData();
-        setNotificationToast(`Added subscription: ${subToSave.name}`);
-        setTimeout(() => setNotificationToast(''), 3500);
+        try {
+          const json = await res.json();
+          savedSub = json?.subscription || json;
+        } catch (err) {}
       }
+      const subItem = savedSub && savedSub.id ? savedSub : {
+        id: `sub-${Date.now()}`,
+        name: subToSave.name.trim(),
+        amount: parseFloat(subToSave.amount),
+        billingCycle: subToSave.billingCycle || 'monthly',
+        renewalDate: subToSave.renewalDate || 'Renews monthly',
+        category: subToSave.category || 'Streaming',
+        account: chosenAccount
+      };
+
+      setData(prev => {
+        const baseSubs = (prev.subscriptions && prev.subscriptions.length > 0) ? prev.subscriptions : DEFAULT_OVERVIEW_SUBS;
+        const nextSubs = [subItem, ...baseSubs.filter(s => s.id !== subItem.id)];
+        const nextState = { ...prev, subscriptions: nextSubs };
+        try {
+          localStorage.setItem('klarity_subscriptions', JSON.stringify(nextSubs));
+          localStorage.setItem('klarity_finance_data', JSON.stringify(nextState));
+        } catch (err) {}
+        return nextState;
+      });
+
+      setIsAddSubOpen(false);
+      setNewSub({
+        name: '',
+        amount: '',
+        billingCycle: 'monthly',
+        renewalDate: '1st of month',
+        category: 'Streaming',
+        account: ''
+      });
+      setNotificationToast(`Added subscription: ${subItem.name}`);
+      setTimeout(() => setNotificationToast(''), 3500);
     } catch (err) {
       console.error(err);
     }
@@ -4614,18 +4706,8 @@ function KlarityApp() {
                         <p className="text-xs font-bold text-slate-900">{bill.name}</p>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
                           <span className="text-[11px] text-slate-400">
-                            {bill.nextDueDate ? `Due ${bill.nextDueDate}` : `Due Day ${bill.dueDay}`} · {bill.category || 'Utilities'}
+                            {bill.nextDueDate ? `Due ${bill.nextDueDate}` : `Due Day ${bill.dueDay}`} · {bill.category || 'Utilities'} · {bill.account || 'Checking •••• 4821'}
                           </span>
-                          <select
-                            value={bill.account || 'Checking •••• 4821'}
-                            onChange={e => handleChangeItemCard('bill', bill.id, e.target.value)}
-                            className="text-[10px] font-mono bg-slate-100 hover:bg-slate-200/70 text-slate-700 rounded px-2 py-0.5 outline-none cursor-pointer"
-                            title="Change payment card/account"
-                          >
-                            {allFilterableCards.map(c => (
-                              <option key={c.id} value={c.fullLabel}>{c.fullLabel}</option>
-                            ))}
-                          </select>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 self-end sm:self-center">
@@ -4767,17 +4849,9 @@ function KlarityApp() {
                           )}
                         </div>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <span className="text-[11px] text-slate-400">{sub.renewalDate || 'Renews monthly'} • {sub.category}</span>
-                          <select
-                            value={sub.account || 'Everyday Rewards •••• 4417'}
-                            onChange={e => handleChangeItemCard('sub', sub.id, e.target.value)}
-                            className="text-[10px] font-mono bg-slate-100 hover:bg-slate-200/70 text-slate-700 rounded px-2 py-0.5 outline-none cursor-pointer"
-                            title="Change payment card/account"
-                          >
-                            {allFilterableCards.map(c => (
-                              <option key={c.id} value={c.fullLabel}>{c.fullLabel}</option>
-                            ))}
-                          </select>
+                          <span className="text-[11px] text-slate-400">
+                            {sub.renewalDate ? `Renews ${sub.renewalDate}` : 'Renews monthly'} · {sub.category} · {sub.account || 'Everyday Rewards •••• 4417'}
+                          </span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 self-end sm:self-center">
@@ -6174,11 +6248,11 @@ function KlarityApp() {
                 <div>
                   <label className="font-semibold text-slate-700">Paid From Card / Account</label>
                   <select
-                    value={newBill.account || (filterableCards[0]?.fullLabel || 'Checking •••• 4821')}
+                    value={newBill.account || (allFilterableCards[0]?.fullLabel || 'Checking •••• 4821')}
                     onChange={e => setNewBill(prev => ({ ...prev, account: e.target.value }))}
                     className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
                   >
-                    {filterableCards.map(c => (
+                    {allFilterableCards.map(c => (
                       <option key={c.id} value={c.fullLabel}>{c.fullLabel}</option>
                     ))}
                   </select>
@@ -6265,11 +6339,11 @@ function KlarityApp() {
                 <div>
                   <label className="font-semibold text-slate-700">Charged To Card</label>
                   <select
-                    value={newSub.account || (filterableCards.find(c => c.type === 'credit')?.fullLabel || 'Everyday Rewards •••• 4417')}
+                    value={newSub.account || (allFilterableCards.find(c => c.type === 'credit')?.fullLabel || 'Everyday Rewards •••• 4417')}
                     onChange={e => setNewSub({ ...newSub, account: e.target.value })}
                     className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
                   >
-                    {filterableCards.map(c => (
+                    {allFilterableCards.map(c => (
                       <option key={c.id} value={c.fullLabel}>{c.fullLabel}</option>
                     ))}
                   </select>
@@ -6362,11 +6436,11 @@ function KlarityApp() {
                 <div>
                   <label className="font-semibold text-slate-700">Card / Account</label>
                   <select
-                    value={newTx.account || (filterableCards.find(c => c.type === 'credit')?.fullLabel || 'Everyday Rewards •••• 4417')}
+                    value={newTx.account || (allFilterableCards.find(c => c.type === 'credit')?.fullLabel || 'Everyday Rewards •••• 4417')}
                     onChange={e => setNewTx({ ...newTx, account: e.target.value })}
                     className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none cursor-pointer"
                   >
-                    {filterableCards.map(c => (
+                    {allFilterableCards.map(c => (
                       <option key={c.id} value={c.fullLabel}>{c.fullLabel}</option>
                     ))}
                   </select>
