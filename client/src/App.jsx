@@ -421,7 +421,7 @@ function KlarityApp() {
       metrics: { totalChecking: 0, totalCreditDebt: 0, totalMonthlyBills: 0, netWorthEstimate: 0 }
     };
   });
-  const VALID_TABS = ['dashboard', 'cards', 'bills', 'subscriptions', 'transactions', 'budgets', 'advisor'];
+  const VALID_TABS = ['dashboard', 'cards', 'bills', 'subscriptions', 'transactions', 'budgets', 'advisor', 'more'];
 
   const getInitialTab = () => {
     try {
@@ -634,25 +634,25 @@ function KlarityApp() {
   // Monthly Category Budgets
   const [budgets, setBudgets] = useState(() => {
     try {
-      const saved = localStorage.getItem('klarity_budgets');
+      const saved = localStorage.getItem('klarity_budgets_v2');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {}
     return [
-      { id: 'b-groceries', category: 'Groceries', limit: 450, lastMonthSpent: 395 },
-      { id: 'b-dining', category: 'Dining', limit: 250, lastMonthSpent: 210 },
-      { id: 'b-transport', category: 'Transportation', limit: 160, lastMonthSpent: 145 },
-      { id: 'b-shopping', category: 'Shopping', limit: 200, lastMonthSpent: 185 },
-      { id: 'b-entertainment', category: 'Entertainment', limit: 120, lastMonthSpent: 95 },
-      { id: 'b-utilities', category: 'Utilities', limit: 300, lastMonthSpent: 280 }
+      { id: 'b-groceries', category: 'Groceries', limit: 200, defaultSpent: 142, lastMonthSpent: 165 },
+      { id: 'b-dining', category: 'Dining', limit: 60, defaultSpent: 57, lastMonthSpent: 48 },
+      { id: 'b-gas', category: 'Gas', limit: 80, defaultSpent: 90, lastMonthSpent: 72 },
+      { id: 'b-shopping', category: 'Shopping', limit: 150, defaultSpent: 68, lastMonthSpent: 110 },
+      { id: 'b-subscriptions', category: 'Subscriptions', limit: 40, defaultSpent: 27, lastMonthSpent: 27 },
+      { id: 'b-bills', category: 'Bills', limit: 150, defaultSpent: 128, lastMonthSpent: 125 }
     ];
   });
 
   useEffect(() => {
     try {
-      localStorage.setItem('klarity_budgets', JSON.stringify(budgets));
+      localStorage.setItem('klarity_budgets_v2', JSON.stringify(budgets));
     } catch (e) {}
   }, [budgets]);
 
@@ -2599,12 +2599,17 @@ function KlarityApp() {
   ];
 
   const DEFAULT_OVERVIEW_TXS = [
-    { id: 'mock-t-1', name: "Trader Joe's", date: '2026-10-24', category: 'Groceries', account: 'Everyday Rewards •••• 4417', subText: 'Oct 24 · Everyday Rewards', amount: -54.12, notes: 'Weekly family groceries' },
-    { id: 'mock-t-2', name: 'Shell', date: '2026-10-23', category: 'Transportation', account: 'Everyday Rewards •••• 4417', subText: 'Oct 23 · Everyday Rewards', amount: -41.80, notes: '' },
-    { id: 'mock-t-3', name: 'Paycheck deposit', date: '2026-10-22', category: 'Income', account: 'Checking •••• 4821', subText: 'Oct 22 · Checking', amount: 1850.00, notes: 'Bi-weekly direct deposit' },
-    { id: 'mock-t-4', name: 'Chipotle Mexican Grill', date: '2026-10-21', category: 'Dining', account: 'Everyday Rewards •••• 4417', subText: 'Oct 21 · Everyday Rewards', amount: -24.50, notes: '' },
-    { id: 'mock-t-5', name: 'Delta Air Lines', date: '2026-10-19', category: 'Travel', account: 'Travel Card •••• 9082', subText: 'Oct 19 · Travel Card', amount: -218.00, notes: 'Thanksgiving flight' },
-    { id: 'mock-t-6', name: 'Target Superstore', date: '2026-10-18', category: 'Shopping', account: 'Everyday Rewards •••• 4417', subText: 'Oct 18 · Everyday Rewards', amount: -86.40, notes: 'Household supplies' }
+    { id: 'mock-t-0', name: 'Chipotle', date: 'Oct 26', category: 'Dining', account: 'Everyday Rewards •••• 4417', subText: 'Oct 26 · Dining', amount: -16.40, pending: true, notes: '' },
+    { id: 'mock-t-sub-1', name: 'Netflix', date: 'Oct 25', category: 'Subscriptions', account: 'Everyday Rewards •••• 4417', subText: 'Oct 25 · Subscriptions', amount: -15.49, notes: '' },
+    { id: 'mock-t-1', name: "Trader Joe's", date: 'Oct 24', category: 'Groceries', account: 'Everyday Rewards •••• 4417', subText: 'Oct 24 · Groceries', amount: -54.12, notes: 'Weekly family groceries' },
+    { id: 'mock-t-2', name: 'Shell', date: 'Oct 23', category: 'Gas', account: 'Everyday Rewards •••• 4417', subText: 'Oct 23 · Gas', amount: -41.80, notes: '' },
+    { id: 'mock-t-3', name: 'Paycheck', date: 'Oct 22', category: 'Income', account: 'Checking •••• 4821', subText: 'Oct 22 · Income', amount: 1850.00, notes: 'Bi-weekly direct deposit' },
+    { id: 'mock-t-4', name: 'Amazon', date: 'Oct 21', category: 'Shopping', account: 'Everyday Rewards •••• 4417', subText: 'Oct 21 · Shopping', amount: -67.90, notes: '' },
+    { id: 'mock-t-5', name: 'Starbucks', date: 'Oct 20', category: 'Dining', account: 'Everyday Rewards •••• 4417', subText: 'Oct 20 · Dining', amount: -6.85, notes: '' },
+    { id: 'mock-t-6', name: 'Safeway', date: 'Oct 19', category: 'Groceries', account: 'Everyday Rewards •••• 4417', subText: 'Oct 19 · Groceries', amount: -88.30, notes: '' },
+    { id: 'mock-t-7', name: 'Spotify', date: 'Oct 18', category: 'Subscriptions', account: 'Everyday Rewards •••• 4417', subText: 'Oct 18 · Subscriptions', amount: -11.99, notes: '' },
+    { id: 'mock-t-8', name: 'Chevron', date: 'Oct 16', category: 'Gas', account: 'Travel Card •••• 9082', subText: 'Oct 16 · Gas', amount: -48.20, notes: '' },
+    { id: 'mock-t-9', name: 'Sweetgreen', date: 'Oct 15', category: 'Dining', account: 'Travel Card •••• 9082', subText: 'Oct 15 · Dining', amount: -33.75, notes: '' }
   ];
 
   // Unified list of every connected card and account (with last 4 digits) for the Multi-Card Filter
@@ -2832,15 +2837,23 @@ function KlarityApp() {
   const computedBudgets = budgets.map(b => {
     const catLower = (b.category || '').toLowerCase();
     let spent = cardFilteredTxsForBudgets
-      .filter(t => (t.category || '').toLowerCase() === catLower && catLower !== 'income')
+      .filter(t => {
+        const tc = (t.category || '').toLowerCase();
+        if (tc === 'income') return false;
+        if (catLower === 'gas' || catLower === 'transportation') {
+          return tc === 'gas' || tc === 'transportation';
+        }
+        return tc === catLower;
+      })
       .reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0);
 
-    if (catLower === 'utilities' || catLower === 'housing') {
-      spent += cardFilteredBillsForBudgets
-        .filter(bill => (bill.category || '').toLowerCase() === catLower)
-        .reduce((sum, bill) => sum + Number(bill.expectedAmount || 0), 0);
+    if (catLower === 'utilities' || catLower === 'housing' || catLower === 'bills') {
+      const billsToCount = catLower === 'bills'
+        ? cardFilteredBillsForBudgets.filter(bill => bill.status === 'due_soon' || (bill.daysUntil != null && bill.daysUntil <= 5))
+        : cardFilteredBillsForBudgets.filter(bill => (bill.category || '').toLowerCase() === catLower);
+      spent += billsToCount.reduce((sum, bill) => sum + Number(bill.expectedAmount || 0), 0);
     }
-    if (catLower === 'entertainment' || catLower === 'subscriptions') {
+    if ((catLower === 'entertainment' || catLower === 'subscriptions') && spent === 0) {
       spent += cardFilteredSubsForBudgets
         .reduce((sum, sub) => sum + Number(sub.amount || 0), 0);
     }
@@ -2854,15 +2867,15 @@ function KlarityApp() {
       spent,
       limit,
       pct,
-      isWarning: pct >= 80 && pct < 100,
-      isOver: pct >= 100,
+      isWarning: pct >= 80 && pct <= 100,
+      isOver: spent > limit,
       lastMonth,
       diffFromLastMonth
     };
   });
 
   const totalBudgetLimit = computedBudgets.reduce((s, b) => s + b.limit, 0);
-  const totalBudgetSpent = computedBudgets.reduce((s, b) => s + b.spent, 0);
+  const totalBudgetSpent = Math.ceil(computedBudgets.reduce((s, b) => s + b.spent, 0));
   const hasAnyBudgetPaymentsOnSelectedCard =
     cardFilteredTxsForBudgets.length > 0 || cardFilteredBillsForBudgets.length > 0 || cardFilteredSubsForBudgets.length > 0;
 
@@ -3209,25 +3222,620 @@ function KlarityApp() {
       </aside>
 
       {/* ======================================================================= */}
-      {/* 2. CENTER MAIN CONTENT */}
+      {/* 2A. MOBILE APP SHELL (< 768px) — Matches Mobile Reference Mockups 1:1 */}
       {/* ======================================================================= */}
-      <main className="flex-1 min-w-0 p-6 lg:p-8 flex flex-col gap-6 overflow-y-auto">
-        {/* Mobile Header */}
-        <div className="md:hidden flex items-center justify-between pb-3 border-b border-slate-200">
-          <span className="font-serif-title text-xl font-bold text-slate-900">Klarity</span>
-          <select
-            value={activeTab}
-            onChange={e => setActiveTab(e.target.value)}
-            className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs text-slate-800"
-          >
-            <option value="dashboard">Overview</option>
-            <option value="transactions">Transactions</option>
-            <option value="budgets">Budgets</option>
-            <option value="bills">Bills</option>
-            <option value="subscriptions">Subscriptions</option>
-            <option value="cards">Cards</option>
-          </select>
-        </div>
+      <div className="md:hidden flex-1 min-w-0 flex flex-col min-h-screen bg-[#f8fafc] pb-16">
+        {/* Horizontal Card Filter Pills Helper for Mobile Activity, Budgets, Bills, Subscriptions */}
+        {(() => {
+          const renderMobileCardPills = () => (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              <button
+                type="button"
+                onClick={() => setSelectedCardIds([])}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-colors cursor-pointer ${
+                  selectedCardIds.length === 0
+                    ? 'bg-[#18457c] text-white shadow-2xs'
+                    : 'bg-white border border-slate-200/90 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                All cards
+              </button>
+              {allFilterableCards.map(c => {
+                const isSelected = selectedCardIds.includes(c.id);
+                const pillLabel = c.name.toLowerCase() === 'checking'
+                  ? 'Checking'
+                  : `${c.name.split(' ')[0]} ••${c.mask}`;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCardIds(prev =>
+                        prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
+                      );
+                    }}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium shrink-0 transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#18457c] text-white font-semibold shadow-2xs'
+                        : 'bg-white border border-slate-200/90 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {pillLabel}
+                  </button>
+                );
+              })}
+              {selectedCardIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedCardIds([])}
+                  className="px-3 py-1.5 rounded-full text-[11px] font-semibold text-blue-600 bg-blue-50 shrink-0 cursor-pointer"
+                >
+                  Clear filter
+                </button>
+              )}
+            </div>
+          );
+
+          return (
+            <>
+              {/* SCREEN 1: MOBILE HOME (OVERVIEW) */}
+              {activeTab === 'dashboard' && (
+                <div className="p-5 flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <h1 className="font-serif-title text-[26px] font-bold text-slate-900 tracking-tight">Overview</h1>
+                    <button
+                      type="button"
+                      onClick={() => setIsSettingsOpen(true)}
+                      className="w-9 h-9 rounded-full bg-[#18457c] text-white flex items-center justify-center font-bold text-xs shadow-2xs cursor-pointer"
+                      title="Open Settings"
+                    >
+                      {userInitials}
+                    </button>
+                  </div>
+
+                  {/* Available Cash Hero Card */}
+                  <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-2xs">
+                    <p className="text-xs text-slate-500">Available cash</p>
+                    <p className="font-serif-title text-[34px] leading-tight font-bold text-slate-900 mt-1">
+                      {fmtMoney(displayCash)}
+                    </p>
+                    <p className="text-xs font-medium text-emerald-700 mt-1.5">
+                      Covers all bills due in 14 days
+                    </p>
+                  </div>
+
+                  {/* Two Side-by-Side Metric Cards */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs">
+                      <p className="text-xs text-slate-500">Card balances</p>
+                      <p className="font-serif-title text-xl font-bold text-slate-900 mt-1">
+                        {fmtMoney(displayCardBalances)}
+                      </p>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs">
+                      <p className="text-xs text-slate-500">Due in 14 days</p>
+                      <p className="font-serif-title text-xl font-bold text-slate-900 mt-1">
+                        {fmtMoney(displayDue14Sum || 842.15)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Horizontal Scrollable Cards Carousel */}
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900 mb-2.5">Cards</h2>
+                    <div className="flex gap-3 overflow-x-auto pb-2">
+                      {displayCards.map(card => {
+                        const utilPct = Math.min(100, Math.round((card.balance / (card.limit || 5000)) * 100));
+                        return (
+                          <div
+                            key={card.id}
+                            onClick={() => {
+                              setSelectedCardIds([card.id]);
+                              setActiveTab('transactions');
+                            }}
+                            className={`w-[160px] shrink-0 rounded-2xl p-4 text-white flex flex-col justify-between min-h-[142px] shadow-xs cursor-pointer ${
+                              card.bgColor || 'bg-[#18457c]'
+                            }`}
+                          >
+                            <div>
+                              <p className="text-xs font-semibold leading-snug">{card.name}</p>
+                              <p className="text-[11px] text-white/75 mt-0.5">•••• {card.mask}</p>
+                            </div>
+                            <div className="mt-6">
+                              <p className="font-serif-title text-lg font-bold">{fmtMoney(card.balance)}</p>
+                              <div className="w-full h-1 bg-white/25 rounded-full overflow-hidden mt-2">
+                                <div className="bg-white h-full rounded-full" style={{ width: `${utilPct}%` }} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => setIsAddAccountOpen(true)}
+                        className="w-[120px] shrink-0 rounded-2xl border border-dashed border-slate-300 bg-white/50 hover:bg-white text-slate-600 text-xs font-medium flex items-center justify-center min-h-[142px] cursor-pointer"
+                      >
+                        + Add card
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Advisor Callout Box */}
+                  <div className="bg-[#e9eff8] rounded-2xl p-4 flex flex-col gap-3">
+                    <p className="text-xs text-slate-800 leading-relaxed">
+                      <strong className="font-bold text-slate-900">Advisor:</strong> Gas spending is $10 over budget this month. Want to see where else you can adjust?
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('advisor')}
+                      className="self-start px-4 py-2 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold cursor-pointer shadow-2xs"
+                    >
+                      Ask the advisor
+                    </button>
+                  </div>
+
+                  {/* Upcoming Bills */}
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900 mb-2.5">Upcoming bills</h2>
+                    <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
+                      {displayBills.map(bill => (
+                        <div key={bill.id} className="p-4 flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">{bill.name}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              Due {bill.nextDueDate || `Oct ${bill.dueDay || 28}`} · {bill.daysUntil || 3} days
+                            </p>
+                          </div>
+                          <span className="text-sm font-semibold text-slate-900">
+                            {fmtMoney(bill.expectedAmount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SCREEN 2: MOBILE ACTIVITY (TRANSACTIONS) */}
+              {activeTab === 'transactions' && (
+                <div className="p-5 flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <h1 className="font-serif-title text-[26px] font-bold text-slate-900 tracking-tight">Activity</h1>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddTxOpen(true)}
+                      className="px-3 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
+                    >
+                      + Add
+                    </button>
+                  </div>
+
+                  {renderMobileCardPills()}
+
+                  <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
+                    {filteredTransactions.length === 0 ? (
+                      <div className="p-8 text-center flex flex-col items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-700">No payments on this card.</p>
+                        {selectedCardIds.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCardIds([])}
+                            className="mt-1 px-3.5 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
+                          >
+                            Clear filter
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      filteredTransactions.map(t => {
+                        const isIncome = (t.category || '').toLowerCase() === 'income' || (t.name || '').toLowerCase().includes('paycheck') || (t.name || '').toLowerCase().includes('deposit');
+                        return (
+                          <div key={t.id} className="p-4 flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{t.name}</p>
+                              <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
+                                <span>{t.date} · {t.category}</span>
+                                {t.pending && (
+                                  <>
+                                    <span>·</span>
+                                    <span className="px-2 py-0.5 rounded-full bg-amber-100/80 text-amber-800 text-[10px] font-semibold">
+                                      Pending
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <span className={`text-sm font-semibold ${isIncome ? 'text-emerald-600' : 'text-slate-900'}`}>
+                              {isIncome ? `+${fmtMoney(Math.abs(t.amount))}` : `-${fmtMoney(Math.abs(t.amount))}`}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* SCREEN 3: MOBILE BUDGETS */}
+              {activeTab === 'budgets' && (
+                <div className="p-5 flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <h1 className="font-serif-title text-[26px] font-bold text-slate-900 tracking-tight">Budgets</h1>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddBudgetOpen(true)}
+                      className="px-3 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
+                    >
+                      + Set Limit
+                    </button>
+                  </div>
+
+                  {renderMobileCardPills()}
+
+                  {/* 3-Column Summary Box */}
+                  <div className="bg-white rounded-2xl border border-slate-200/80 p-4 grid grid-cols-3 text-center shadow-2xs">
+                    <div>
+                      <p className="text-xs text-slate-500">Budgeted</p>
+                      <p className="font-serif-title text-lg font-bold text-slate-900 mt-0.5">
+                        {fmtMoney(totalBudgetLimit, 0)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Spent</p>
+                      <p className="font-serif-title text-lg font-bold text-slate-900 mt-0.5">
+                        {fmtMoney(totalBudgetSpent, 0)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Left</p>
+                      <p className="font-serif-title text-lg font-bold text-emerald-700 mt-0.5">
+                        {fmtMoney(Math.max(0, totalBudgetLimit - totalBudgetSpent), 0)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Category Budgets List Card */}
+                  <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
+                    {!hasAnyBudgetPaymentsOnSelectedCard && selectedCardIds.length > 0 ? (
+                      <div className="p-8 text-center flex flex-col items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-700">No payments on this card.</p>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCardIds([])}
+                          className="mt-1 px-3.5 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
+                        >
+                          Clear filter
+                        </button>
+                      </div>
+                    ) : (
+                      computedBudgets.map(b => {
+                        const spentRounded = Math.round(b.spent);
+                        const isOver = spentRounded > b.limit;
+                        const isWarn = !isOver && b.pct >= 80;
+                        return (
+                          <div key={b.id} className="p-4 flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-bold text-slate-900">{b.category}</span>
+                              <span className="text-sm text-slate-500">
+                                {fmtMoney(spentRounded, 0)} of {fmtMoney(b.limit, 0)}
+                              </span>
+                            </div>
+                            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  isOver ? 'bg-[#b91c1c]' : isWarn ? 'bg-[#b45309]' : 'bg-[#18457c]'
+                                }`}
+                                style={{ width: `${Math.min(100, b.pct)}%` }}
+                              />
+                            </div>
+                            <div>
+                              {isOver ? (
+                                <span className="text-xs font-medium text-[#b91c1c]">
+                                  {fmtMoney(spentRounded - b.limit, 0)} over
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-500">
+                                  {fmtMoney(Math.max(0, b.limit - spentRounded), 0)} left
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* SCREEN 4: MOBILE ADVISOR */}
+              {activeTab === 'advisor' && (
+                <div className="flex-1 flex flex-col justify-between min-h-[calc(100vh-4rem)]">
+                  <div className="px-5 pt-5 pb-2">
+                    <h1 className="font-serif-title text-[26px] font-bold text-slate-900 tracking-tight">Advisor</h1>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto px-5 py-2 flex flex-col gap-3">
+                    {/* Initial Advisor Card */}
+                    <div className="bg-white border border-slate-200/80 rounded-2xl p-4 text-xs sm:text-sm text-slate-800 leading-relaxed shadow-2xs max-w-[92%]">
+                      Your cash covers everything due this month. The {highestAprCard ? highestAprCard.name : 'Travel Card'} has the highest rate at {highestAprCard ? highestAprCard.apr : '24.4'}%, so extra payments there save the most interest.
+                    </div>
+
+                    {/* Quick-Prompt Pills */}
+                    <div className="flex flex-col items-start gap-2">
+                      {[
+                        'What should I pay off first?',
+                        "What's due in 14 days?",
+                        'Where can I cut subscriptions?'
+                      ].map((qText, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSendChatMessage(qText)}
+                          className="px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200/90 text-xs font-medium text-slate-800 shadow-2xs cursor-pointer transition-colors"
+                        >
+                          {qText}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Active Chat Thread Messages */}
+                    {chatMessages.filter((_, idx) => idx > 0).map((msg, i) => (
+                      <div
+                        key={i}
+                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`max-w-[90%] rounded-2xl p-3.5 text-xs leading-relaxed flex flex-col gap-2 ${
+                            msg.role === 'user'
+                              ? 'bg-[#18457c] text-white shadow-2xs'
+                              : 'bg-white text-slate-800 border border-slate-200/80 shadow-2xs'
+                          }`}
+                        >
+                          {msg.text && <FormattedChatMessage text={msg.text} isUser={msg.role === 'user'} />}
+                          {msg.role === 'assistant' && Array.isArray(msg.suggestedActions) && msg.suggestedActions.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-slate-100">
+                              {msg.suggestedActions.map((act, actIdx) => (
+                                <button
+                                  key={actIdx}
+                                  type="button"
+                                  onClick={() => handleExecuteSuggestedAction(act)}
+                                  className="px-2.5 py-1 rounded-lg bg-[#eff4f9] hover:bg-[#18457c] text-[#18457c] hover:text-white text-[11px] font-semibold transition-colors cursor-pointer"
+                                >
+                                  {act.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    {isAiTyping && (
+                      <div className="flex justify-start">
+                        <div className="bg-white border border-slate-200/80 rounded-2xl px-4 py-2.5 text-xs text-slate-500 animate-pulse shadow-2xs">
+                          Advisor is analyzing...
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bottom Input Bar */}
+                  <form
+                    onSubmit={handleSendChatMessage}
+                    className="bg-white border-t border-slate-200/80 px-4 py-3 flex items-center gap-2 sticky bottom-14"
+                  >
+                    <input
+                      type="text"
+                      placeholder="Ask about your money"
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      className="flex-1 bg-slate-100/90 border border-slate-200/90 rounded-full px-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isAiTyping || (!chatInput.trim() && chatFiles.length === 0)}
+                      className="px-4 py-2.5 rounded-xl bg-[#18457c] hover:bg-[#123561] text-white text-xs font-semibold disabled:opacity-50 cursor-pointer shrink-0"
+                    >
+                      Send
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* SCREEN 5: MOBILE MORE MENU */}
+              {activeTab === 'more' && (
+                <div className="p-5 flex flex-col gap-4">
+                  <h1 className="font-serif-title text-[26px] font-bold text-slate-900 tracking-tight">More</h1>
+
+                  <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
+                    {[
+                      { label: 'Bills', onClick: () => setActiveTab('bills') },
+                      { label: 'Subscriptions', onClick: () => setActiveTab('subscriptions') },
+                      { label: 'Cards', onClick: () => setActiveTab('cards') },
+                      { label: 'Settings', onClick: () => setIsSettingsOpen(true) }
+                    ].map((item, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={item.onClick}
+                        className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors cursor-pointer"
+                      >
+                        <span className="text-sm font-medium text-slate-900">{item.label}</span>
+                        <span className="text-slate-400 text-base leading-none">›</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="w-full p-4 text-left text-sm font-medium text-[#b91c1c] hover:bg-rose-50/40 transition-colors cursor-pointer"
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* SUB-VIEWS FROM MORE: BILLS, SUBSCRIPTIONS, CARDS ON MOBILE */}
+              {activeTab === 'bills' && (
+                <div className="p-5 flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('more')}
+                        className="p-1.5 rounded-lg hover:bg-slate-200/60 text-slate-600 cursor-pointer"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                      </button>
+                      <h1 className="font-serif-title text-[24px] font-bold text-slate-900">Bills</h1>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddBillOpen(true)}
+                      className="px-3 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
+                    >
+                      + Add Bill
+                    </button>
+                  </div>
+                  {renderMobileCardPills()}
+                  <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
+                    {filteredBills.length === 0 ? (
+                      <div className="p-8 text-center text-sm font-semibold text-slate-600">No payments on this card.</div>
+                    ) : (
+                      filteredBills.map(b => (
+                        <div key={b.id} className="p-4 flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">{b.name}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{b.dueText}</p>
+                          </div>
+                          <span className="text-sm font-semibold text-slate-900">{fmtMoney(b.expectedAmount)}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'subscriptions' && (
+                <div className="p-5 flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('more')}
+                        className="p-1.5 rounded-lg hover:bg-slate-200/60 text-slate-600 cursor-pointer"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                      </button>
+                      <h1 className="font-serif-title text-[24px] font-bold text-slate-900">Subscriptions</h1>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddSubOpen(true)}
+                      className="px-3 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
+                    >
+                      + Add
+                    </button>
+                  </div>
+                  {renderMobileCardPills()}
+                  <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
+                    {filteredSubscriptions.length === 0 ? (
+                      <div className="p-8 text-center text-sm font-semibold text-slate-600">No payments on this card.</div>
+                    ) : (
+                      filteredSubscriptions.map(s => (
+                        <div key={s.id} className="p-4 flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">{s.name}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{s.renewText}</p>
+                          </div>
+                          <span className="text-sm font-semibold text-slate-900">{fmtMoney(s.amount)}/mo</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'cards' && (
+                <div className="p-5 flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('more')}
+                        className="p-1.5 rounded-lg hover:bg-slate-200/60 text-slate-600 cursor-pointer"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                      </button>
+                      <h1 className="font-serif-title text-[24px] font-bold text-slate-900">Cards</h1>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddAccountOpen(true)}
+                      className="px-3 py-1.5 rounded-xl bg-[#18457c] text-white text-xs font-semibold cursor-pointer"
+                    >
+                      + Add Card
+                    </button>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    {displayCards.map(card => (
+                      <div
+                        key={card.id}
+                        className={`rounded-2xl p-5 text-white shadow-sm ${card.bgColor || 'bg-[#18457c]'}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold">{card.name}</p>
+                            <p className="text-xs text-white/75">•••• {card.mask}</p>
+                          </div>
+                          <span className="text-xs bg-white/15 px-2.5 py-1 rounded-full">{card.apr}% APR</span>
+                        </div>
+                        <p className="font-serif-title text-2xl font-bold mt-4">{fmtMoney(card.balance)}</p>
+                        <p className="text-[11px] text-white/75 mt-1">Limit {fmtMoney(card.limit, 0)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
+
+        {/* Fixed Bottom Navigation Bar (Home, Activity, Budgets, Advisor, More) */}
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-40 grid grid-cols-5">
+          {[
+            { id: 'dashboard', label: 'Home', matchIds: ['dashboard'] },
+            { id: 'transactions', label: 'Activity', matchIds: ['transactions'] },
+            { id: 'budgets', label: 'Budgets', matchIds: ['budgets'] },
+            { id: 'advisor', label: 'Advisor', matchIds: ['advisor'] },
+            { id: 'more', label: 'More', matchIds: ['more', 'bills', 'subscriptions', 'cards'] }
+          ].map(tab => {
+            const isActive = tab.matchIds.includes(activeTab);
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`py-3.5 text-xs text-center transition-colors cursor-pointer border-t-2 ${
+                  isActive
+                    ? 'border-[#18457c] text-[#18457c] font-bold'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 font-medium'
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* ======================================================================= */}
+      {/* 2B. DESKTOP CENTER MAIN CONTENT (>= 768px) */}
+      {/* ======================================================================= */}
+      <main className="hidden md:flex flex-1 min-w-0 p-6 lg:p-8 flex-col gap-6 overflow-y-auto">
 
         {plaidError && (
           <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between">
@@ -4922,6 +5530,39 @@ function KlarityApp() {
                 Send
               </button>
             </form>
+          </div>
+        )}
+
+        {activeTab === 'more' && (
+          <div className="flex flex-col gap-4 max-w-md">
+            <h1 className="font-serif-title text-2xl font-bold text-slate-900 tracking-tight">More</h1>
+            <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
+              {[
+                { label: 'Bills', onClick: () => setActiveTab('bills') },
+                { label: 'Subscriptions', onClick: () => setActiveTab('subscriptions') },
+                { label: 'Cards', onClick: () => setActiveTab('cards') },
+                { label: 'Settings', onClick: () => setIsSettingsOpen(true) }
+              ].map((item, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={item.onClick}
+                  className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  <span className="text-sm font-medium text-slate-900">{item.label}</span>
+                  <span className="text-slate-400 text-base leading-none">›</span>
+                </button>
+              ))}
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full p-4 text-left text-sm font-medium text-[#b91c1c] hover:bg-rose-50/40 transition-colors cursor-pointer"
+              >
+                Sign out
+              </button>
+            </div>
           </div>
         )}
       </main>
