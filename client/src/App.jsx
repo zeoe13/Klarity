@@ -62,6 +62,7 @@ import {
 import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
 import { marked } from 'marked';
+import KlarityLogo from './components/KlarityLogo';
 
 // Configure marked with GitHub-flavored markdown and automatic line breaks
 marked.setOptions({
@@ -2478,7 +2479,8 @@ function KlarityApp() {
       <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col justify-between selection:bg-blue-100 selection:text-blue-900">
         {/* Top Navbar */}
         <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center">
+          <div className="flex items-center gap-2.5">
+            <KlarityLogo className="w-7 h-7 text-[#18457c] shrink-0" />
             <span className="font-serif-title text-2xl font-bold tracking-tight text-slate-900">Klarity</span>
           </div>
         </header>
@@ -2489,6 +2491,9 @@ function KlarityApp() {
             
             {/* Header */}
             <div className="text-center">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200/80 flex items-center justify-center mx-auto mb-3 shadow-xs">
+                <KlarityLogo className="w-7 h-7 text-[#18457c]" />
+              </div>
               <h2 className="font-serif-title text-2xl font-bold tracking-tight text-slate-900">
                 Sign In to Klarity
               </h2>
@@ -3193,12 +3198,15 @@ function KlarityApp() {
           {/* Logo Brand & Compact Toggle Button */}
           {!isSidebarCompact ? (
             <div className="flex items-center justify-between">
-              <h1
-                className="font-serif-title text-2xl font-bold tracking-tight text-slate-900 cursor-pointer select-none"
+              <div
+                className="flex items-center gap-2.5 cursor-pointer select-none group"
                 onClick={() => setActiveTab('dashboard')}
               >
-                Klarity
-              </h1>
+                <KlarityLogo className="w-7 h-7 text-[#18457c] shrink-0 transition-transform group-hover:scale-105" />
+                <h1 className="font-serif-title text-2xl font-bold tracking-tight text-slate-900">
+                  Klarity
+                </h1>
+              </div>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -3220,7 +3228,15 @@ function KlarityApp() {
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-2">
+            <div className="flex flex-col items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setActiveTab('dashboard')}
+                className="p-1.5 rounded-xl hover:bg-slate-200/60 cursor-pointer transition-transform hover:scale-105"
+                title="Klarity Overview"
+              >
+                <KlarityLogo className="w-7 h-7 text-[#18457c]" />
+              </button>
               <button
                 type="button"
                 onClick={() => setIsSidebarCompact(false)}
@@ -3374,7 +3390,10 @@ function KlarityApp() {
               {activeTab === 'dashboard' && (
                 <div className="p-5 flex flex-col gap-4">
                   <div className="flex items-center justify-between">
-                    <h1 className="font-serif-title text-[26px] font-bold text-slate-900 tracking-tight">Overview</h1>
+                    <div className="flex items-center gap-2.5">
+                      <KlarityLogo className="w-7 h-7 text-[#18457c] shrink-0" />
+                      <h1 className="font-serif-title text-[26px] font-bold text-slate-900 tracking-tight">Overview</h1>
+                    </div>
                     <button
                       type="button"
                       onClick={() => setIsSettingsOpen(true)}
