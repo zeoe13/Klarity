@@ -465,43 +465,32 @@ function KlarityApp() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsActiveTab, setSettingsActiveTab] = useState('profile'); // 'profile' | 'ai' | 'plaid' | 'session'
   const [settingsDisplayName, setSettingsDisplayName] = useState(currentUser?.name || 'Ziyad Elmahi');
-  const [settingsAiProvider, setSettingsAiProvider] = useState(() => {
+  const getInitialUserStorage = (key, fallback = '') => {
     try {
-      return localStorage.getItem('klarity_ai_provider') || 'gemini';
+      const savedUser = localStorage.getItem('klarity_user');
+      const u = savedUser ? JSON.parse(savedUser) : null;
+      const uid = u?.id || 'u-ziyad';
+      const userVal = localStorage.getItem(`klarity_${uid}_${key}`);
+      if (userVal !== null && userVal !== undefined) return userVal;
+      if (uid === 'u-ziyad') {
+        const legacy = localStorage.getItem(`klarity_${key}`);
+        if (legacy !== null && legacy !== undefined) return legacy;
+      }
+      return fallback;
     } catch {
-      return 'gemini';
+      return fallback;
     }
-  });
+  };
+
+  const [settingsAiProvider, setSettingsAiProvider] = useState(() => getInitialUserStorage('ai_provider', 'gemini'));
   const [settingsAiModel, setSettingsAiModel] = useState(() => {
-    try {
-      const saved = localStorage.getItem('klarity_ai_model');
-      if (saved && !saved.includes('2.0') && !saved.includes('2.5') && !saved.includes('tts')) return saved;
-      return 'gemini-3.8-flash';
-    } catch {
-      return 'gemini-3.8-flash';
-    }
+    const saved = getInitialUserStorage('ai_model', 'gemini-3.8-flash');
+    if (saved && !saved.includes('2.0') && !saved.includes('2.5') && !saved.includes('tts')) return saved;
+    return 'gemini-3.8-flash';
   });
-  const [settingsAiApiKey, setSettingsAiApiKey] = useState(() => {
-    try {
-      return localStorage.getItem('klarity_ai_api_key') || '';
-    } catch {
-      return '';
-    }
-  });
-  const [settingsAiMaskedKey, setSettingsAiMaskedKey] = useState(() => {
-    try {
-      return localStorage.getItem('klarity_ai_masked_key') || '';
-    } catch {
-      return '';
-    }
-  });
-  const [settingsAiStatus, setSettingsAiStatus] = useState(() => {
-    try {
-      return localStorage.getItem('klarity_ai_status') || 'not_connected';
-    } catch {
-      return 'not_connected';
-    }
-  });
+  const [settingsAiApiKey, setSettingsAiApiKey] = useState(() => getInitialUserStorage('ai_api_key', ''));
+  const [settingsAiMaskedKey, setSettingsAiMaskedKey] = useState(() => getInitialUserStorage('ai_masked_key', ''));
+  const [settingsAiStatus, setSettingsAiStatus] = useState(() => getInitialUserStorage('ai_status', 'not_connected'));
   const [settingsAiShowKey, setSettingsAiShowKey] = useState(false);
   const [settingsAiTesting, setSettingsAiTesting] = useState(false);
   const [settingsAiPermissions, setSettingsAiPermissions] = useState({
@@ -510,28 +499,10 @@ function KlarityApp() {
     cards: true,
     purchases: true
   });
-  const [settingsPlaidClientId, setSettingsPlaidClientId] = useState(() => {
-    try {
-      return localStorage.getItem('klarity_plaid_client_id') || '';
-    } catch {
-      return '';
-    }
-  });
+  const [settingsPlaidClientId, setSettingsPlaidClientId] = useState(() => getInitialUserStorage('plaid_client_id', ''));
   const [settingsPlaidSecret, setSettingsPlaidSecret] = useState('');
-  const [settingsPlaidMaskedSecret, setSettingsPlaidMaskedSecret] = useState(() => {
-    try {
-      return localStorage.getItem('klarity_plaid_masked_secret') || '';
-    } catch {
-      return '';
-    }
-  });
-  const [settingsPlaidStatus, setSettingsPlaidStatus] = useState(() => {
-    try {
-      return localStorage.getItem('klarity_plaid_status') || 'not_connected';
-    } catch {
-      return 'not_connected';
-    }
-  });
+  const [settingsPlaidMaskedSecret, setSettingsPlaidMaskedSecret] = useState(() => getInitialUserStorage('plaid_masked_secret', ''));
+  const [settingsPlaidStatus, setSettingsPlaidStatus] = useState(() => getInitialUserStorage('plaid_status', 'not_connected'));
   const [settingsPlaidShowSecret, setSettingsPlaidShowSecret] = useState(false);
   const [bankTab, setBankTab] = useState('connected'); // 'connected' | 'connect'
 
@@ -1198,10 +1169,13 @@ function KlarityApp() {
     }
   };
 
-  // Fetch Settings & Sync with Server-Side Encrypted Values
-  const fetchSettings = async () => {
+  // Fetch Settings & Sync with Server-Side Encrypted Values (User-scoped)
+  const fetchSettings = async (targetUser = currentUser) => {
+    const uid = targetUser?.id || 'u-default';
     try {
-      const res = await fetch('/api/settings');
+      const res = await fetch(`/api/settings?userId=${encodeURIComponent(uid)}`, {
+        headers: { 'x-user-id': uid }
+      });
       if (res.ok) {
         const json = await res.json();
         setSettings(json);
@@ -1209,13 +1183,15 @@ function KlarityApp() {
           setSettingsDisplayName(json.user.name);
         }
         if (json.ai) {
-          let prov = localStorage.getItem('klarity_ai_provider') || json.ai.provider || 'gemini';
-          let mod = localStorage.getItem('klarity_ai_model') || json.ai.model || 'gemini-3.8-flash';
-          if (mod.includes('2.0') || mod.includes('2.5') || mod.includes('tts')) mod = 'gemini-3.8-flash';
+          const storedProv = localStorage.getItem(`klarity_${uid}_ai_provider`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_provider') : null);
+          const storedMod = localStorage.getItem(`klarity_${uid}_ai_model`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_model') : null);
+          const storedKey = localStorage.getItem(`klarity_${uid}_ai_api_key`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_api_key') : null);
+          const storedMasked = localStorage.getItem(`klarity_${uid}_ai_masked_key`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_masked_key') : null);
+          const storedStatus = localStorage.getItem(`klarity_${uid}_ai_status`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_status') : null);
 
-          const storedKey = localStorage.getItem('klarity_ai_api_key');
-          const storedMasked = localStorage.getItem('klarity_ai_masked_key');
-          const storedStatus = localStorage.getItem('klarity_ai_status');
+          let prov = storedProv || json.ai.provider || 'gemini';
+          let mod = storedMod || json.ai.model || 'gemini-3.8-flash';
+          if (mod.includes('2.0') || mod.includes('2.5') || mod.includes('tts')) mod = 'gemini-3.8-flash';
 
           const finalMasked = json.ai.maskedKey || storedMasked || '';
           const finalStatus = (json.ai.status === 'connected' || storedStatus === 'connected' || Boolean(storedKey)) ? 'connected' : 'not_connected';
@@ -1223,24 +1199,25 @@ function KlarityApp() {
           setSettingsAiProvider(prov);
           setSettingsAiModel(mod);
           setSettingsAiMaskedKey(finalMasked);
+          setSettingsAiApiKey(storedKey || '');
           setSettingsAiStatus(finalStatus);
           if (json.ai.dataPermissions) {
             setSettingsAiPermissions(json.ai.dataPermissions);
           }
         }
         if (json.plaid) {
-          const storedClientId = localStorage.getItem('klarity_plaid_client_id') || '';
-          const storedMaskedSecret = localStorage.getItem('klarity_plaid_masked_secret') || '';
-          const storedSecret = localStorage.getItem('klarity_plaid_secret') || '';
-          const storedStatus = localStorage.getItem('klarity_plaid_status') || 'not_connected';
+          const storedClientId = localStorage.getItem(`klarity_${uid}_plaid_client_id`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_client_id') : '');
+          const storedMaskedSecret = localStorage.getItem(`klarity_${uid}_plaid_masked_secret`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_masked_secret') : '');
+          const storedSecret = localStorage.getItem(`klarity_${uid}_plaid_secret`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_secret') : '');
+          const storedStatus = localStorage.getItem(`klarity_${uid}_plaid_status`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_status') : 'not_connected');
 
           const finalClientId = json.plaid.clientId || storedClientId;
           const finalMasked = json.plaid.maskedSecret || storedMaskedSecret;
           const finalStatus = (json.plaid.status === 'connected' || storedStatus === 'connected' || Boolean(storedClientId)) ? 'connected' : 'not_connected';
 
-          if (finalClientId) setSettingsPlaidClientId(finalClientId);
-          if (finalMasked) setSettingsPlaidMaskedSecret(finalMasked);
-          if (storedSecret) setSettingsPlaidSecret(storedSecret);
+          setSettingsPlaidClientId(finalClientId || '');
+          setSettingsPlaidMaskedSecret(finalMasked || '');
+          setSettingsPlaidSecret(storedSecret || '');
           setSettingsPlaidStatus(finalStatus);
         }
       }
@@ -1275,7 +1252,8 @@ function KlarityApp() {
   };
 
   const handleSaveAndTestAiKey = async () => {
-    const rawKey = settingsAiApiKey.trim() || localStorage.getItem('klarity_ai_api_key') || '';
+    const uid = currentUser?.id || 'u-ziyad';
+    const rawKey = settingsAiApiKey.trim() || localStorage.getItem(`klarity_${uid}_ai_api_key`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_api_key') : '') || '';
     if (!rawKey) {
       setNotificationToast('Please enter an API key to test');
       setTimeout(() => setNotificationToast(''), 3000);
@@ -1285,8 +1263,9 @@ function KlarityApp() {
     try {
       const res = await fetch('/api/settings/ai-key/test-and-save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
         body: JSON.stringify({
+          userId: uid,
           provider: settingsAiProvider,
           model: settingsAiModel,
           apiKey: rawKey,
@@ -1298,13 +1277,20 @@ function KlarityApp() {
         setSettingsAiStatus('connected');
         setSettingsAiMaskedKey(json.maskedKey);
         try {
-          localStorage.setItem('klarity_ai_api_key', rawKey);
-          localStorage.setItem('klarity_ai_masked_key', json.maskedKey);
-          localStorage.setItem('klarity_ai_provider', settingsAiProvider);
-          localStorage.setItem('klarity_ai_model', settingsAiModel);
-          localStorage.setItem('klarity_ai_status', 'connected');
+          localStorage.setItem(`klarity_${uid}_ai_api_key`, rawKey);
+          localStorage.setItem(`klarity_${uid}_ai_masked_key`, json.maskedKey);
+          localStorage.setItem(`klarity_${uid}_ai_provider`, settingsAiProvider);
+          localStorage.setItem(`klarity_${uid}_ai_model`, settingsAiModel);
+          localStorage.setItem(`klarity_${uid}_ai_status`, 'connected');
+          if (uid === 'u-ziyad') {
+            localStorage.setItem('klarity_ai_api_key', rawKey);
+            localStorage.setItem('klarity_ai_masked_key', json.maskedKey);
+            localStorage.setItem('klarity_ai_provider', settingsAiProvider);
+            localStorage.setItem('klarity_ai_model', settingsAiModel);
+            localStorage.setItem('klarity_ai_status', 'connected');
+          }
         } catch {}
-        setNotificationToast('API key verified and securely saved!');
+        setNotificationToast('API key verified and securely saved for your account!');
       } else {
         setSettingsAiStatus('invalid_key');
         setNotificationToast(`Verification failed: ${json.error || 'Invalid API key'}`);
@@ -1319,16 +1305,26 @@ function KlarityApp() {
   };
 
   const handleRemoveAiKey = async () => {
+    const uid = currentUser?.id || 'u-ziyad';
     try {
-      const res = await fetch('/api/settings/ai-key/remove', { method: 'POST' });
+      const res = await fetch('/api/settings/ai-key/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+        body: JSON.stringify({ userId: uid })
+      });
       if (res.ok) {
         setSettingsAiStatus('not_connected');
         setSettingsAiMaskedKey('');
         setSettingsAiApiKey('');
         try {
-          localStorage.removeItem('klarity_ai_api_key');
-          localStorage.removeItem('klarity_ai_masked_key');
-          localStorage.removeItem('klarity_ai_status');
+          localStorage.removeItem(`klarity_${uid}_ai_api_key`);
+          localStorage.removeItem(`klarity_${uid}_ai_masked_key`);
+          localStorage.removeItem(`klarity_${uid}_ai_status`);
+          if (uid === 'u-ziyad') {
+            localStorage.removeItem('klarity_ai_api_key');
+            localStorage.removeItem('klarity_ai_masked_key');
+            localStorage.removeItem('klarity_ai_status');
+          }
         } catch {}
         setNotificationToast('AI API key removed.');
         setTimeout(() => setNotificationToast(''), 3000);
@@ -1339,13 +1335,14 @@ function KlarityApp() {
   };
 
   const handleTogglePermission = async (category) => {
+    const uid = currentUser?.id || 'u-ziyad';
     const updated = { ...settingsAiPermissions, [category]: !settingsAiPermissions[category] };
     setSettingsAiPermissions(updated);
     try {
       await fetch('/api/settings/ai-permissions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dataPermissions: updated })
+        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+        body: JSON.stringify({ userId: uid, dataPermissions: updated })
       });
     } catch (e) {
       console.error(e);
@@ -1354,14 +1351,19 @@ function KlarityApp() {
 
   const handleSavePlaidCredentials = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
+    const uid = currentUser?.id || 'u-ziyad';
     try {
       if (settingsPlaidClientId) {
-        try { localStorage.setItem('klarity_plaid_client_id', settingsPlaidClientId); } catch {}
+        try {
+          localStorage.setItem(`klarity_${uid}_plaid_client_id`, settingsPlaidClientId);
+          if (uid === 'u-ziyad') localStorage.setItem('klarity_plaid_client_id', settingsPlaidClientId);
+        } catch {}
       }
       const res = await fetch('/api/settings/plaid', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
         body: JSON.stringify({
+          userId: uid,
           clientId: settingsPlaidClientId,
           secret: settingsPlaidSecret
         })
@@ -1372,12 +1374,22 @@ function KlarityApp() {
         setSettingsPlaidStatus(json.status);
         setSettingsPlaidSecret('');
         try {
-          if (json.clientId) localStorage.setItem('klarity_plaid_client_id', json.clientId);
-          if (json.maskedSecret) localStorage.setItem('klarity_plaid_masked_secret', json.maskedSecret);
-          if (settingsPlaidSecret) localStorage.setItem('klarity_plaid_secret', settingsPlaidSecret);
-          localStorage.setItem('klarity_plaid_status', json.status || 'connected');
+          if (json.clientId) {
+            localStorage.setItem(`klarity_${uid}_plaid_client_id`, json.clientId);
+            if (uid === 'u-ziyad') localStorage.setItem('klarity_plaid_client_id', json.clientId);
+          }
+          if (json.maskedSecret) {
+            localStorage.setItem(`klarity_${uid}_plaid_masked_secret`, json.maskedSecret);
+            if (uid === 'u-ziyad') localStorage.setItem('klarity_plaid_masked_secret', json.maskedSecret);
+          }
+          if (settingsPlaidSecret) {
+            localStorage.setItem(`klarity_${uid}_plaid_secret`, settingsPlaidSecret);
+            if (uid === 'u-ziyad') localStorage.setItem('klarity_plaid_secret', settingsPlaidSecret);
+          }
+          localStorage.setItem(`klarity_${uid}_plaid_status`, json.status || 'connected');
+          if (uid === 'u-ziyad') localStorage.setItem('klarity_plaid_status', json.status || 'connected');
         } catch {}
-        setNotificationToast('Plaid credentials saved securely server-side!');
+        setNotificationToast('Plaid credentials saved securely for your account!');
         setTimeout(() => setNotificationToast(''), 3000);
       }
     } catch (e) {
@@ -1476,14 +1488,11 @@ function KlarityApp() {
   };
 
   useEffect(() => {
-    fetchSettings();
-  }, []);
-
-  useEffect(() => {
     if (currentUser) {
+      fetchSettings(currentUser);
       fetchData(currentUser, viewHousehold);
     }
-  }, [currentUser, viewHousehold]);
+  }, [currentUser?.id, viewHousehold]);
 
   useEffect(() => {
     scrollChatToBottom();
@@ -1631,21 +1640,29 @@ function KlarityApp() {
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('klarity_user');
+    setSettingsPlaidClientId('');
+    setSettingsPlaidSecret('');
+    setSettingsPlaidMaskedSecret('');
+    setSettingsPlaidStatus('not_connected');
+    setSettingsAiApiKey('');
+    setSettingsAiMaskedKey('');
+    setSettingsAiStatus('not_connected');
   };
 
-  // Plaid Link Launcher
+  // Plaid Link Launcher (User-scoped)
   const initiatePlaidLink = async () => {
     setIsConnectingPlaid(true);
     setPlaidError('');
+    const uid = currentUser?.id || 'u-ziyad';
     try {
-      const storedClientId = settingsPlaidClientId || localStorage.getItem('klarity_plaid_client_id') || '';
-      const storedSecret = settingsPlaidSecret || localStorage.getItem('klarity_plaid_secret') || '';
+      const storedClientId = settingsPlaidClientId || localStorage.getItem(`klarity_${uid}_plaid_client_id`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_client_id') : '') || '';
+      const storedSecret = settingsPlaidSecret || localStorage.getItem(`klarity_${uid}_plaid_secret`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_secret') : '') || '';
 
       const res = await fetch('/api/plaid/create-link-token', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
         body: JSON.stringify({
-          userId: currentUser.id,
+          userId: uid,
           clientPlaidId: storedClientId,
           clientPlaidSecret: storedSecret
         })
@@ -1674,18 +1691,19 @@ function KlarityApp() {
   };
 
   const handlePlaidSuccess = async (public_token, metadata) => {
+    const uid = currentUser?.id || 'u-ziyad';
     try {
       setIsConnectingPlaid(true);
-      const storedClientId = settingsPlaidClientId || localStorage.getItem('klarity_plaid_client_id') || '';
-      const storedSecret = settingsPlaidSecret || localStorage.getItem('klarity_plaid_secret') || '';
+      const storedClientId = settingsPlaidClientId || localStorage.getItem(`klarity_${uid}_plaid_client_id`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_client_id') : '') || '';
+      const storedSecret = settingsPlaidSecret || localStorage.getItem(`klarity_${uid}_plaid_secret`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_plaid_secret') : '') || '';
 
       const res = await fetch('/api/plaid/exchange-public-token', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
         body: JSON.stringify({
           public_token,
           metadata,
-          userId: currentUser.id,
+          userId: uid,
           clientPlaidId: storedClientId,
           clientPlaidSecret: storedSecret
         })
@@ -2309,12 +2327,16 @@ function KlarityApp() {
     chatAbortControllerRef.current = controller;
 
     try {
-      const cachedApiKey = settingsAiApiKey.trim() || localStorage.getItem('klarity_ai_api_key') || '';
-      const cachedProvider = settingsAiProvider || localStorage.getItem('klarity_ai_provider') || 'gemini';
-      let cachedModel = settingsAiModel || localStorage.getItem('klarity_ai_model') || 'gemini-3.8-flash';
+      const uid = currentUser?.id || 'u-ziyad';
+      const cachedApiKey = settingsAiApiKey.trim() || localStorage.getItem(`klarity_${uid}_ai_api_key`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_api_key') : '') || '';
+      const cachedProvider = settingsAiProvider || localStorage.getItem(`klarity_${uid}_ai_provider`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_provider') : '') || 'gemini';
+      let cachedModel = settingsAiModel || localStorage.getItem(`klarity_${uid}_ai_model`) || (uid === 'u-ziyad' ? localStorage.getItem('klarity_ai_model') : '') || 'gemini-3.8-flash';
       if (cachedModel.includes('2.0') || cachedModel.includes('2.5') || cachedModel.includes('tts')) {
         cachedModel = 'gemini-3.8-flash';
-        try { localStorage.setItem('klarity_ai_model', 'gemini-3.8-flash'); } catch {}
+        try {
+          localStorage.setItem(`klarity_${uid}_ai_model`, 'gemini-3.8-flash');
+          if (uid === 'u-ziyad') localStorage.setItem('klarity_ai_model', 'gemini-3.8-flash');
+        } catch {}
       }
 
       const payloadAttachments = currentFiles.map(f => ({
@@ -6154,6 +6176,16 @@ function KlarityApp() {
                   >
                     Manage Plaid Keys & Bank Connections
                   </button>
+
+                  <a
+                    href="https://dashboard.plaid.com/overview"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-blue-700 font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <span>Get Plaid API keys (Plaid Dashboard)</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
                 </div>
 
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
@@ -6936,13 +6968,24 @@ function KlarityApp() {
                         </div>
 
                         <div>
-                          <label className="text-xs font-medium text-slate-700 block mb-1.5">API Key</label>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="text-xs font-medium text-slate-700">API Key</label>
+                            <a
+                              href="https://aistudio.google.com/api-keys"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                            >
+                              <span>Get a Gemini API key</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
                           <div className="relative">
                             <input
                               type={settingsAiShowKey ? 'text' : 'password'}
                               value={settingsAiApiKey}
                               onChange={e => setSettingsAiApiKey(e.target.value)}
-                              placeholder={settingsAiMaskedKey ? `Saved: ${settingsAiMaskedKey}` : 'Paste API key (sk-...)'}
+                              placeholder={settingsAiMaskedKey ? `Saved: ${settingsAiMaskedKey}` : 'Paste API key (AIza... or sk-...)'}
                               className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 text-xs text-slate-800 focus:outline-none focus:border-blue-600 shadow-2xs"
                             />
                             <button
@@ -6953,6 +6996,18 @@ function KlarityApp() {
                               {settingsAiShowKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                           </div>
+                          <p className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1">
+                            <span>Get your free Gemini API key at</span>
+                            <a
+                              href="https://aistudio.google.com/api-keys"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 font-semibold hover:underline inline-flex items-center gap-0.5"
+                            >
+                              aistudio.google.com/api-keys
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          </p>
                         </div>
 
                         {/* Status Pill & Action Buttons */}
@@ -7279,8 +7334,36 @@ function KlarityApp() {
                           </div>
 
                           <form onSubmit={handleSavePlaidCredentials} className="flex flex-col gap-4">
+                            {/* Plaid Dashboard Callout */}
+                            <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-bold text-slate-900">Need Plaid API Keys?</p>
+                                <p className="text-[11px] text-slate-500">Get your Client ID and Secret directly on the Plaid dashboard.</p>
+                              </div>
+                              <a
+                                href="https://dashboard.plaid.com/overview"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-blue-200 text-blue-700 text-xs font-semibold hover:bg-blue-50 shadow-2xs transition-colors shrink-0"
+                              >
+                                <span>Plaid Dashboard</span>
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            </div>
+
                             <div>
-                              <label className="text-xs font-medium text-slate-700 block mb-1.5">Plaid Client ID</label>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="text-xs font-medium text-slate-700">Plaid Client ID</label>
+                                <a
+                                  href="https://dashboard.plaid.com/overview"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                                >
+                                  <span>Get keys on Plaid</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </div>
                               <input
                                 type="text"
                                 value={settingsPlaidClientId}

@@ -247,11 +247,47 @@ function writeData(data) {
   }
 }
 
-// Plaid Client Helper
-function getPlaidClient(overrideClientId, overrideSecret) {
+// User-scoped Settings Helper
+function getUserSettings(data, userId) {
+  if (!data) return { ai: {}, plaid: {} };
+  if (!data.userSettings) data.userSettings = {};
+  const uid = userId || 'default';
+  if (!data.userSettings[uid]) {
+    // If it's the primary default user 'u-ziyad' and legacy settings exist, migrate them:
+    if (uid === 'u-ziyad' && data.settings?.ai?.encryptedKey) {
+      data.userSettings[uid] = JSON.parse(JSON.stringify(data.settings));
+    } else {
+      // New or separate account starts completely fresh with no keys
+      data.userSettings[uid] = {
+        ai: {
+          provider: "gemini",
+          model: "gemini-3.8-flash",
+          encryptedKey: "",
+          status: "not_connected",
+          dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true }
+        },
+        plaid: {
+          clientId: "",
+          encryptedSecret: "",
+          status: "not_connected"
+        }
+      };
+    }
+  }
+  return data.userSettings[uid];
+}
+
+// Plaid Client Helper (User-scoped)
+function getPlaidClient(overrideClientId, overrideSecret, userId) {
   const data = readData();
-  const clientId = overrideClientId || process.env.PLAID_CLIENT_ID || data.settings?.plaid?.clientId;
-  const secret = overrideSecret || process.env.PLAID_SECRET || (data.settings?.plaid?.encryptedSecret ? decrypt(data.settings.plaid.encryptedSecret) : '');
+  const uSettings = userId ? getUserSettings(data, userId) : null;
+  const userPlaid = uSettings?.plaid || data.settings?.plaid;
+
+  // Each user must have their own Plaid keys.
+  // Only fallback to process.env if this is the default user 'u-ziyad'
+  const isDefaultUser = !userId || userId === 'u-ziyad';
+  const clientId = overrideClientId || userPlaid?.clientId || (isDefaultUser ? process.env.PLAID_CLIENT_ID : '');
+  const secret = overrideSecret || (userPlaid?.encryptedSecret ? decrypt(userPlaid.encryptedSecret) : '') || (isDefaultUser ? process.env.PLAID_SECRET : '');
   const env = process.env.PLAID_ENV || data.settings?.plaidEnv || 'sandbox';
 
   if (!clientId || !secret) return null;
@@ -390,23 +426,21 @@ app.post('/api/auth/google', (req, res) => {
   res.json({ user });
 });
 
-// 2. Settings Endpoints (Encrypted Server Storage)
+// 2. Settings Endpoints (Encrypted Server Storage per User)
 app.get('/api/settings', (req, res) => {
+  const userId = req.query.userId || req.headers['x-user-id'] || 'default';
   const data = readData();
-  const user = data.users?.[0] || { name: 'Ziyad Elmahi', email: 'zeoe13@gmail.com' };
-  const ai = data.settings?.ai || {
-    provider: 'gemini',
-    model: 'gemini-3.8-flash',
-    encryptedKey: '',
-    status: 'not_connected',
-    dataPermissions: { bills: true, subscriptions: true, cards: true, purchases: true }
-  };
-  const plaid = data.settings?.plaid || { clientId: '', encryptedSecret: '', status: 'not_connected' };
+  const user = (data.users || []).find(u => u.id === userId) || data.users?.[0] || { name: 'Ziyad Elmahi', email: 'zeoe13@gmail.com' };
+  const userSettings = getUserSettings(data, userId);
+  const ai = userSettings.ai;
+  const plaid = userSettings.plaid;
+  const userPlaidItems = (data.plaidItems || []).filter(item => !item.userId || item.userId === userId);
 
   res.json({
     user: {
-      name: user.name || 'Ziyad Elmahi',
-      email: user.email || 'zeoe13@gmail.com'
+      id: userId,
+      name: user.name || '',
+      email: user.email || ''
     },
     ai: {
       provider: ai.provider || 'gemini',
@@ -421,13 +455,13 @@ app.get('/api/settings', (req, res) => {
       hasSecret: Boolean(plaid.encryptedSecret),
       maskedSecret: plaid.encryptedSecret ? maskSecret(decrypt(plaid.encryptedSecret)) : '',
       status: (plaid.clientId && plaid.encryptedSecret) ? (plaid.status || 'connected') : 'not_connected',
-      connectedItemsCount: (data.plaidItems || []).length
+      connectedItemsCount: userPlaidItems.length
     },
-    plaidItems: (data.plaidItems || []).map(item => ({
+    plaidItems: userPlaidItems.map(item => ({
       itemId: item.itemId,
       institution: item.institution || 'Connected Bank',
       connectedAt: item.connectedAt,
-      accounts: (data.accounts || []).filter(a => a.institution === item.institution)
+      accounts: (data.accounts || []).filter(a => a.institution === item.institution && (!a.ownerId || a.ownerId === userId))
     }))
   });
 });
@@ -445,9 +479,10 @@ app.post('/api/settings/profile', (req, res) => {
   res.json({ success: true, name: name.trim() });
 });
 
-// Test and save AI API key server-side
+// Test and save AI API key server-side (User-scoped)
 app.post('/api/settings/ai-key/test-and-save', async (req, res) => {
-  const { provider = 'anthropic', model, apiKey, dataPermissions } = req.body;
+  const { provider = 'anthropic', model, apiKey, dataPermissions, userId } = req.body;
+  const uid = userId || req.headers['x-user-id'] || 'default';
   if (!apiKey || !apiKey.trim()) {
     return res.status(400).json({ success: false, error: 'API key is required' });
   }
@@ -512,10 +547,10 @@ app.post('/api/settings/ai-key/test-and-save', async (req, res) => {
     });
   }
 
-  // Key is valid! Save encrypted server-side
+  // Key is valid! Save encrypted server-side for this user
   const data = readData();
-  if (!data.settings) data.settings = {};
-  data.settings.ai = {
+  const userSettings = getUserSettings(data, uid);
+  userSettings.ai = {
     provider,
     model: model || (provider === 'anthropic' ? 'claude-3-7-sonnet-20250219' : provider === 'openai' ? 'gpt-4o' : 'gemini-3.8-flash'),
     encryptedKey: encrypt(keyToTest),
@@ -529,42 +564,45 @@ app.post('/api/settings/ai-key/test-and-save', async (req, res) => {
     status: 'connected',
     maskedKey: maskSecret(keyToTest),
     provider,
-    model: data.settings.ai.model,
-    dataPermissions: data.settings.ai.dataPermissions
+    model: userSettings.ai.model,
+    dataPermissions: userSettings.ai.dataPermissions
   });
 });
 
 app.post('/api/settings/ai-key/remove', (req, res) => {
+  const uid = req.body?.userId || req.headers['x-user-id'] || 'default';
   const data = readData();
-  if (!data.settings) data.settings = {};
-  data.settings.ai = {
-    provider: data.settings.ai?.provider || 'anthropic',
-    model: data.settings.ai?.model || 'claude-3-7-sonnet-20250219',
+  const userSettings = getUserSettings(data, uid);
+  userSettings.ai = {
+    provider: userSettings.ai?.provider || 'gemini',
+    model: userSettings.ai?.model || 'gemini-3.8-flash',
     encryptedKey: '',
     status: 'not_connected',
-    dataPermissions: data.settings.ai?.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true }
+    dataPermissions: userSettings.ai?.dataPermissions || { bills: true, subscriptions: true, cards: true, purchases: true }
   };
   writeData(data);
   res.json({ success: true, status: 'not_connected' });
 });
 
 app.post('/api/settings/ai-permissions', (req, res) => {
-  const { dataPermissions } = req.body;
+  const { dataPermissions, userId } = req.body;
+  const uid = userId || req.headers['x-user-id'] || 'default';
   const data = readData();
-  if (!data.settings) data.settings = {};
-  if (!data.settings.ai) data.settings.ai = {};
-  data.settings.ai.dataPermissions = dataPermissions;
+  const userSettings = getUserSettings(data, uid);
+  if (!userSettings.ai) userSettings.ai = {};
+  userSettings.ai.dataPermissions = dataPermissions;
   writeData(data);
   res.json({ success: true, dataPermissions });
 });
 
 app.post('/api/settings/plaid', (req, res) => {
-  const { clientId, secret } = req.body;
+  const { clientId, secret, userId } = req.body;
+  const uid = userId || req.headers['x-user-id'] || 'default';
   const data = readData();
-  if (!data.settings) data.settings = {};
-  const currentPlaid = data.settings.plaid || {};
+  const userSettings = getUserSettings(data, uid);
+  const currentPlaid = userSettings.plaid || {};
 
-  data.settings.plaid = {
+  userSettings.plaid = {
     clientId: clientId || currentPlaid.clientId || '',
     encryptedSecret: secret ? encrypt(secret) : (currentPlaid.encryptedSecret || ''),
     status: (clientId || currentPlaid.clientId) ? 'connected' : 'not_connected'
@@ -573,21 +611,22 @@ app.post('/api/settings/plaid', (req, res) => {
 
   res.json({
     success: true,
-    clientId: data.settings.plaid.clientId,
-    maskedSecret: data.settings.plaid.encryptedSecret ? maskSecret(decrypt(data.settings.plaid.encryptedSecret)) : '',
-    status: data.settings.plaid.status
+    clientId: userSettings.plaid.clientId,
+    maskedSecret: userSettings.plaid.encryptedSecret ? maskSecret(decrypt(userSettings.plaid.encryptedSecret)) : '',
+    status: userSettings.plaid.status
   });
 });
 
-// 3. Plaid Link & Webhook Endpoints
+// 3. Plaid Link & Webhook Endpoints (User-scoped)
 app.post('/api/plaid/create-link-token', async (req, res) => {
   const { userId, clientPlaidId, clientPlaidSecret } = req.body;
-  const plaidClient = getPlaidClient(clientPlaidId, clientPlaidSecret);
+  const plaidClient = getPlaidClient(clientPlaidId, clientPlaidSecret, userId);
 
   if (!plaidClient) {
     return res.status(400).json({
-      error: 'Plaid API keys are not configured yet.',
-      needsKeys: true
+      error: 'Plaid API keys are not configured yet for this account.',
+      needsKeys: true,
+      plaidDashboardUrl: 'https://dashboard.plaid.com/overview'
     });
   }
 
@@ -608,10 +647,10 @@ app.post('/api/plaid/create-link-token', async (req, res) => {
 
 app.post('/api/plaid/exchange-public-token', async (req, res) => {
   const { public_token, metadata, userId, clientPlaidId, clientPlaidSecret } = req.body;
-  const plaidClient = getPlaidClient(clientPlaidId, clientPlaidSecret);
+  const plaidClient = getPlaidClient(clientPlaidId, clientPlaidSecret, userId);
 
   if (!plaidClient) {
-    return res.status(400).json({ error: 'Plaid keys not configured' });
+    return res.status(400).json({ error: 'Plaid keys not configured for this account' });
   }
 
   try {
@@ -662,6 +701,7 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
     data.plaidItems = data.plaidItems || [];
     data.plaidItems.push({
       itemId,
+      userId: userId || 'u-ziyad',
       accessToken,
       institution: metadata?.institution?.name || 'Connected Bank',
       institutionId: metadata?.institution?.institution_id,
@@ -670,7 +710,8 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
     });
     writeData(data);
 
-    res.json({ success: true, accounts: addedAccounts, plaidItems: data.plaidItems });
+    const userPlaidItems = data.plaidItems.filter(item => !item.userId || item.userId === userId);
+    res.json({ success: true, accounts: addedAccounts, plaidItems: userPlaidItems });
   } catch (err) {
     console.error('Plaid exchange error:', err.response?.data || err.message);
     res.status(500).json({ error: err.response?.data?.error_message || err.message });
@@ -679,12 +720,14 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
 
 // Plaid Items Management (List & Disconnect Bank)
 app.get('/api/plaid/items', (req, res) => {
+  const userId = req.query.userId || req.headers['x-user-id'];
   const data = readData();
-  const items = (data.plaidItems || []).map(item => ({
+  const userItems = (data.plaidItems || []).filter(item => !userId || !item.userId || item.userId === userId);
+  const items = userItems.map(item => ({
     itemId: item.itemId,
     institution: item.institution || 'Connected Bank',
     connectedAt: item.connectedAt,
-    accounts: (data.accounts || []).filter(a => a.institution === item.institution)
+    accounts: (data.accounts || []).filter(a => a.institution === item.institution && (!userId || !a.ownerId || a.ownerId === userId))
   }));
   res.json({ items });
 });
@@ -710,7 +753,8 @@ app.get('/api/data', (req, res) => {
   const userAccounts = (data.accounts || []).filter(a => {
     if (household === 'true') return true;
     if (!userId) return true;
-    return a.ownerId === userId || a.ownerId === 'u-ziyad' || !a.ownerId;
+    if (userId === 'u-ziyad') return a.ownerId === 'u-ziyad' || !a.ownerId;
+    return a.ownerId === userId;
   });
   const userChecking = userAccounts.filter(a => a.type === 'depository');
   const userCards = userAccounts.filter(a => a.type === 'credit');
@@ -1132,14 +1176,13 @@ app.post('/api/ai/chat', async (req, res) => {
     attachments = []
   } = req.body;
   const data = readData();
-
-  const aiConfig = data.settings?.ai || {};
+  const userSettings = getUserSettings(data, userId);
+  const aiConfig = userSettings.ai || {};
   let rawApiKey = clientApiKey || (aiConfig.encryptedKey ? decrypt(aiConfig.encryptedKey) : '');
 
-  // If serverless disk reset occurred and client has cached credentials, restore them into server data
+  // If serverless disk reset occurred and client has cached credentials, restore them into user settings
   if (clientApiKey && !aiConfig.encryptedKey) {
-    if (!data.settings) data.settings = {};
-    data.settings.ai = {
+    userSettings.ai = {
       provider: clientProvider || 'gemini',
       model: clientModel || 'gemini-3.8-flash',
       encryptedKey: encrypt(clientApiKey),
@@ -1152,7 +1195,8 @@ app.post('/api/ai/chat', async (req, res) => {
   if (!rawApiKey) {
     return res.json({
       needsKey: true,
-      reply: "AI Advisor is not connected. Please connect your Anthropic, OpenAI, or Google Gemini API key in Settings > AI advisor to activate financial intelligence."
+      apiKeyUrl: 'https://aistudio.google.com/api-keys',
+      reply: "AI Advisor is not connected. Please connect your Google Gemini API key in Settings > AI advisor to activate financial intelligence.\n\nYou can generate an API key here: https://aistudio.google.com/api-keys"
     });
   }
 
@@ -1191,9 +1235,13 @@ app.post('/api/ai/chat', async (req, res) => {
 
   const currentUser = (data.users || []).find(u => u.id === userId) || data.users?.[0] || { name: 'Ziyad' };
 
-  // Data restricted by user toggles
-  const userCards = permissions.cards ? (data.accounts || []).filter(a => a.type === 'credit') : [];
-  const userChecking = permissions.cards ? (data.accounts || []).filter(a => a.type === 'depository') : [];
+  // Data restricted by user toggles and account ownership
+  const userAccounts = (data.accounts || []).filter(a => {
+    if (!userId || userId === 'u-ziyad') return true;
+    return a.ownerId === userId;
+  });
+  const userCards = permissions.cards ? userAccounts.filter(a => a.type === 'credit') : [];
+  const userChecking = permissions.cards ? userAccounts.filter(a => a.type === 'depository') : [];
   const userBills = permissions.bills ? (data.bills || []) : [];
   const userSubscriptions = permissions.subscriptions ? (data.subscriptions || []) : [];
   const userTransactions = permissions.purchases ? (data.transactions || []).slice(0, 10) : [];
