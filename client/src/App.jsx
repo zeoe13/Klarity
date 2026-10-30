@@ -370,6 +370,21 @@ function GoogleSignInButton({ onAuthSuccess, onError, setIsAuthenticating, isAut
   );
 }
 
+// Plaid Link Launcher declared outside render to maintain hook lifecycle integrity
+function PlaidLauncher({ token, onSuccess, onExit }) {
+  const { open, ready } = usePlaidLink({
+    token,
+    onSuccess,
+    onExit
+  });
+
+  useEffect(() => {
+    if (ready) open();
+  }, [ready, open]);
+
+  return null;
+}
+
 export default function App() {
   return <KlarityApp />;
 }
@@ -1618,28 +1633,6 @@ function KlarityApp() {
     localStorage.removeItem('klarity_user');
   };
 
-  // Save Settings (Plaid Keys)
-  const handleSaveSettings = async (e) => {
-    e.preventDefault();
-    try {
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          plaidClientId: plaidClientIdInput,
-          plaidSecret: plaidSecretInput,
-          plaidEnv: plaidEnvInput
-        })
-      });
-      setIsSettingsOpen(false);
-      await fetchSettings();
-      setNotificationToast('Settings updated securely.');
-      setTimeout(() => setNotificationToast(''), 4000);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   // Plaid Link Launcher
   const initiatePlaidLink = async () => {
     setIsConnectingPlaid(true);
@@ -1680,72 +1673,60 @@ function KlarityApp() {
     }
   };
 
-  function PlaidLauncher({ token }) {
-    const { open, ready } = usePlaidLink({
-      token,
-      onSuccess: async (public_token, metadata) => {
-        try {
-          setIsConnectingPlaid(true);
-          const storedClientId = settingsPlaidClientId || localStorage.getItem('klarity_plaid_client_id') || '';
-          const storedSecret = settingsPlaidSecret || localStorage.getItem('klarity_plaid_secret') || '';
+  const handlePlaidSuccess = async (public_token, metadata) => {
+    try {
+      setIsConnectingPlaid(true);
+      const storedClientId = settingsPlaidClientId || localStorage.getItem('klarity_plaid_client_id') || '';
+      const storedSecret = settingsPlaidSecret || localStorage.getItem('klarity_plaid_secret') || '';
 
-          const res = await fetch('/api/plaid/exchange-public-token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              public_token,
-              metadata,
-              userId: currentUser.id,
-              clientPlaidId: storedClientId,
-              clientPlaidSecret: storedSecret
-            })
-          });
+      const res = await fetch('/api/plaid/exchange-public-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          public_token,
+          metadata,
+          userId: currentUser.id,
+          clientPlaidId: storedClientId,
+          clientPlaidSecret: storedSecret
+        })
+      });
 
-          const resData = await res.json();
-          if (res.ok && resData.accounts && resData.accounts.length > 0) {
-            setData(prev => {
-              const existing = prev.accounts || [];
-              const updatedAccounts = existing.filter(a => !resData.accounts.some(na => na.id === a.id)).concat(resData.accounts);
-              const newData = {
-                ...prev,
-                accounts: updatedAccounts,
-                metrics: {
-                  ...prev.metrics,
-                  totalCreditDebt: updatedAccounts.filter(a => a.type === 'credit').reduce((s, a) => s + Number(a.balance || 0), 0),
-                  totalChecking: updatedAccounts.filter(a => a.type === 'depository').reduce((s, a) => s + Number(a.balance || 0), 0)
-                }
-              };
-              try {
-                localStorage.setItem('klarity_finance_data', JSON.stringify(newData));
-                localStorage.setItem('klarity_accounts', JSON.stringify(updatedAccounts));
-                localStorage.setItem('klarity_plaid_status', 'connected');
-              } catch (e) {}
-              return newData;
-            });
-            setSettingsPlaidStatus('connected');
-            setNotificationToast(`Connected ${resData.accounts.length} account(s) from ${metadata?.institution?.name || 'bank'}!`);
-          } else if (!res.ok) {
-            setPlaidError(resData.error || 'Failed to exchange Plaid token.');
-          }
-          setLinkToken(null);
-          await fetchData();
-        } catch (err) {
-          console.error('Plaid link exchange error:', err);
-          setPlaidError('Could not complete bank linking: ' + err.message);
-        } finally {
-          setIsConnectingPlaid(false);
-          setTimeout(() => setNotificationToast(''), 5000);
-        }
-      },
-      onExit: () => setLinkToken(null)
-    });
-
-    useEffect(() => {
-      if (ready) open();
-    }, [ready, open]);
-
-    return null;
-  }
+      const resData = await res.json();
+      if (res.ok && resData.accounts && resData.accounts.length > 0) {
+        setData(prev => {
+          const existing = prev.accounts || [];
+          const updatedAccounts = existing.filter(a => !resData.accounts.some(na => na.id === a.id)).concat(resData.accounts);
+          const newData = {
+            ...prev,
+            accounts: updatedAccounts,
+            metrics: {
+              ...prev.metrics,
+              totalCreditDebt: updatedAccounts.filter(a => a.type === 'credit').reduce((s, a) => s + Number(a.balance || 0), 0),
+              totalChecking: updatedAccounts.filter(a => a.type === 'depository').reduce((s, a) => s + Number(a.balance || 0), 0)
+            }
+          };
+          try {
+            localStorage.setItem('klarity_finance_data', JSON.stringify(newData));
+            localStorage.setItem('klarity_accounts', JSON.stringify(updatedAccounts));
+            localStorage.setItem('klarity_plaid_status', 'connected');
+          } catch (e) {}
+          return newData;
+        });
+        setSettingsPlaidStatus('connected');
+        setNotificationToast(`Connected ${resData.accounts.length} account(s) from ${metadata?.institution?.name || 'bank'}!`);
+      } else if (!res.ok) {
+        setPlaidError(resData.error || 'Failed to exchange Plaid token.');
+      }
+      setLinkToken(null);
+      await fetchData();
+    } catch (err) {
+      console.error('Plaid link exchange error:', err);
+      setPlaidError('Could not complete bank linking: ' + err.message);
+    } finally {
+      setIsConnectingPlaid(false);
+      setTimeout(() => setNotificationToast(''), 5000);
+    }
+  };
 
   // Add Manual Card
   const handleAddAccount = async (e) => {
@@ -2204,7 +2185,7 @@ function KlarityApp() {
     const limitNum = parseFloat(newBudget.limit);
     if (!newBudget.category || isNaN(limitNum) || limitNum <= 0) return;
     setBudgets(prev => {
-      const exists = prev.find(b => b.category.toLowerCase() === newBudget.category.toLowerCase());
+      const exists = prev.find(b => (b.category || '').toLowerCase() === (newBudget.category || '').toLowerCase());
       if (exists) {
         return prev.map(b => b.id === exists.id ? { ...b, limit: limitNum } : b);
       }
@@ -2394,7 +2375,7 @@ function KlarityApp() {
           if (act.type === 'budget' && act.item?.category && act.item?.limit) {
             const lim = parseFloat(act.item.limit);
             setBudgets(prev => {
-              const exists = prev.find(b => b.category.toLowerCase() === act.item.category.toLowerCase());
+              const exists = prev.find(b => (b.category || '').toLowerCase() === (act.item.category || '').toLowerCase());
               if (exists) return prev.map(b => b.id === exists.id ? { ...b, limit: lim } : b);
               return [...prev, { id: `b-${Date.now()}`, category: act.item.category, limit: lim, lastMonthSpent: Math.round(lim * 0.8) }];
             });
@@ -3181,7 +3162,7 @@ function KlarityApp() {
       const cat = act.category || 'Groceries';
       const lim = Number(act.limit || 400);
       setBudgets(prev => {
-        const exists = prev.find(b => b.category.toLowerCase() === cat.toLowerCase());
+        const exists = prev.find(b => (b.category || '').toLowerCase() === cat.toLowerCase());
         if (exists) return prev.map(b => b.id === exists.id ? { ...b, limit: lim } : b);
         return [...prev, { id: `b-${Date.now()}`, category: cat, limit: lim, lastMonthSpent: Math.round(lim * 0.8) }];
       });
@@ -3191,9 +3172,10 @@ function KlarityApp() {
     } else if (act.type === 'payment_reminder') {
       const nextDueBill = sourceBillsList.find(b => b.status !== 'paid') || sourceBillsList[0];
       setActiveTab('bills');
+      const dueInfo = nextDueBill?.dueText || nextDueBill?.nextDueDate || 'due soon';
       setNotificationToast(
         nextDueBill
-          ? `Payment reminder set for ${nextDueBill.name} ($${Number(nextDueBill.expectedAmount).toFixed(2)}, ${nextDueBill.dueLabel}).`
+          ? `Payment reminder set for ${nextDueBill.name} ($${Number(nextDueBill.expectedAmount).toFixed(2)}, ${dueInfo}).`
           : 'Payment reminder enabled for upcoming bills!'
       );
       setTimeout(() => setNotificationToast(''), 4000);
@@ -3204,7 +3186,13 @@ function KlarityApp() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
-      {linkToken && <PlaidLauncher token={linkToken} />}
+      {linkToken && (
+        <PlaidLauncher
+          token={linkToken}
+          onSuccess={handlePlaidSuccess}
+          onExit={() => setLinkToken(null)}
+        />
+      )}
 
       {/* Hidden CSV Input for Importing Transactions */}
       <input
