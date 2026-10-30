@@ -2040,6 +2040,24 @@ function KlarityApp() {
     }
   };
 
+  // Auto-Detect Category & Card based on Store / Merchant Name
+  const autoDetectPurchaseCategory = (name) => {
+    if (!name) return 'Shopping';
+    const n = name.toLowerCase().trim();
+    if (categoryRules && categoryRules[n]) return categoryRules[n];
+    if (n.includes('electric') || n.includes('pge') || n.includes('water') || n.includes('utility') || n.includes('gas co') || n.includes('internet') || n.includes('wifi') || n.includes('comcast') || n.includes('verizon') || n.includes('at&t') || n.includes('t-mobile')) return 'Utilities';
+    if (n.includes('rent') || n.includes('mortgage') || n.includes('lease') || n.includes('apartment')) return 'Housing';
+    if (n.includes('safeway') || n.includes('trader joe') || n.includes('grocery') || n.includes('market') || n.includes('whole foods') || n.includes('costco') || n.includes('kroger') || n.includes('sprouts') || n.includes('aldi') || n.includes('supermarket') || n.includes('heb') || n.includes('publix')) return 'Groceries';
+    if (n.includes('chipotle') || n.includes('starbucks') || n.includes('mcdonald') || n.includes('burger') || n.includes('restaurant') || n.includes('cafe') || n.includes('coffee') || n.includes('pizza') || n.includes('taco') || n.includes('dining') || n.includes('doordash') || n.includes('uber eats') || n.includes('grubhub') || n.includes('sweetgreen') || n.includes('panera') || n.includes('chick-fil-a') || n.includes('dunkin') || n.includes('bakery')) return 'Dining';
+    if (n.includes('shell') || n.includes('chevron') || n.includes('gas') || n.includes('fuel') || n.includes('exxon') || n.includes('bp') || n.includes('mobil') || n.includes('uber') || n.includes('lyft') || n.includes('transit') || n.includes('metro') || n.includes('parking') || n.includes('toll')) return 'Transportation';
+    if (n.includes('netflix') || n.includes('spotify') || n.includes('hulu') || n.includes('disney') || n.includes('apple') || n.includes('icloud') || n.includes('chatgpt') || n.includes('youtube') || n.includes('subscription')) return 'Subscriptions';
+    if (n.includes('payroll') || n.includes('salary') || n.includes('deposit') || n.includes('direct dep') || n.includes('paycheck') || n.includes('income')) return 'Income';
+    if (n.includes('pharmacy') || n.includes('cvs') || n.includes('walgreens') || n.includes('doctor') || n.includes('dental') || n.includes('health') || n.includes('clinic')) return 'Health';
+    if (n.includes('flight') || n.includes('airline') || n.includes('hotel') || n.includes('airbnb') || n.includes('delta') || n.includes('united')) return 'Travel';
+    if (n.includes('amazon') || n.includes('best buy') || n.includes('nike') || n.includes('target') || n.includes('walmart') || n.includes('shop') || n.includes('store') || n.includes('retail')) return 'Shopping';
+    return 'Shopping';
+  };
+
   // Recategorize Transaction & Remember Merchant Rule
   const handleRecategorizeTransaction = async (txId, txName, newCategory) => {
     const cleanMerchant = (txName || '').toLowerCase().trim();
@@ -5377,15 +5395,10 @@ function KlarityApp() {
                               </select>
                             </td>
                             <td className="py-3 px-4 whitespace-nowrap">
-                              <select
-                                value={tx.account || 'Everyday Rewards •••• 4417'}
-                                onChange={e => handleChangeItemCard('tx', tx.id, e.target.value)}
-                                className="text-[11px] font-mono bg-slate-100 hover:bg-slate-200/70 text-slate-700 rounded-md px-2 py-1 outline-none cursor-pointer"
-                              >
-                                {allFilterableCards.map(c => (
-                                  <option key={c.id} value={c.fullLabel}>{c.fullLabel}</option>
-                                ))}
-                              </select>
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-mono border border-slate-200/70 font-medium shadow-2xs">
+                                <CreditCard className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                <span>{tx.account || 'Everyday Rewards •••• 4417'}</span>
+                              </span>
                             </td>
                             <td className={`py-3 px-4 text-right font-bold whitespace-nowrap ${isDeposit ? 'text-emerald-700' : 'text-slate-900'}`}>
                               {isDeposit ? `+${fmtMoney(displayAmount)}` : `-${fmtMoney(displayAmount)}`}
@@ -6491,15 +6504,37 @@ function KlarityApp() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Trader Joe's, Shell, Target"
+                  placeholder="e.g. Trader Joe's, Shell, Chipotle, Paycheck"
                   value={newTx.name}
                   onChange={e => {
                     const val = e.target.value;
-                    const remembered = categoryRules[val.toLowerCase().trim()];
-                    setNewTx({ ...newTx, name: val, category: remembered || newTx.category });
+                    const detectedCategory = autoDetectPurchaseCategory(val);
+                    let detectedAccount = newTx.account;
+                    if (detectedCategory === 'Income') {
+                      const checking = allFilterableCards.find(c => c.type === 'depository');
+                      if (checking) detectedAccount = checking.fullLabel;
+                    } else if (detectedCategory === 'Travel') {
+                      const travel = allFilterableCards.find(c => (c.name || '').toLowerCase().includes('travel'));
+                      if (travel) detectedAccount = travel.fullLabel;
+                    } else {
+                      const credit = allFilterableCards.find(c => c.type === 'credit');
+                      if (credit) detectedAccount = credit.fullLabel;
+                    }
+                    setNewTx({
+                      ...newTx,
+                      name: val,
+                      category: detectedCategory,
+                      account: detectedAccount
+                    });
                   }}
                   className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 placeholder-slate-400 outline-none"
                 />
+                {newTx.name && (
+                  <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span>Auto-detected: <strong>{newTx.category}</strong> · Card: <strong>{newTx.account}</strong></span>
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

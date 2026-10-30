@@ -306,16 +306,36 @@ function getPlaidClient(overrideClientId, overrideSecret, userId) {
   return new PlaidApi(configuration);
 }
 
-// Auto-categorize
+// Map Plaid's Category to Klarity Category
+function mapPlaidCategory(plaidCat) {
+  if (!plaidCat) return 'Shopping';
+  const c = String(plaidCat).toLowerCase();
+  if (c.includes('food') || c.includes('restaurant') || c.includes('dining') || c.includes('fast_food') || c.includes('cafe')) return 'Dining';
+  if (c.includes('grocer') || c.includes('supermarket') || c.includes('market') || c.includes('food_and_beverage')) return 'Groceries';
+  if (c.includes('transport') || c.includes('gas') || c.includes('fuel') || c.includes('automotive') || c.includes('transit') || c.includes('taxi')) return 'Transportation';
+  if (c.includes('subscription') || c.includes('entertainment') || c.includes('streaming') || c.includes('tv') || c.includes('music')) return 'Subscriptions';
+  if (c.includes('utilit') || c.includes('electric') || c.includes('water') || c.includes('telecom') || c.includes('internet') || c.includes('sanitation')) return 'Utilities';
+  if (c.includes('rent') || c.includes('mortgage') || c.includes('housing') || c.includes('home')) return 'Housing';
+  if (c.includes('medical') || c.includes('health') || c.includes('pharmacy') || c.includes('dental')) return 'Health';
+  if (c.includes('income') || c.includes('payroll') || c.includes('deposit') || c.includes('salary') || c.includes('transfer_in')) return 'Income';
+  if (c.includes('travel') || c.includes('airline') || c.includes('hotel') || c.includes('lodging')) return 'Travel';
+  return 'Shopping';
+}
+
+// Auto-categorize by merchant name
 function categorizeTransaction(name) {
   const n = (name || '').toLowerCase();
-  if (n.includes('electric') || n.includes('pge') || n.includes('water') || n.includes('utility') || n.includes('gas')) return 'Utilities';
-  if (n.includes('rent') || n.includes('mortgage') || n.includes('lease') || n.includes('apartment')) return 'Housing';
-  if (n.includes('safeway') || n.includes('trader joe') || n.includes('grocery') || n.includes('market') || n.includes('whole foods')) return 'Groceries';
-  if (n.includes('shell') || n.includes('chevron') || n.includes('gas station') || n.includes('fuel')) return 'Transportation';
-  if (n.includes('netflix') || n.includes('spotify') || n.includes('hulu') || n.includes('disney') || n.includes('apple') || n.includes('google storage')) return 'Subscriptions';
-  if (n.includes('payroll') || n.includes('salary') || n.includes('deposit') || n.includes('direct dep') || n.includes('paycheck')) return 'Income';
-  return 'General';
+  if (n.includes('electric') || n.includes('pge') || n.includes('water') || n.includes('utility') || n.includes('gas co') || n.includes('internet') || n.includes('wifi') || n.includes('comcast') || n.includes('verizon') || n.includes('at&t') || n.includes('t-mobile')) return 'Utilities';
+  if (n.includes('rent') || n.includes('mortgage') || n.includes('lease') || n.includes('apartment') || n.includes('landlord')) return 'Housing';
+  if (n.includes('safeway') || n.includes('trader joe') || n.includes('grocery') || n.includes('market') || n.includes('whole foods') || n.includes('costco') || n.includes('kroger') || n.includes('sprouts') || n.includes('aldi') || n.includes('supermarket') || n.includes('heb') || n.includes('publix')) return 'Groceries';
+  if (n.includes('chipotle') || n.includes('starbucks') || n.includes('mcdonald') || n.includes('burger') || n.includes('restaurant') || n.includes('cafe') || n.includes('coffee') || n.includes('pizza') || n.includes('taco') || n.includes('dining') || n.includes('doordash') || n.includes('uber eats') || n.includes('grubhub') || n.includes('sweetgreen') || n.includes('panera') || n.includes('chick-fil-a') || n.includes('dunkin')) return 'Dining';
+  if (n.includes('shell') || n.includes('chevron') || n.includes('gas') || n.includes('fuel') || n.includes('exxon') || n.includes('bp') || n.includes('mobil') || n.includes('uber') || n.includes('lyft') || n.includes('transit') || n.includes('metro') || n.includes('parking') || n.includes('toll')) return 'Transportation';
+  if (n.includes('netflix') || n.includes('spotify') || n.includes('hulu') || n.includes('disney') || n.includes('apple') || n.includes('google storage') || n.includes('icloud') || n.includes('chatgpt') || n.includes('youtube') || n.includes('prime video') || n.includes('max')) return 'Subscriptions';
+  if (n.includes('payroll') || n.includes('salary') || n.includes('deposit') || n.includes('direct dep') || n.includes('paycheck') || n.includes('bonus')) return 'Income';
+  if (n.includes('pharmacy') || n.includes('cvs') || n.includes('walgreens') || n.includes('doctor') || n.includes('dental') || n.includes('health') || n.includes('clinic')) return 'Health';
+  if (n.includes('flight') || n.includes('airline') || n.includes('hotel') || n.includes('airbnb') || n.includes('delta') || n.includes('united') || n.includes('american air')) return 'Travel';
+  if (n.includes('amazon') || n.includes('target') || n.includes('walmart') || n.includes('best buy') || n.includes('nike') || n.includes('clothing') || n.includes('store') || n.includes('shop')) return 'Shopping';
+  return 'Shopping';
 }
 
 // Helper: Calculate Due Date from Day of Month
@@ -708,6 +728,34 @@ app.post('/api/plaid/exchange-public-token', async (req, res) => {
       accountsCount: addedAccounts.length,
       connectedAt: new Date().toISOString()
     });
+
+    // Automatically sync real transactions for the connected card / account
+    try {
+      const syncRes = await plaidClient.transactionsSync({ access_token: accessToken });
+      if (syncRes.data?.added && syncRes.data.added.length > 0) {
+        const fetchedTransactions = [];
+        for (const pt of syncRes.data.added) {
+          const matchingAcc = addedAccounts.find(a => a.id === `acc-${pt.account_id}`) || addedAccounts[0];
+          const cat = mapPlaidCategory(pt.personal_finance_category?.primary || pt.category?.[0] || pt.name);
+          const amt = Number(pt.amount || 0);
+          fetchedTransactions.push({
+            id: `tx-plaid-${pt.transaction_id}`,
+            ownerId: userId || 'u-ziyad',
+            name: pt.merchant_name || pt.name || 'Card Purchase',
+            amount: amt > 0 ? -amt : Math.abs(amt),
+            category: cat,
+            date: pt.date || new Date().toISOString().split('T')[0],
+            account: matchingAcc ? `${matchingAcc.name} •••• ${matchingAcc.mask}` : 'Connected Card',
+            cardId: matchingAcc ? matchingAcc.id : '',
+            notes: pt.payment_channel ? `Paid via ${pt.payment_channel}` : ''
+          });
+        }
+        data.transactions = (data.transactions || []).filter(t => !fetchedTransactions.some(ft => ft.id === t.id)).concat(fetchedTransactions);
+      }
+    } catch (txErr) {
+      console.warn('transactionsSync note:', txErr.message);
+    }
+
     writeData(data);
 
     const userPlaidItems = data.plaidItems.filter(item => !item.userId || item.userId === userId);
