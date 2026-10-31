@@ -1225,7 +1225,8 @@ app.post('/api/ai/chat', async (req, res) => {
     clientModel,
     imageBase64,
     imageMimeType,
-    attachments = []
+    attachments = [],
+    statutoryShield
   } = req.body;
   const data = readData();
   const userSettings = getUserSettings(data, userId);
@@ -1347,6 +1348,13 @@ Rules:
    - For Overview / Dashboard: [NAVIGATE:dashboard]
    - For Settings: [NAVIGATE:settings]
 6. RETIREMENT, SOCIAL SECURITY, CALPERS & SENIOR DEBT PROTECTION EXPERTISE:
+${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
+   * Total Monthly Income: ${statutoryShield.totalMonthlyIncome || 0}/mo
+   * Statutorily Shielded Income: ${statutoryShield.shieldedMonthlyIncome || 0}/mo (${(statutoryShield.shieldedRatioPercent || 0).toFixed(0)}% Protected from private card banks)
+   * 31 CFR Part 212 Automatic Bank Cushion: ${statutoryShield.lookbackBankCushion || 0} (Mandatory 2-month lookback safe from private bank levies)
+   * Status: ${statutoryShield.isFullyJudgmentProof ? 'Fully Judgment-Proof against private card creditors' : 'Partially Protected'}
+   * Underwriting: 12 CFR § 1026.51 CARD Act accessible shared household income rule applies.
+` : ''}
    When advising users, seniors, or parents living on fixed incomes, Social Security, CalPERS, or state/federal pensions:
    - LEGAL SHIELD & JUDGMENT-PROOF STATUS:
      * Social Security Act § 207: Benefits are strictly exempt by federal law from garnishment, levy, or execution by private, commercial credit card creditors.

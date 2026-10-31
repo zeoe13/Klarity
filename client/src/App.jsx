@@ -67,6 +67,10 @@ import { usePlaidLink } from 'react-plaid-link';
 import { jwtDecode } from 'jwt-decode';
 import { marked } from 'marked';
 import KlarityLogo from './components/KlarityLogo';
+import LegalShieldStatusCard from './components/LegalShieldStatusCard';
+import InteractivePayoffComparison from './components/InteractivePayoffComparison';
+import HardshipPlaybookModal from './components/HardshipPlaybookModal';
+import { DEFAULT_INCOME_STREAMS, calculateJudgmentProofRatio } from './utils/statutoryDebtEngine';
 
 // Configure marked with GitHub-flavored markdown and automatic line breaks
 marked.setOptions({
@@ -708,6 +712,7 @@ function KlarityApp() {
   // Debt Payoff Planner State
   const [extraDebtPayment, setExtraDebtPayment] = useState(150);
   const [debtStrategy, setDebtStrategy] = useState('avalanche');
+  const [isHardshipModalOpen, setIsHardshipModalOpen] = useState(false);
   const [seniorReliefTab, setSeniorReliefTab] = useState('protections'); // 'protections' | 'hardship' | 'dmp' | 'family' | 'math'
   const [copiedSeniorScript, setCopiedSeniorScript] = useState(false);
   const [incomeSources, setIncomeSources] = useState(() => {
@@ -2411,7 +2416,11 @@ function KlarityApp() {
           clientApiKey: cachedApiKey,
           clientProvider: cachedProvider,
           clientModel: cachedModel,
-          attachments: payloadAttachments
+          attachments: payloadAttachments,
+          statutoryShield: {
+            ...calculateJudgmentProofRatio(DEFAULT_INCOME_STREAMS),
+            incomeStreams: DEFAULT_INCOME_STREAMS
+          }
         })
       });
 
@@ -5209,7 +5218,19 @@ function KlarityApp() {
               </div>
             )}
 
-                        {/* Senior & Fixed-Income Debt Relief Hub */}
+                        {/* 1. Statutory Legal Shield Status Card (42 U.S.C. § 407, CA CCP § 704.110, 31 CFR Part 212) */}
+            <LegalShieldStatusCard 
+              incomeStreams={DEFAULT_INCOME_STREAMS} 
+              debtAccounts={allFilterableCards.filter(c => c.type === 'credit')} 
+            />
+
+            {/* 2. Mathematical 4-Option Payoff Engine (Minimum, Accelerated, 0% Hardship/NFCC, Family Qard Hasan) */}
+            <InteractivePayoffComparison 
+              cards={allFilterableCards.filter(c => c.type === 'credit')} 
+              onOpenHardshipPlaybook={() => setIsHardshipModalOpen(true)} 
+            />
+
+            {/* Senior & Fixed-Income Debt Relief Hub */}
             <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 sm:p-6 flex flex-col gap-5">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
                 <div>
@@ -6876,6 +6897,14 @@ function KlarityApp() {
           </div>
         </div>
       )}
+
+      {/* Actionable 0% Hardship Playbook Modal */}
+      <HardshipPlaybookModal
+        isOpen={isHardshipModalOpen}
+        onClose={() => setIsHardshipModalOpen(false)}
+        cards={allFilterableCards.filter(c => c.type === 'credit')}
+        userName={currentUser?.name || 'Cardholder'}
+      />
 
       {/* Add Purchase Modal */}
       {isAddTxOpen && (
