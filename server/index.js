@@ -1385,7 +1385,7 @@ function shouldPerformWebSearch(message) {
     'utility', 'rebate', 'tax', 'cost', 'alternative', 'cheaper', 'funds',
     'search', 'internet', 'online', 'google', 'look up', 'find', 'price', 
     'what is', 'who is', 'how much', 'inflation', 'fed', 'interest', 'yield',
-    'stock', 'crypto', 'sub', 'subscription', 'plan', 'phone', 'electric', 'gas'
+    'stock', 'crypto', 'sub', 'subscription', 'plan', 'phone', 'electric', 'gas', 'ev', 'charger', 'charging', 'pge', 'pg&e', 'water', 'car', 'tesla', 'ioniq', 'equinox', 'dealer', 'lease', 'rebate'
   ];
   return searchKeywords.some(k => m.includes(k)) || m.includes('?') || m.startsWith('how') || m.startsWith('what') || m.startsWith('where');
 }
@@ -1406,7 +1406,9 @@ app.post('/api/ai/chat', async (req, res) => {
     budgets = [],
     savingsGoals = [],
     manualAssets = [],
-    netWorth
+    netWorth,
+    householdProfile,
+    householdMetrics
   } = req.body;
   const data = readData();
   const userSettings = getUserSettings(data, userId);
@@ -1504,7 +1506,10 @@ Actual Connected Finances for ${currentUser.name} (strictly respecting permissio
 - Monthly Category Budgets: ${budgets && budgets.length > 0 ? budgets.map(b => `${b.category}: ${b.limit}/mo`).join(' | ') : 'None set'}
 - Savings Goals: ${savingsGoals && savingsGoals.length > 0 ? savingsGoals.map(g => `${g.name}: ${g.currentAmount} of ${g.targetAmount} (${g.monthlyContribution || 0}/mo)`).join(' | ') : 'None created'}
 - Manual Assets & Investments: ${manualAssets && manualAssets.length > 0 ? manualAssets.map(a => `${a.name}: ${Number(a.balance || 0).toLocaleString()} (${a.type})`).join(' | ') : 'None'}
-- Net Worth: ${Number(netWorth || 0).toLocaleString()}${memoryContext}${liveWebSearchContext}
+- Net Worth: ${Number(netWorth || 0).toLocaleString()}
+- Household & Residence Profile: ${householdProfile ? `${householdProfile.dwellingType} (${householdProfile.sqFt || 2000} sq ft) in ${householdProfile.cityOrZip || 'California'} | Household Size: ${householdProfile.householdSize || 4} people | PG&E CARE Discount: ${householdProfile.hasCareDiscount ? 'Enrolled (~32% Off)' : 'Not Enrolled'} | Solar: ${householdProfile.hasSolar ? 'Yes' : 'No'}` : 'Standard Single-Family Household'}
+- Calculated Real-Life Monthly Utilities: ${householdMetrics?.utilities ? `Combined PG&E (Electric + Gas): ${householdMetrics.utilities.totalPgeCombinedBill}/mo [Home Electric: ${householdMetrics.utilities.homeKwh} kWh (${householdMetrics.utilities.homeElectricCost}), EV Home Charging: ${householdMetrics.utilities.evHomeKwh} kWh (${householdMetrics.utilities.evHomeChargingCost}), Natural Gas: ${householdMetrics.utilities.monthlyTherms} Therms (${householdMetrics.utilities.naturalGasCost})] | Water, Sewer & Trash: ${householdMetrics.utilities.waterTrashTotalCost}/mo (${householdMetrics.utilities.monthlyWaterGallons} gal/mo) | Total Utilities: ${householdMetrics.utilities.totalUtilitiesMonthly}/mo` : 'Not calculated yet'}
+- Household Vehicle Fleet (${householdMetrics?.fleet?.vehicles?.length || 0} Cars): ${householdMetrics?.fleet?.vehicles?.length > 0 ? householdMetrics.fleet.vehicles.map(v => `${v.name} (${v.type.toUpperCase()}): ${v.monthlyMiles} mi/mo, Fuel/Charge: ${v.monthlyFuelOrChargeCost}/mo, Ins: ${v.insuranceMonthly}/mo, Maint: ${v.maintenance}/mo${v.potentialEvSwitchSavings ? ` [Saves ${v.potentialEvSwitchSavings}/mo if switched to EV]` : ''}`).join(' | ') : 'None listed'}${memoryContext}${liveWebSearchContext}
 
 Rules:
 1. Provide concise, clear, and empathetic financial guidance based strictly on real numbers and current web knowledge.
@@ -1523,6 +1528,9 @@ Rules:
    - For Deleting Savings Goals: [ACTION:DELETE_GOAL:{"name":"Emergency Fund"}]
    - For Setting / Verifying Retirement Inflow: [ACTION:SET_INCOME:{"type":"social_security","amount":2185,"label":"Social Security"}] or [ACTION:SET_INCOME:{"type":"calpers","amount":3450,"label":"CalPERS Pension"}]
    - For Deleting Income Stream: [ACTION:DELETE_INCOME:{"type":"social_security"}]
+   - For Updating Home / Household Size / City / PG&E CARE: [ACTION:SET_HOUSEHOLD:{"dwellingType":"single_family","householdSize":4,"sqFt":2100,"cityOrZip":"San Jose, CA","hasCareDiscount":true}]
+   - For Adding a Household Car (gas, hybrid, phev, ev): [ACTION:ADD_VEHICLE:{"name":"2024 Hyundai Ioniq 5","type":"ev","mpgOrEfficiency":28,"monthlyMiles":1000,"freeChargingSharePercent":40}]
+   - For Removing a Household Car: [ACTION:DELETE_VEHICLE:{"name":"Toyota Camry"}]
    You can output multiple ACTION tags in a single response to execute batch operations!
    Always summarize the changes you made in clean bullet points with exact dollar figures.
 4. GEMINI-STYLE POLISHED FORMATTING:
@@ -1560,6 +1568,20 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
      * Option C: Family Zero-Interest Payoff (Qard Hasan). Family members pool funds to eliminate toxic high-APR card balances in a lump sum, and the senior repays the family interest-free (e.g. $200-$250/mo from pension) with zero bank fees and zero credit report impact.
      * Option D: CalPERS 457b Loan (if applicable). If they contributed to a 457b plan, they can borrow against their vested balance where all interest returns directly to their own retirement fund.
    - THE MINIMUM PAYMENT TRAP: Show the math—paying only the minimum on $8,000 at 24% APR takes ~22 years and costs over $11,500 in pure wasted interest ($19,500 total out of pocket) compared to 0% hardship workout plans!
+
+7. REAL-LIFE HOUSEHOLD, PG&E UTILITY, FREE EV CHARGING & 0% APR ELECTRIC CAR ADVISOR:
+   - PG&E, WATER & GAS CALCULATIONS: Always reference the user's exact dwelling type, square footage, household size, and vehicle fleet. Explain how PG&E Time-of-Use (E-TOU-C and EV2-A off-peak Midnight-3PM rates), PG&E CARE (30-35% electric discount & 20% gas discount) or FERA (18% discount for 3+ person households), and Medical Baseline reduce monthly utility bills.
+   - FREE EV CHARGING NEARBY: When the user has an EV or asks about electric cars, tell them exactly where to charge for FREE in their area:
+     * Volta / Shell Recharge Free Level 2 Chargers (30-60 mins free at Whole Foods, Target, Safeway, Cinemark, Walgreens, Shopping Centers).
+     * Municipal, City Hall, Public Library & Community Center free Level 2 J1772 stations.
+     * Caltrans Free DC Fast Chargers at highway Safety Roadside Rest Areas (I-5, I-80, US-101, SR-99).
+     * Automaker complimentary charging (1-2 years of free Electrify America / ChargePoint / EVgo included with new Hyundai Ioniq 5/6, Kia EV6/EV9, Toyota bZ4X).
+     * Home PG&E EV2-A Off-Peak charging scheduled after 12:00 AM Midnight (especially with CARE discount, bringing home charging down to ~$0.21/kWh, equivalent to ~$0.95/gallon gas).
+   - HOW, WHERE & WHEN TO BUY A NEW ELECTRIC CAR FOR 0% APR:
+     * Top 0% APR EVs: Hyundai Ioniq 5 & Ioniq 6 (0% APR for 60-72 mos), Chevrolet Equinox EV (0%-0.9% APR + $7,500 Instant IRS Point-of-Sale Tax Credit at the dealership bringing net price to ~$27,495), Ford Mustang Mach-E & F-150 Lightning (0% APR for 72 mos + Free Ford Power Promise Home Charger & Free Standard Home Installation), Tesla Model Y & Model 3 (0%-0.99% promotional APR + Existing Inventory discounts), Kia EV6 & EV9 (0% APR for 60-72 mos), Toyota bZ4X & Subaru Solterra (0% APR for 72 mos).
+     * WHEN TO BUY: Shop during the last 5 days of a quarter (March 25-31, June 25-30, September 25-30, December 20-31) when automakers and dealerships face quarterly volume quota bonuses, or during model-year clearance (August-November).
+     * WHERE TO BUY: Contact the Internet Fleet Manager at 3 high-volume EV-certified dealerships in their region (or Costco Auto Program dealers) via email only, requesting an itemized Out-The-Door (OTD) worksheet with zero dealer markups/add-ons.
+     * STACKING REBATES + GAS OFFSET MATH: Show how combining 0% APR ($0 interest) + $7,500 IRS Point-of-Sale credit upfront + California Clean Cars 4 All / Replace Your Ride ($9,500-$12,000 for scrapping an older gas car) + PG&E EV Rebate ($1,000-$4,000) + subtracting their current monthly gas & oil change expenses ($180-$300/mo) makes the true net monthly cost remarkably low!
 `.trim();
 
   const fullUserPrompt = `${message || (fileAttachments.length > 0 ? `Please read and analyze the attached ${fileAttachments.length} file(s) (${fileAttachments.map(f => f.name).join(', ')}) and automatically extract and add all bills, subscriptions, and store purchases.` : 'Please analyze this.')}${extractedFilesText}`;
@@ -1910,6 +1932,33 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
       try {
         const incData = JSON.parse(siMatch[1]);
         actionsExecuted.push({ type: 'set_income', item: incData });
+      } catch (e) {}
+    }
+
+    const setHouseholdRegex = /\[ACTION:SET_HOUSEHOLD:([\s\S]*?)\]/gi;
+    let shMatch;
+    while ((shMatch = setHouseholdRegex.exec(reply)) !== null) {
+      try {
+        const hhData = JSON.parse(shMatch[1]);
+        actionsExecuted.push({ type: 'set_household', item: hhData });
+      } catch (e) {}
+    }
+
+    const addVehicleRegex = /\[ACTION:ADD_VEHICLE:([\s\S]*?)\]/gi;
+    let avMatch;
+    while ((avMatch = addVehicleRegex.exec(reply)) !== null) {
+      try {
+        const vData = JSON.parse(avMatch[1]);
+        actionsExecuted.push({ type: 'add_vehicle', item: vData });
+      } catch (e) {}
+    }
+
+    const delVehicleRegex = /\[ACTION:DELETE_VEHICLE:([\s\S]*?)\]/gi;
+    let dvMatch;
+    while ((dvMatch = delVehicleRegex.exec(reply)) !== null) {
+      try {
+        const vData = JSON.parse(dvMatch[1]);
+        actionsExecuted.push({ type: 'delete_vehicle', item: vData });
       } catch (e) {}
     }
 

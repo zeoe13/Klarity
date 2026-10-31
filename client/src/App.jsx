@@ -71,6 +71,8 @@ import LegalShieldStatusCard from './components/LegalShieldStatusCard';
 import InteractivePayoffComparison from './components/InteractivePayoffComparison';
 import HardshipPlaybookModal from './components/HardshipPlaybookModal';
 import { DEFAULT_INCOME_STREAMS, calculateJudgmentProofRatio } from './utils/statutoryDebtEngine';
+import HouseholdLifestyleHub from './components/HouseholdLifestyleHub';
+import { DEFAULT_HOUSEHOLD_PROFILE, calculateHouseholdAndFleetMetrics } from './utils/householdLifestyleEngine';
 
 // Configure marked with GitHub-flavored markdown and automatic line breaks
 marked.setOptions({
@@ -710,6 +712,84 @@ function KlarityApp() {
       localStorage.setItem('klarity_income_streams', JSON.stringify(incomeStreams));
     } catch (e) {}
   }, [incomeStreams]);
+
+  // Household, Utility (PG&E / Water / Gas) & Vehicle Fleet Profile
+  const [householdProfile, setHouseholdProfile] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_household_profile');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && parsed.dwellingType) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_HOUSEHOLD_PROFILE;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_household_profile', JSON.stringify(householdProfile));
+    } catch (e) {}
+  }, [householdProfile]);
+
+  const handleSyncUtilitiesToBills = (calcMetrics) => {
+    if (!calcMetrics || !calcMetrics.utilities) return;
+    const pgeAmount = Number(calcMetrics.utilities.totalPgeCombinedBill || 0);
+    const waterAmount = Number(calcMetrics.utilities.waterTrashTotalCost || 0);
+    const insAmount = Number(calcMetrics.fleet?.totalMonthlyInsurance || 0);
+    const gasFuelAmount = Number(calcMetrics.fleet?.totalMonthlyGasCost || 0);
+
+    setData(prev => {
+      const existingBills = [...(prev.bills || [])];
+      const upsertBill = (name, category, amount, dueDay) => {
+        if (amount <= 0) return;
+        const idx = existingBills.findIndex(b => (b.name || '').toLowerCase().includes(name.toLowerCase().split(' ')[0]));
+        if (idx >= 0) {
+          existingBills[idx] = { ...existingBills[idx], name, expectedAmount: amount, category };
+        } else {
+          existingBills.push({
+            id: `bill-sync-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            name,
+            category,
+            expectedAmount: amount,
+            dueDay,
+            nextDueDate: `Monthly on Day ${dueDay}`,
+            autopay: true,
+            status: 'upcoming'
+          });
+        }
+      };
+
+      upsertBill('PG&E Electric & Gas (Household Est.)', 'Utilities', pgeAmount, 15);
+      upsertBill('Municipal Water, Sewer & Trash', 'Utilities', waterAmount, 20);
+      if (insAmount > 0) {
+        upsertBill(`Auto Insurance (${calcMetrics.fleet.vehicles.length} Household Cars)`, 'Insurance', insAmount, 10);
+      }
+
+      const nextState = {
+        ...prev,
+        bills: existingBills,
+        metrics: {
+          ...prev.metrics,
+          totalMonthlyBills: existingBills.reduce((s, b) => s + Number(b.expectedAmount || 0), 0)
+        }
+      };
+      try {
+        localStorage.setItem('klarity_finance_data', JSON.stringify(nextState));
+        localStorage.setItem('klarity_bills', JSON.stringify(existingBills));
+      } catch (e) {}
+      return nextState;
+    });
+
+    if (gasFuelAmount > 0) {
+      setBudgets(prev => {
+        const exists = prev.find(b => (b.category || '').toLowerCase() === 'gas');
+        if (exists) {
+          return prev.map(b => b.id === exists.id ? { ...b, limit: gasFuelAmount } : b);
+        }
+        return [...prev, { id: `b-gas-${Date.now()}`, category: 'Gas', limit: gasFuelAmount, lastMonthSpent: gasFuelAmount }];
+      });
+    }
+  };
 
   // Modals & Editors for Budgets, Goals, Manual Accounts, Notes, Debt Planner
   const [isAddBudgetOpen, setIsAddBudgetOpen] = useState(false);
@@ -2442,7 +2522,9 @@ function KlarityApp() {
           budgets: budgets,
           savingsGoals: savingsGoals,
           manualAssets: manualAssets,
-          netWorth: totalNetWorth || 0
+          netWorth: totalNetWorth || 0,
+          householdProfile: householdProfile,
+          householdMetrics: calculateHouseholdAndFleetMetrics(householdProfile)
         })
       });
 
@@ -2518,6 +2600,39 @@ function KlarityApp() {
             });
           } else if (act.type === 'delete_income' && act.item?.type) {
             setIncomeStreams(prev => prev.filter(s => s.type !== act.item.type));
+          } else if (act.type === 'set_household' && act.item) {
+            setHouseholdProfile(prev => ({
+              ...prev,
+              ...(act.item.dwellingType ? { dwellingType: act.item.dwellingType } : {}),
+              ...(act.item.householdSize ? { householdSize: Number(act.item.householdSize) } : {}),
+              ...(act.item.sqFt ? { sqFt: Number(act.item.sqFt) } : {}),
+              ...(act.item.cityOrZip ? { cityOrZip: act.item.cityOrZip } : {}),
+              ...(act.item.utilityRegionId ? { utilityRegionId: act.item.utilityRegionId } : {}),
+              ...(typeof act.item.hasCareDiscount === 'boolean' ? { hasCareDiscount: act.item.hasCareDiscount } : {}),
+              ...(typeof act.item.hasSolar === 'boolean' ? { hasSolar: act.item.hasSolar } : {})
+            }));
+          } else if (act.type === 'add_vehicle' && act.item?.name) {
+            setHouseholdProfile(prev => ({
+              ...prev,
+              vehicles: [
+                ...(prev.vehicles || []),
+                {
+                  id: `veh-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+                  name: act.item.name,
+                  type: act.item.type || 'gas',
+                  mpgOrEfficiency: Number(act.item.mpgOrEfficiency) || (act.item.type === 'ev' ? 28 : 30),
+                  monthlyMiles: Number(act.item.monthlyMiles) || 900,
+                  insuranceMonthly: Number(act.item.insuranceMonthly) || 120,
+                  monthlyPayment: Number(act.item.monthlyPayment) || 0,
+                  freeChargingSharePercent: act.item.type === 'ev' ? Number(act.item.freeChargingSharePercent ?? 35) : 0
+                }
+              ]
+            }));
+          } else if (act.type === 'delete_vehicle' && act.item?.name) {
+            setHouseholdProfile(prev => ({
+              ...prev,
+              vehicles: (prev.vehicles || []).filter(v => !(v.name || '').toLowerCase().includes((act.item.name || '').toLowerCase()))
+            }));
           } else if (act.type === 'goal' && act.item?.name && act.item?.targetAmount) {
             setSavingsGoals(prev => [
               ...prev,
@@ -4508,6 +4623,17 @@ function KlarityApp() {
                 </div>
               </div>
             </div>
+
+            {/* Household, Utility (PG&E / Water / Gas) & EV Fleet Intelligence Hub */}
+            <HouseholdLifestyleHub
+              householdProfile={householdProfile}
+              onUpdateProfile={setHouseholdProfile}
+              onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
+              onAskAiAdvisor={(promptText) => {
+                setIsAiDrawerOpen(true);
+                handleSendChatMessage(promptText);
+              }}
+            />
           </div>
         )}
 
@@ -4863,6 +4989,17 @@ function KlarityApp() {
                 </button>
               </div>
             </div>
+
+            {/* Household, Utility (PG&E / Water / Gas) & EV Fleet Estimator */}
+            <HouseholdLifestyleHub
+              householdProfile={householdProfile}
+              onUpdateProfile={setHouseholdProfile}
+              onSyncUtilitiesToBills={handleSyncUtilitiesToBills}
+              onAskAiAdvisor={(promptText) => {
+                setIsAiDrawerOpen(true);
+                handleSendChatMessage(promptText);
+              }}
+            />
 
             {/* Filter & Search Bar + Multi-Card Filter Dropdown */}
             <div className="bg-white rounded-xl border border-slate-200/90 p-4 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap">
