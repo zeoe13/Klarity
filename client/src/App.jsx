@@ -630,9 +630,9 @@ function KlarityApp() {
   const [budgets, setBudgets] = useState(() => {
     try {
       const saved = localStorage.getItem('klarity_budgets_v2');
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {}
     return [
@@ -655,9 +655,9 @@ function KlarityApp() {
   const [savingsGoals, setSavingsGoals] = useState(() => {
     try {
       const saved = localStorage.getItem('klarity_savings_goals');
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {}
     return [
@@ -676,62 +676,9 @@ function KlarityApp() {
   const [manualAssets, setManualAssets] = useState(() => {
     try {
       const saved = localStorage.getItem('klarity_manual_assets');
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (e) {}
-    return [
-      { id: 'ma-1', name: 'High-Yield Emergency Savings', type: 'savings', balance: 3500 },
-      { id: 'ma-2', name: 'Vanguard Index Portfolio', type: 'investment', balance: 6400 }
-    ];
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('klarity_manual_assets', JSON.stringify(manualAssets));
-    } catch (e) {}
-  }, [manualAssets]);
-
-  // Modals & Editors for Budgets, Goals, Manual Accounts, Notes, Debt Planner
-  const [isAddBudgetOpen, setIsAddBudgetOpen] = useState(false);
-  const [newBudget, setNewBudget] = useState({ category: 'Groceries', limit: '350' });
-  const [editingBudgetId, setEditingBudgetId] = useState(null);
-  const [editingBudgetLimit, setEditingBudgetLimit] = useState('');
-
-  const [isAddGoalOpen, setIsAddGoalOpen] = useState(false);
-  const [newGoal, setNewGoal] = useState({ name: '', targetAmount: '3000', currentAmount: '500', monthlyContribution: '250' });
-
-  const [isAddManualAssetOpen, setIsAddManualAssetOpen] = useState(false);
-  const [newManualAsset, setNewManualAsset] = useState({ name: '', type: 'savings', balance: '' });
-
-  const [editingTxNoteId, setEditingTxNoteId] = useState(null);
-  const [editingTxNoteText, setEditingTxNoteText] = useState('');
-  const csvInputRef = useRef(null);
-
-  // Debt Payoff Planner State
-  const [extraDebtPayment, setExtraDebtPayment] = useState(150);
-  const [debtStrategy, setDebtStrategy] = useState('avalanche');
-  const [isHardshipModalOpen, setIsHardshipModalOpen] = useState(false);
-  const [seniorReliefTab, setSeniorReliefTab] = useState('protections'); // 'protections' | 'hardship' | 'dmp' | 'family' | 'math'
-  const [copiedSeniorScript, setCopiedSeniorScript] = useState(false);
-  const [incomeSources, setIncomeSources] = useState(() => {
-    try {
-      const uid = currentUser?.id || 'u-ziyad';
-      const saved = localStorage.getItem('klarity_' + uid + '_income_sources');
-      return saved ? JSON.parse(saved) : ['Social Security', 'CalPERS Public Pension'];
-    } catch {
-      return ['Social Security', 'CalPERS Public Pension'];
-    }
-  }); // 'avalanche' (highest APR first) | 'snowball' (smallest balance first)
-
-  // AI Chat & Multi-thread Past Chats state (like Gemini chats)
-  const [chatSessions, setChatSessions] = useState(() => {
-    try {
-      const saved = localStorage.getItem('klarity_chat_sessions');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {}
     return [
@@ -1461,27 +1408,52 @@ function KlarityApp() {
       const getLocalList = (key) => {
         try {
           const raw = localStorage.getItem(key);
-          return raw ? JSON.parse(raw) : [];
-        } catch { return []; }
+          if (raw !== null) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch { return null; }
+        return null;
       };
+
       const localCachedAccounts = getLocalList('klarity_accounts');
       const localCachedBills = getLocalList('klarity_bills');
       const localCachedSubs = getLocalList('klarity_subscriptions');
       const localCachedTxs = getLocalList('klarity_transactions');
+      const localCachedBudgets = getLocalList('klarity_budgets_v2');
+      const localCachedGoals = getLocalList('klarity_savings_goals');
+      const localCachedAssets = getLocalList('klarity_manual_assets');
 
       const res = await fetch(`/api/data?userId=${user.id}&household=${household}`);
       if (res.ok) {
         const json = await res.json();
-        const mergedAccounts = (json.accounts && json.accounts.length > 0) ? json.accounts : localCachedAccounts;
-        const mergedBills = (json.bills && json.bills.length > 0) ? json.bills : localCachedBills;
-        const mergedSubs = (json.subscriptions && json.subscriptions.length > 0) ? json.subscriptions : localCachedSubs;
-        const mergedTxs = (json.transactions && json.transactions.length > 0) ? json.transactions : localCachedTxs;
 
-        const needsSync =
-          (json.accounts?.length === 0 && localCachedAccounts.length > 0) ||
-          (json.bills?.length === 0 && localCachedBills.length > 0) ||
-          (json.subscriptions?.length === 0 && localCachedSubs.length > 0) ||
-          (json.transactions?.length === 0 && localCachedTxs.length > 0);
+        // Authoritative resolution: if user has a saved local copy (even empty []), KEEP IT!
+        const mergedAccounts = localCachedAccounts !== null ? localCachedAccounts : (json.accounts || []);
+        const mergedBills = localCachedBills !== null ? localCachedBills : (json.bills || []);
+        const mergedSubs = localCachedSubs !== null ? localCachedSubs : (json.subscriptions || []);
+        const mergedTxs = localCachedTxs !== null ? localCachedTxs : (json.transactions || []);
+        const mergedBudgets = localCachedBudgets !== null ? localCachedBudgets : (json.budgets || []);
+        const mergedGoals = localCachedGoals !== null ? localCachedGoals : (json.savingsGoals || []);
+        const mergedAssets = localCachedAssets !== null ? localCachedAssets : (json.manualAssets || []);
+
+        if (localCachedBudgets !== null) {
+          setBudgets(localCachedBudgets);
+        } else if (Array.isArray(json.budgets)) {
+          setBudgets(json.budgets);
+        }
+
+        if (localCachedGoals !== null) {
+          setSavingsGoals(localCachedGoals);
+        } else if (Array.isArray(json.savingsGoals)) {
+          setSavingsGoals(json.savingsGoals);
+        }
+
+        if (localCachedAssets !== null) {
+          setManualAssets(localCachedAssets);
+        } else if (Array.isArray(json.manualAssets)) {
+          setManualAssets(json.manualAssets);
+        }
 
         const finalData = {
           ...json,
@@ -1489,6 +1461,9 @@ function KlarityApp() {
           bills: mergedBills,
           subscriptions: mergedSubs,
           transactions: mergedTxs,
+          budgets: mergedBudgets,
+          savingsGoals: mergedGoals,
+          manualAssets: mergedAssets,
           metrics: {
             ...json.metrics,
             totalCreditDebt: mergedAccounts.filter(a => a.type === 'credit').reduce((s, a) => s + Number(a.balance || 0), 0),
@@ -1501,10 +1476,10 @@ function KlarityApp() {
         setData(finalData);
         try {
           localStorage.setItem('klarity_finance_data', JSON.stringify(finalData));
-          if (mergedAccounts.length > 0) localStorage.setItem('klarity_accounts', JSON.stringify(mergedAccounts));
-          if (mergedBills.length > 0) localStorage.setItem('klarity_bills', JSON.stringify(mergedBills));
-          if (mergedSubs.length > 0) localStorage.setItem('klarity_subscriptions', JSON.stringify(mergedSubs));
-          if (mergedTxs.length > 0) localStorage.setItem('klarity_transactions', JSON.stringify(mergedTxs));
+          localStorage.setItem('klarity_accounts', JSON.stringify(mergedAccounts));
+          localStorage.setItem('klarity_bills', JSON.stringify(mergedBills));
+          localStorage.setItem('klarity_subscriptions', JSON.stringify(mergedSubs));
+          localStorage.setItem('klarity_transactions', JSON.stringify(mergedTxs));
         } catch (e) {}
 
         if (needsSync) {
@@ -4564,7 +4539,17 @@ function KlarityApp() {
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="flex items-center gap-2">
-                            <h3 className="text-sm font-bold text-slate-900">{b.category}</h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-bold text-slate-900">{b.category}</h3>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteBudget(b.id, b.category)}
+                                className="p-1 text-slate-300 hover:text-rose-600 rounded transition-colors cursor-pointer"
+                                title="Delete budget"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                             {b.isOver && (
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
                                 Over budget
@@ -4739,7 +4724,7 @@ function KlarityApp() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setSavingsGoals(prev => prev.filter(g => g.id !== goal.id))}
+                              onClick={() => handleDeleteGoal(goal.id, goal.name)}
                               className="text-slate-400 hover:text-rose-600 cursor-pointer"
                               title="Remove goal"
                             >
