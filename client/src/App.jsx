@@ -2903,7 +2903,7 @@ function KlarityApp() {
   const displayCardBalances = creditCards.length > 0 ? cardBalances : 1764.20;
 
   // Source lists for Bills, Subscriptions, and Transactions (using real data when present, or defaults)
-  const sourceBillsList = (billsList.length > 0 ? billsList : DEFAULT_OVERVIEW_BILLS).map(b => {
+  const sourceBillsList = (Array.isArray(billsList) ? billsList : []).map(b => {
     const cardObj = resolveItemCard(b, 'depository');
     return {
       ...b,
@@ -2918,7 +2918,7 @@ function KlarityApp() {
     };
   });
 
-  const sourceSubsList = (subscriptionsList.length > 0 ? subscriptionsList : DEFAULT_OVERVIEW_SUBS).map(s => {
+  const sourceSubsList = (Array.isArray(subscriptionsList) ? subscriptionsList : []).map(s => {
     const cardObj = resolveItemCard(s, 'credit');
     return {
       ...s,
@@ -2930,7 +2930,7 @@ function KlarityApp() {
     };
   });
 
-  const sourceTxsList = (transactionsList.length > 0 ? transactionsList : DEFAULT_OVERVIEW_TXS).map(t => {
+  const sourceTxsList = (Array.isArray(transactionsList) ? transactionsList : []).map(t => {
     const isIncome = (t.category || '').toLowerCase() === 'income' || (t.name || '').toLowerCase().includes('deposit') || Number(t.amount) > 500;
     const cardObj = resolveItemCard(t, isIncome ? 'depository' : 'credit');
     const rememberedCat = categoryRules[(t.name || '').toLowerCase().trim()];
@@ -5606,7 +5606,7 @@ function KlarityApp() {
                       </span>
                       <button
                         type="button"
-                        onClick={() => setManualAssets(prev => prev.filter(x => x.id !== ma.id))}
+                        onClick={() => handleDeleteManualAsset(ma.id, ma.name)}
                         className="text-slate-400 hover:text-rose-600 cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />

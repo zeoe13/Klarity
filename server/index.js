@@ -200,6 +200,22 @@ const initialSeedData = {
       account: "Checking"
     }
   ],
+  budgets: [
+    { id: 'b-groceries', category: 'Groceries', limit: 200, defaultSpent: 142, lastMonthSpent: 165 },
+    { id: 'b-dining', category: 'Dining', limit: 60, defaultSpent: 57, lastMonthSpent: 48 },
+    { id: 'b-gas', category: 'Gas', limit: 80, defaultSpent: 90, lastMonthSpent: 72 },
+    { id: 'b-shopping', category: 'Shopping', limit: 150, defaultSpent: 68, lastMonthSpent: 110 },
+    { id: 'b-subscriptions', category: 'Subscriptions', limit: 40, defaultSpent: 27, lastMonthSpent: 27 },
+    { id: 'b-bills', category: 'Bills', limit: 150, defaultSpent: 128, lastMonthSpent: 125 }
+  ],
+  savingsGoals: [
+    { id: 'goal-emergency', name: 'Emergency Fund', targetAmount: 3000, currentAmount: 1200, monthlyContribution: 250 },
+    { id: 'goal-vacation', name: 'Family Vacation', targetAmount: 2000, currentAmount: 750, monthlyContribution: 150 }
+  ],
+  manualAssets: [
+    { id: 'ma-1', name: 'High-Yield Emergency Savings', type: 'savings', balance: 3500 },
+    { id: 'ma-2', name: 'Vanguard Index Portfolio', type: 'investment', balance: 6400 }
+  ],
   plaidItems: [],
   settings: {
     ai: {
@@ -797,6 +813,132 @@ app.delete('/api/plaid/items/:itemId', (req, res) => {
   res.json({ success: true });
 });
 
+
+// ==================== BUDGETS CRUD ====================
+app.get('/api/budgets', (req, res) => {
+  const data = readData();
+  res.json({ budgets: data.budgets || [] });
+});
+
+app.post('/api/budgets', (req, res) => {
+  const { id, category, limit, lastMonthSpent } = req.body;
+  if (!category || limit == null) return res.status(400).json({ error: 'Missing category or limit' });
+  const data = readData();
+  data.budgets = data.budgets || [];
+  const limitNum = parseFloat(limit);
+  const existingIdx = data.budgets.findIndex(b => b.id === id || (b.category || '').toLowerCase() === category.toLowerCase());
+  let item;
+  if (existingIdx >= 0) {
+    data.budgets[existingIdx] = {
+      ...data.budgets[existingIdx],
+      limit: limitNum,
+      category
+    };
+    item = data.budgets[existingIdx];
+  } else {
+    item = {
+      id: id || `b-${Date.now()}`,
+      category,
+      limit: limitNum,
+      lastMonthSpent: Number(lastMonthSpent) || Math.round(limitNum * 0.8)
+    };
+    data.budgets.push(item);
+  }
+  writeData(data);
+  res.json({ success: true, budget: item, budgets: data.budgets });
+});
+
+app.delete('/api/budgets/:id', (req, res) => {
+  const data = readData();
+  data.budgets = (data.budgets || []).filter(b => b.id !== req.params.id);
+  writeData(data);
+  res.json({ success: true, budgets: data.budgets });
+});
+
+// ==================== SAVINGS GOALS CRUD ====================
+app.get('/api/savings-goals', (req, res) => {
+  const data = readData();
+  res.json({ goals: data.savingsGoals || [] });
+});
+
+app.post('/api/savings-goals', (req, res) => {
+  const { id, name, targetAmount, currentAmount, monthlyContribution } = req.body;
+  if (!name || targetAmount == null) return res.status(400).json({ error: 'Missing goal name or target' });
+  const data = readData();
+  data.savingsGoals = data.savingsGoals || [];
+  const existingIdx = data.savingsGoals.findIndex(g => g.id === id || (g.name || '').toLowerCase() === name.toLowerCase());
+  let item;
+  if (existingIdx >= 0) {
+    data.savingsGoals[existingIdx] = {
+      ...data.savingsGoals[existingIdx],
+      name,
+      targetAmount: Number(targetAmount),
+      currentAmount: currentAmount !== undefined ? Number(currentAmount) : data.savingsGoals[existingIdx].currentAmount,
+      monthlyContribution: Number(monthlyContribution) || 200
+    };
+    item = data.savingsGoals[existingIdx];
+  } else {
+    item = {
+      id: id || `goal-${Date.now()}`,
+      name,
+      targetAmount: Number(targetAmount),
+      currentAmount: Number(currentAmount || 0),
+      monthlyContribution: Number(monthlyContribution || 200)
+    };
+    data.savingsGoals.push(item);
+  }
+  writeData(data);
+  res.json({ success: true, goal: item, savingsGoals: data.savingsGoals });
+});
+
+app.delete('/api/savings-goals/:id', (req, res) => {
+  const data = readData();
+  data.savingsGoals = (data.savingsGoals || []).filter(g => g.id !== req.params.id);
+  writeData(data);
+  res.json({ success: true, savingsGoals: data.savingsGoals });
+});
+
+// ==================== MANUAL ASSETS CRUD ====================
+app.get('/api/manual-assets', (req, res) => {
+  const data = readData();
+  res.json({ manualAssets: data.manualAssets || [] });
+});
+
+app.post('/api/manual-assets', (req, res) => {
+  const { id, name, type, balance } = req.body;
+  if (!name) return res.status(400).json({ error: 'Missing asset name' });
+  const data = readData();
+  data.manualAssets = data.manualAssets || [];
+  const existingIdx = data.manualAssets.findIndex(a => a.id === id);
+  let item;
+  if (existingIdx >= 0) {
+    data.manualAssets[existingIdx] = {
+      ...data.manualAssets[existingIdx],
+      name,
+      type: type || 'savings',
+      balance: Number(balance || 0)
+    };
+    item = data.manualAssets[existingIdx];
+  } else {
+    item = {
+      id: id || `ma-${Date.now()}`,
+      name,
+      type: type || 'savings',
+      balance: Number(balance || 0)
+    };
+    data.manualAssets.push(item);
+  }
+  writeData(data);
+  res.json({ success: true, asset: item, manualAssets: data.manualAssets });
+});
+
+app.delete('/api/manual-assets/:id', (req, res) => {
+  const data = readData();
+  data.manualAssets = (data.manualAssets || []).filter(a => a.id !== req.params.id);
+  writeData(data);
+  res.json({ success: true, manualAssets: data.manualAssets });
+});
+
 // 4. Financial Data Overview
 app.get('/api/data', (req, res) => {
   const { userId, household } = req.query;
@@ -826,6 +968,9 @@ app.get('/api/data', (req, res) => {
     bills: activeBills,
     subscriptions,
     transactions: (data.transactions || []).slice(0, 50),
+    budgets: data.budgets || [],
+    savingsGoals: data.savingsGoals || [],
+    manualAssets: data.manualAssets || [],
     metrics: {
       totalChecking,
       totalCreditDebt,
@@ -839,8 +984,17 @@ app.get('/api/data', (req, res) => {
 
 // Batch sync accounts, bills, subscriptions, and transactions from client cache if server cold started
 app.post('/api/accounts/batch-sync', (req, res) => {
-  const { accounts, bills, subscriptions, transactions, userId } = req.body;
+  const { accounts, bills, subscriptions, transactions, budgets, savingsGoals, manualAssets, userId } = req.body;
   const data = readData();
+  if (Array.isArray(budgets)) {
+    data.budgets = budgets;
+  }
+  if (Array.isArray(savingsGoals)) {
+    data.savingsGoals = savingsGoals;
+  }
+  if (Array.isArray(manualAssets)) {
+    data.manualAssets = manualAssets;
+  }
   if (Array.isArray(accounts) && accounts.length > 0) {
     data.accounts = data.accounts || [];
     for (const acc of accounts) {

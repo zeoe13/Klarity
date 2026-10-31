@@ -25,7 +25,7 @@
       "institution": "Everyday Rewards",
       "type": "credit",
       "subtype": "credit card",
-      "balance": 1102.20,
+      "balance": 1102.2,
       "limit": 5000,
       "apr": 21.9,
       "mask": "4417",
@@ -37,7 +37,7 @@
       "institution": "Travel Card",
       "type": "credit",
       "subtype": "credit card",
-      "balance": 662.00,
+      "balance": 662,
       "limit": 2000,
       "apr": 24.4,
       "mask": "9082",
@@ -49,7 +49,7 @@
       "id": "bill-pge",
       "name": "PG&E Electric",
       "category": "Utilities",
-      "expectedAmount": 128.40,
+      "expectedAmount": 128.4,
       "dueDay": 28,
       "daysUntil": 3,
       "nextDueDate": "Due Oct 28 · Checking",
@@ -60,7 +60,7 @@
       "id": "bill-rent",
       "name": "Rent",
       "category": "Rent",
-      "expectedAmount": 650.00,
+      "expectedAmount": 650,
       "dueDay": 1,
       "daysUntil": 7,
       "nextDueDate": "Due Nov 1 · Checking",
@@ -113,7 +113,7 @@
     {
       "id": "sub-chatgpt",
       "name": "ChatGPT Plus",
-      "amount": 20.00,
+      "amount": 20,
       "billingCycle": "monthly",
       "renewDay": 20,
       "renewalDate": "Renews Nov 20",
@@ -133,7 +133,7 @@
     {
       "id": "tx-shell",
       "name": "Shell",
-      "amount": 41.80,
+      "amount": 41.8,
       "date": "Oct 23 · Everyday Rewards",
       "category": "Transportation",
       "account": "Everyday Rewards"
@@ -141,7 +141,7 @@
     {
       "id": "tx-paycheck",
       "name": "Paycheck deposit",
-      "amount": -1850.00,
+      "amount": -1850,
       "date": "Oct 22 · Checking",
       "category": "Income",
       "account": "Checking"
@@ -166,5 +166,79 @@
       "encryptedSecret": "",
       "status": "not_connected"
     }
-  }
+  },
+  "budgets": [
+    {
+      "id": "b-groceries",
+      "category": "Groceries",
+      "limit": 200,
+      "defaultSpent": 142,
+      "lastMonthSpent": 165
+    },
+    {
+      "id": "b-dining",
+      "category": "Dining",
+      "limit": 60,
+      "defaultSpent": 57,
+      "lastMonthSpent": 48
+    },
+    {
+      "id": "b-gas",
+      "category": "Gas",
+      "limit": 80,
+      "defaultSpent": 90,
+      "lastMonthSpent": 72
+    },
+    {
+      "id": "b-shopping",
+      "category": "Shopping",
+      "limit": 150,
+      "defaultSpent": 68,
+      "lastMonthSpent": 110
+    },
+    {
+      "id": "b-subscriptions",
+      "category": "Subscriptions",
+      "limit": 40,
+      "defaultSpent": 27,
+      "lastMonthSpent": 27
+    },
+    {
+      "id": "b-bills",
+      "category": "Bills",
+      "limit": 150,
+      "defaultSpent": 128,
+      "lastMonthSpent": 125
+    }
+  ],
+  "savingsGoals": [
+    {
+      "id": "goal-emergency",
+      "name": "Emergency Fund",
+      "targetAmount": 3000,
+      "currentAmount": 1200,
+      "monthlyContribution": 250
+    },
+    {
+      "id": "goal-vacation",
+      "name": "Family Vacation",
+      "targetAmount": 2000,
+      "currentAmount": 750,
+      "monthlyContribution": 150
+    }
+  ],
+  "manualAssets": [
+    {
+      "id": "ma-1",
+      "name": "High-Yield Emergency Savings",
+      "type": "savings",
+      "balance": 3500
+    },
+    {
+      "id": "ma-2",
+      "name": "Vanguard Index Portfolio",
+      "type": "investment",
+      "balance": 6400
+    }
+  ]
 }
