@@ -310,6 +310,8 @@ function getPlaidClient(overrideClientId, overrideSecret, userId) {
 function mapPlaidCategory(plaidCat) {
   if (!plaidCat) return 'Shopping';
   const c = String(plaidCat).toLowerCase();
+  if (c.includes('social_security') || c.includes('ssa')) return 'Social Security';
+  if (c.includes('pension') || c.includes('calpers') || c.includes('strs') || c.includes('annuity') || c.includes('retirement')) return 'CalPERS / Pension';
   if (c.includes('food') || c.includes('restaurant') || c.includes('dining') || c.includes('fast_food') || c.includes('cafe')) return 'Dining';
   if (c.includes('grocer') || c.includes('supermarket') || c.includes('market') || c.includes('food_and_beverage')) return 'Groceries';
   if (c.includes('transport') || c.includes('gas') || c.includes('fuel') || c.includes('automotive') || c.includes('transit') || c.includes('taxi')) return 'Transportation';
@@ -325,6 +327,8 @@ function mapPlaidCategory(plaidCat) {
 // Auto-categorize by merchant name
 function categorizeTransaction(name) {
   const n = (name || '').toLowerCase();
+  if (n.includes('social security') || n.includes('ssa ') || n.includes('ssa-') || n.includes('ssdi') || n.includes('ssi ')) return 'Social Security';
+  if (n.includes('calpers') || n.includes('pension') || n.includes('strs') || n.includes('retirement dist') || n.includes('annuity') || n.includes('opm')) return 'CalPERS / Pension';
   if (n.includes('electric') || n.includes('pge') || n.includes('water') || n.includes('utility') || n.includes('gas co') || n.includes('internet') || n.includes('wifi') || n.includes('comcast') || n.includes('verizon') || n.includes('at&t') || n.includes('t-mobile')) return 'Utilities';
   if (n.includes('rent') || n.includes('mortgage') || n.includes('lease') || n.includes('apartment') || n.includes('landlord')) return 'Housing';
   if (n.includes('safeway') || n.includes('trader joe') || n.includes('grocery') || n.includes('market') || n.includes('whole foods') || n.includes('costco') || n.includes('kroger') || n.includes('sprouts') || n.includes('aldi') || n.includes('supermarket') || n.includes('heb') || n.includes('publix')) return 'Groceries';
@@ -1342,6 +1346,21 @@ Rules:
    - For Transactions / Purchases: [NAVIGATE:transactions]
    - For Overview / Dashboard: [NAVIGATE:dashboard]
    - For Settings: [NAVIGATE:settings]
+6. RETIREMENT, SOCIAL SECURITY, CALPERS & SENIOR DEBT PROTECTION EXPERTISE:
+   When advising users, seniors, or parents living on fixed incomes, Social Security, CalPERS, or state/federal pensions:
+   - LEGAL SHIELD & JUDGMENT-PROOF STATUS:
+     * Social Security Act § 207: Benefits are strictly exempt by federal law from garnishment, levy, or execution by private, commercial credit card creditors.
+     * CalPERS & Public Pension Shield (California CCP § 704.110): Public employee retirement, disability, and pension benefits are 100% exempt from the enforcement of civil money judgments.
+     * Bank Account Automatic Shield (31 CFR Part 212): Banks are federally mandated to automatically protect the last 2 months of direct-deposited Social Security and public pensions from any account freeze, attachment, or levy.
+     * Who CAN garnish? Only child support/alimony, the IRS (federal taxes), or federal student loans. Private card companies (Amex, Citi, Discover, Chase, Capital One) have ZERO legal authority to touch or garnish Social Security or pensions.
+     * Note: Government programs (Medi-Cal, Medicare, State) do NOT pay off private credit card balances.
+   - INTEREST ELIMINATION (RIBA-FREE) WORKOUT SOLUTIONS:
+     * Option A: Internal Bank Hardship Program. Major banks (Amex Financial Relief 1-866-703-4169, Citi, Discover) offer workout programs cutting APR to 0%-6% with a 36-60 month fixed repayment plan in exchange for closing the card. Provide the exact call script:
+       "Hello, I am calling regarding my account ending in [XXXX]. I am an elderly retiree on a fixed CalPERS public pension and Social Security. The current interest charges are making it impossible to pay down this principal balance. I want to honor my debt and pay back 100% of what I borrowed, but I cannot sustain this APR on my fixed income. I am requesting to enroll this account into an internal Financial Relief / Hardship Program with a 0% interest rate and a fixed monthly payoff plan in exchange for closing the card."
+     * Option B: NFCC Certified Non-Profit Debt Management Plan (DMP). Direct users to accredited agencies: National Foundation for Credit Counseling (NFCC at nfcc.org | 1-800-388-2227) or Money Management International (MMI at moneymanagement.org | 1-866-889-9347). Explain that non-profit agencies legally reduce or waive administrative fees for seniors on low/fixed incomes and negotiate 0%-8% APR concessions.
+     * Option C: Family Zero-Interest Payoff (Qard Hasan). Family members pool funds to eliminate toxic high-APR card balances in a lump sum, and the senior repays the family interest-free (e.g. $200-$250/mo from pension) with zero bank fees and zero credit report impact.
+     * Option D: CalPERS 457b Loan (if applicable). If they contributed to a 457b plan, they can borrow against their vested balance where all interest returns directly to their own retirement fund.
+   - THE MINIMUM PAYMENT TRAP: Show the math—paying only the minimum on $8,000 at 24% APR takes ~22 years and costs over $11,500 in pure wasted interest ($19,500 total out of pocket) compared to 0% hardship workout plans!
 `.trim();
 
   const fullUserPrompt = `${message || (fileAttachments.length > 0 ? `Please read and analyze the attached ${fileAttachments.length} file(s) (${fileAttachments.map(f => f.name).join(', ')}) and automatically extract and add all bills, subscriptions, and store purchases.` : 'Please analyze this.')}${extractedFilesText}`;
