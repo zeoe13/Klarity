@@ -554,6 +554,28 @@ app.post('/api/settings/ai-key/test-and-save', async (req, res) => {
         const errJson = await testRes.json().catch(() => ({}));
         testError = errJson?.error?.message || `Anthropic error: HTTP ${testRes.status}`;
       }
+    } else if (provider === 'ai-gateway' || provider === 'vercel') {
+      const gwRes = await fetch('https://ai-gateway.vercel.sh/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${rawApiKey || process.env.AI_GATEWAY_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: model || 'openai/gpt-4o',
+          messages: [
+            { role: 'system', content: systemContext },
+            { role: 'user', content: fullUserPrompt }
+          ]
+        })
+      });
+      if (gwRes.ok) {
+        const gwJson = await gwRes.json();
+        reply = gwJson.choices?.[0]?.message?.content;
+      } else {
+        const errJson = await gwRes.json().catch(() => ({}));
+        reply = `Vercel AI Gateway error: ${errJson?.error?.message || gwRes.statusText}`;
+      }
     } else if (provider === 'openai') {
       const testRes = await fetch('https://api.openai.com/v1/models', {
         headers: { 'Authorization': `Bearer ${keyToTest}` }
@@ -1380,7 +1402,11 @@ app.post('/api/ai/chat', async (req, res) => {
     imageBase64,
     imageMimeType,
     attachments = [],
-    statutoryShield
+    statutoryShield,
+    budgets = [],
+    savingsGoals = [],
+    manualAssets = [],
+    netWorth
   } = req.body;
   const data = readData();
   const userSettings = getUserSettings(data, userId);
@@ -1474,20 +1500,31 @@ Actual Connected Finances for ${currentUser.name} (strictly respecting permissio
 - Credit Cards (${permissions.cards ? 'Permitted' : 'Access Restricted'}): ${userCards.length > 0 ? userCards.map(c => `${c.institution} ${c.name}: $${Number(c.balance).toFixed(2)} @ ${c.apr}% APR (Min: $${c.minPayment || 0})`).join(' | ') : 'None connected'}
 - Upcoming Bills (${permissions.bills ? 'Permitted' : 'Access Restricted'}): ${userBills.length > 0 ? userBills.map(b => `${b.name}: $${Number(b.expectedAmount).toFixed(2)} due ${b.nextDueDate || b.dueDate || 'Day ' + b.dueDay}`).join(' | ') : 'None scheduled'}
 - Subscriptions (${permissions.subscriptions ? 'Permitted' : 'Access Restricted'}): ${userSubscriptions.length > 0 ? userSubscriptions.map(s => `${s.name}: $${Number(s.amount).toFixed(2)}/mo`).join(' | ') : 'None added'}
-- Recent Purchases (${permissions.purchases ? 'Permitted' : 'Access Restricted'}): ${userTransactions.length > 0 ? userTransactions.map(t => `${t.name}: $${Math.abs(Number(t.amount)).toFixed(2)} on ${t.date}`).join(' | ') : 'None recorded'}${memoryContext}${liveWebSearchContext}
+- Recent Purchases (${permissions.purchases ? 'Permitted' : 'Access Restricted'}): ${userTransactions.length > 0 ? userTransactions.map(t => `${t.name}: ${Math.abs(Number(t.amount)).toFixed(2)} on ${t.date}`).join(' | ') : 'None recorded'}
+- Monthly Category Budgets: ${budgets && budgets.length > 0 ? budgets.map(b => `${b.category}: ${b.limit}/mo`).join(' | ') : 'None set'}
+- Savings Goals: ${savingsGoals && savingsGoals.length > 0 ? savingsGoals.map(g => `${g.name}: ${g.currentAmount} of ${g.targetAmount} (${g.monthlyContribution || 0}/mo)`).join(' | ') : 'None created'}
+- Manual Assets & Investments: ${manualAssets && manualAssets.length > 0 ? manualAssets.map(a => `${a.name}: ${Number(a.balance || 0).toLocaleString()} (${a.type})`).join(' | ') : 'None'}
+- Net Worth: ${Number(netWorth || 0).toLocaleString()}${memoryContext}${liveWebSearchContext}
 
 Rules:
 1. Provide concise, clear, and empathetic financial guidance based strictly on real numbers and current web knowledge.
 2. LIVE INTERNET & WEB KNOWLEDGE: Incorporate real-time web facts to recommend specific credit card promotions (e.g. Citi Simplicity, Wells Fargo Reflect, Chase Freedom), balance transfer fees, current HYSA yields, and ways to save money.
-3. AUTOMATED ACTIONS, SENTENCE COMPREHENSION & DOCUMENT/STATEMENT EXTRACTION:
-   Whenever the user pastes sentences describing bills, subscriptions, or purchases (e.g., via Scan Document or chat) OR uploads any file/statement/receipt, you MUST carefully comprehend every item mentioned and output an ACTION tag for EACH item so Klarity automatically registers them:
-   - For Subscriptions (streaming, software, gym, recurring memberships): [ACTION:ADD_SUBSCRIPTION:{"name":"Netflix","amount":22.99,"billingCycle":"monthly"}]
-   - For Bills (utilities, electric, water, gas, internet, phone, insurance, rent): [ACTION:ADD_BILL:{"name":"ConEdison Electric","expectedAmount":148.60,"dueDay":3}]
-   - For Store Purchases / One-Time Transactions (groceries, dining, retail, gas, rideshare): [ACTION:ADD_TRANSACTION:{"name":"Trader Joe's","amount":78.45,"category":"Groceries"}]
-   - For Setting a Monthly Category Budget: [ACTION:SET_BUDGET:{"category":"Groceries","limit":400}]
-   - For Creating a Savings Goal: [ACTION:ADD_GOAL:{"name":"Emergency Fund","targetAmount":3000,"currentAmount":500,"monthlyContribution":250}]
-   You MUST output multiple ACTION tags in a single response to add ALL detected bills, subscriptions, and purchases at once!
-   Always summarize the items you added in clean bullet points grouped by category, and cite exact dollar amounts from the user's connected data.
+3. FULL AUTONOMOUS CONTROL & ACTION EXECUTION:
+   You have FULL ACCESS to view and autonomously modify all user finances on Klarity.
+   Whenever the user asks you to add, modify, or delete anything, or whenever a statement/bill/receipt is submitted, you can output ACTION tags that Klarity executes in real-time:
+   - For Subscriptions: [ACTION:ADD_SUBSCRIPTION:{"name":"Netflix","amount":22.99,"billingCycle":"monthly"}]
+   - For Deleting Subscriptions: [ACTION:DELETE_SUBSCRIPTION:{"name":"Netflix"}]
+   - For Bills: [ACTION:ADD_BILL:{"name":"ConEdison Electric","expectedAmount":148.60,"dueDay":3}]
+   - For Deleting Bills: [ACTION:DELETE_BILL:{"name":"ConEdison Electric"}]
+   - For Store Purchases: [ACTION:ADD_TRANSACTION:{"name":"Trader Joe's","amount":78.45,"category":"Groceries"}]
+   - For Monthly Budgets: [ACTION:SET_BUDGET:{"category":"Groceries","limit":400}]
+   - For Deleting Budgets: [ACTION:DELETE_BUDGET:{"category":"Groceries"}]
+   - For Savings Goals: [ACTION:ADD_GOAL:{"name":"Emergency Fund","targetAmount":3000,"currentAmount":500,"monthlyContribution":250}]
+   - For Deleting Savings Goals: [ACTION:DELETE_GOAL:{"name":"Emergency Fund"}]
+   - For Setting / Verifying Retirement Inflow: [ACTION:SET_INCOME:{"type":"social_security","amount":2185,"label":"Social Security"}] or [ACTION:SET_INCOME:{"type":"calpers","amount":3450,"label":"CalPERS Pension"}]
+   - For Deleting Income Stream: [ACTION:DELETE_INCOME:{"type":"social_security"}]
+   You can output multiple ACTION tags in a single response to execute batch operations!
+   Always summarize the changes you made in clean bullet points with exact dollar figures.
 4. GEMINI-STYLE POLISHED FORMATTING:
    - Always structure your responses with elegant Markdown formatting just like Google Gemini.
    - Use bold font (**Name / Amount**) for merchant names, key figures, due dates, and action items so they are bold and prominent.
@@ -1821,6 +1858,58 @@ ${statutoryShield ? `   [ACTIVE USER STATUTORY SHIELD]:
       try {
         const gData = JSON.parse(glMatch[1]);
         actionsExecuted.push({ type: 'goal', item: gData });
+      } catch (e) {}
+    }
+
+    // Process [ACTION:DELETE_BILL:...], [ACTION:DELETE_SUBSCRIPTION:...], [ACTION:DELETE_BUDGET:...], [ACTION:DELETE_GOAL:...], [ACTION:SET_INCOME:...]
+    const delBillRegex = /\[ACTION:DELETE_BILL:([\s\S]*?)\]/gi;
+    let dbMatch;
+    while ((dbMatch = delBillRegex.exec(reply)) !== null) {
+      try {
+        const bData = JSON.parse(dbMatch[1]);
+        if (bData.name) {
+          data.bills = data.bills.filter(b => b.name.toLowerCase() !== bData.name.toLowerCase());
+          actionsExecuted.push({ type: 'delete_bill', item: bData });
+        }
+      } catch (e) {}
+    }
+
+    const delSubRegex = /\[ACTION:DELETE_SUBSCRIPTION:([\s\S]*?)\]/gi;
+    let dsMatch;
+    while ((dsMatch = delSubRegex.exec(reply)) !== null) {
+      try {
+        const sData = JSON.parse(dsMatch[1]);
+        if (sData.name) {
+          data.subscriptions = data.subscriptions.filter(s => s.name.toLowerCase() !== sData.name.toLowerCase());
+          actionsExecuted.push({ type: 'delete_subscription', item: sData });
+        }
+      } catch (e) {}
+    }
+
+    const delBudgetRegex = /\[ACTION:DELETE_BUDGET:([\s\S]*?)\]/gi;
+    let dbtMatch;
+    while ((dbtMatch = delBudgetRegex.exec(reply)) !== null) {
+      try {
+        const bgData = JSON.parse(dbtMatch[1]);
+        actionsExecuted.push({ type: 'delete_budget', item: bgData });
+      } catch (e) {}
+    }
+
+    const delGoalRegex = /\[ACTION:DELETE_GOAL:([\s\S]*?)\]/gi;
+    let dgMatch;
+    while ((dgMatch = delGoalRegex.exec(reply)) !== null) {
+      try {
+        const gData = JSON.parse(dgMatch[1]);
+        actionsExecuted.push({ type: 'delete_goal', item: gData });
+      } catch (e) {}
+    }
+
+    const setIncomeRegex = /\[ACTION:SET_INCOME:([\s\S]*?)\]/gi;
+    let siMatch;
+    while ((siMatch = setIncomeRegex.exec(reply)) !== null) {
+      try {
+        const incData = JSON.parse(siMatch[1]);
+        actionsExecuted.push({ type: 'set_income', item: incData });
       } catch (e) {}
     }
 

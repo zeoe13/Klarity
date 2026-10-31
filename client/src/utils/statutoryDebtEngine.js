@@ -385,45 +385,189 @@ export function simulatePayoffScenarios(totalBalance, apr = 24.0, customFixedPay
 /**
  * Hardship Playbook Creditor Directory with Direct Phone Scripts
  */
+/**
+ * Hardship Playbook Creditor Directory with Direct Phone Scripts (12 Major Issuers)
+ */
 export const HARDSHIP_CREDITORS = [
   {
     institution: 'American Express',
     slug: 'amex',
+    category: 'Major Issuers',
     department: 'Financial Relief Program (FRP)',
     phone: '1-866-703-4169',
     onlineUrl: 'https://www.americanexpress.com/financial-relief',
     typicalTerms: '0% - 9.99% APR, 12 - 48 month fixed amortization, account closed/suspended',
     hardshipPhoneScript: (cardholderName, mask, balance) => 
-      `"Hello, my name is ${cardholderName || 'Cardholder'}. I am calling regarding my American Express account ending in •••• ${mask || 'XXXX'} (current balance: $${Number(balance || 0).toLocaleString()}). I am an elderly retiree living on a fixed CalPERS public pension and Social Security. Due to inflation and fixed living expenses, the current APR is making it mathematically impossible to reduce my principal balance. I want to honor my obligations and repay 100% of my debt, but I cannot sustain this interest rate. I am requesting to enroll this card into the American Express Financial Relief Program (FRP) with a 0% to reduced APR and a structured payoff plan in exchange for closing the account."`
+      `"Hello, my name is ${cardholderName || 'Cardholder'}. I am calling regarding my American Express account ending in ${mask || 'XXXX'} (current balance: $${Number(balance || 0).toLocaleString()}). I am an elderly retiree living on a fixed CalPERS public pension and Social Security. Due to inflation and living expenses, the current APR is making it mathematically impossible to reduce my principal balance. I want to honor my obligations and repay 100% of my debt, but I cannot sustain this interest rate. I am requesting to enroll this card into the American Express Financial Relief Program (FRP) with a 0% to reduced APR and a structured payoff plan in exchange for closing the account."`
   },
   {
     institution: 'Citibank',
     slug: 'citi',
+    category: 'Major Issuers',
     department: 'Consumer Hardship & Workout Department',
     phone: '1-800-950-5114',
     onlineUrl: 'https://www.citi.com',
     typicalTerms: '0% - 6% APR, 36 - 60 month fixed monthly payments, account closed',
     hardshipPhoneScript: (cardholderName, mask, balance) => 
-      `"Hello, my name is ${cardholderName || 'Cardholder'}. I am calling about my Citi card ending in •••• ${mask || 'XXXX'} with a balance of $${Number(balance || 0).toLocaleString()}. I am on a fixed retirement pension and Social Security. The monthly interest charges consume most of my payment, preventing principal reduction. Under California CCP § 704.110 and federal law, my pension and Social Security are statutorily judgment-proof, but I want to pay Citi back every dollar borrowed. I am formally asking for Citi's internal Hardship Workout Program with a 0% rate and a 48 to 60 month payment schedule."`
+      `"Hello, my name is ${cardholderName || 'Cardholder'}. I am calling about my Citi card ending in ${mask || 'XXXX'} with a balance of $${Number(balance || 0).toLocaleString()}. I am on a fixed retirement pension and Social Security. The monthly interest charges consume most of my payment, preventing principal reduction. Under California CCP § 704.110 and federal law, my pension and Social Security are statutorily judgment-proof, but I want to pay Citi back every dollar borrowed. I am formally asking for Citi's internal Hardship Workout Program with a 0% rate and a 48 to 60 month payment schedule."`
   },
   {
     institution: 'Discover',
     slug: 'discover',
+    category: 'Major Issuers',
     department: 'Hardship Assistance Team',
     phone: '1-800-347-2683',
     onlineUrl: 'https://www.discover.com',
     typicalTerms: '0.99% - 9.99% APR, 12 - 60 months, account closed to new spending',
     hardshipPhoneScript: (cardholderName, mask, balance) => 
-      `"Hello, I am calling about my Discover account ending in •••• ${mask || 'XXXX'} ($${Number(balance || 0).toLocaleString()} balance). I am retired on Social Security and CalPERS. The ongoing interest is causing severe financial distress. I am requesting enrollment in Discover's Hardship Assistance Program for a reduced/0% APR and fixed monthly repayment plan so I can retire this balance in full."`
+      `"Hello, I am calling about my Discover account ending in ${mask || 'XXXX'} ($${Number(balance || 0).toLocaleString()} balance). I am retired on Social Security and CalPERS. The ongoing interest is causing severe financial distress. I am requesting enrollment in Discover's Hardship Assistance Program for a reduced/0% APR and fixed monthly repayment plan so I can retire this balance in full."`
   },
   {
     institution: 'Chase',
     slug: 'chase',
+    category: 'Major Issuers',
     department: 'Special Assistance / Card Workout Department',
-    phone: '1-800-935-9935',
+    phone: '1-800-436-7941',
     onlineUrl: 'https://www.chase.com',
     typicalTerms: '2% - 6% APR, 36 - 60 month structured payoff, account closed',
     hardshipPhoneScript: (cardholderName, mask, balance) => 
-      `"Hello, I am calling regarding my Chase card ending in •••• ${mask || 'XXXX'}. My current balance is $${Number(balance || 0).toLocaleString()}. I am an elderly retiree on a fixed state pension and Social Security. I am requesting enrollment into Chase's Special Assistance Workout Program with a reduced interest rate and fixed payment plan in exchange for closing the card to future charges."`
+      `"Hello, I am calling regarding my Chase card ending in ${mask || 'XXXX'}. My current balance is $${Number(balance || 0).toLocaleString()}. I am an elderly retiree on a fixed state pension and Social Security. I am requesting enrollment into Chase's Special Assistance Workout Program with a reduced interest rate and fixed payment plan in exchange for closing the card to future charges."`
+  },
+  {
+    institution: 'Capital One',
+    slug: 'capitalone',
+    category: 'Major Issuers',
+    department: 'Payment Assistance & Hardship Department',
+    phone: '1-800-227-4825',
+    onlineUrl: 'https://www.capitalone.com',
+    typicalTerms: '0% - 9.9% APR, 24 - 60 month fixed repayment plan, card restricted/closed',
+    hardshipPhoneScript: (cardholderName, mask, balance) => 
+      `"Hello, my name is ${cardholderName || 'Cardholder'}. I am calling about my Capital One account ending in ${mask || 'XXXX'} with a balance of $${Number(balance || 0).toLocaleString()}. I am living on fixed statutory retirement benefits (CalPERS pension and Social Security). The high APR is making minimum payments ineffective against principal. I want to pay back 100% of the principal without interest burden. I am formally asking to be transferred to your Hardship & Payment Assistance Department to enter a fixed payoff plan with 0% interest in exchange for closing the card."`
+  },
+  {
+    institution: 'Bank of America',
+    slug: 'bofa',
+    category: 'Major Issuers',
+    department: 'Credit Card Hardship Assistance Program',
+    phone: '1-800-732-9194',
+    onlineUrl: 'https://www.bankofamerica.com',
+    typicalTerms: '0% - 5.9% APR, 36 - 60 month structured repayment, account closed',
+    hardshipPhoneScript: (cardholderName, mask, balance) => 
+      `"Hello, I am calling regarding my Bank of America credit card ending in ${mask || 'XXXX'} (balance: $${Number(balance || 0).toLocaleString()}). I am an elderly retiree on fixed retirement income. Under California CCP § 704.110 and Social Security § 207, my income is legally exempt from collection. However, I want to honor my obligation. I am requesting Bank of America's internal Hardship Program with a 0% to low fixed interest rate over 48 to 60 months so my full payments go directly to principal."`
+  },
+  {
+    institution: 'Wells Fargo',
+    slug: 'wellsfargo',
+    category: 'Major Issuers',
+    department: 'Credit Card Payment Assistance & Workout Team',
+    phone: '1-800-642-4720',
+    onlineUrl: 'https://www.wellsfargo.com',
+    typicalTerms: '1% - 7.9% APR, 36 - 60 month fixed payoff, card closed',
+    hardshipPhoneScript: (cardholderName, mask, balance) => 
+      `"Hello, I am calling about my Wells Fargo card ending in ${mask || 'XXXX'} with a balance of $${Number(balance || 0).toLocaleString()}. As a senior living on Social Security and public pension, the compound interest is creating an unsustainable hardship. I am requesting Wells Fargo's Payment Assistance Hardship Program with an interest rate reduction down to 0% and a structured monthly payment plan to clear the balance."`
+  },
+  {
+    institution: 'Barclays',
+    slug: 'barclays',
+    category: 'Major Issuers',
+    department: 'Cardholder Assistance Program (CAP)',
+    phone: '1-866-928-8598',
+    onlineUrl: 'https://www.barclaysus.com',
+    typicalTerms: '0% - 4% APR, 36 - 60 month amortized payoff, account closed',
+    hardshipPhoneScript: (cardholderName, mask, balance) => 
+      `"Hello, I am calling about my Barclays credit card ending in ${mask || 'XXXX'} ($${Number(balance || 0).toLocaleString()} balance). I am retired on a fixed budget. Due to rising costs of living, I cannot sustain the standard interest rate. I am requesting enrollment in the Barclays Cardholder Assistance Program with a 0% rate and a 36 to 60 month payoff schedule in exchange for closing the card."`
+  },
+  {
+    institution: 'Synchrony Bank',
+    slug: 'synchrony',
+    category: 'Retail & Store Cards',
+    department: 'Retail Card Hardship & Workout Program',
+    phone: '1-866-419-4096',
+    onlineUrl: 'https://www.synchrony.com',
+    typicalTerms: "0% - 9.99% APR, 36 - 60 months (Amazon, Lowes, CareCredit, TJX), card closed",
+    hardshipPhoneScript: (cardholderName, mask, balance) => 
+      `"Hello, I am calling regarding my Synchrony store credit card ending in ${mask || 'XXXX'} (balance: $${Number(balance || 0).toLocaleString()}). I am a senior living on fixed retirement income. The store card's 29.99%+ APR is excessive and eating up my entire fixed payment. Under federal law, my retirement funds are judgment-proof, but I want to pay back what I borrowed. I am requesting Synchrony's internal Hardship Workout Program with a 0% interest freeze and fixed monthly payment plan."`
+  },
+  {
+    institution: 'U.S. Bank',
+    slug: 'usbank',
+    category: 'Major Issuers',
+    department: 'Cardmember Assistance / Workout Solutions',
+    phone: '1-800-285-8585',
+    onlineUrl: 'https://www.usbank.com',
+    typicalTerms: '0% - 6% APR, 36 - 60 month fixed amortization, card closed',
+    hardshipPhoneScript: (cardholderName, mask, balance) => 
+      `"Hello, I am calling regarding my U.S. Bank credit card ending in ${mask || 'XXXX'} with a balance of $${Number(balance || 0).toLocaleString()}. I am calling because my fixed pension and Social Security cannot sustain the current monthly interest charges. I want to pay my balance in full and am asking for U.S. Bank's Cardmember Assistance Workout Program with 0% interest and a fixed monthly payoff agreement."`
+  },
+  {
+    institution: 'Goldman Sachs (Apple Card)',
+    slug: 'applecard',
+    category: 'Retail & Tech Cards',
+    department: 'Apple Card Customer Assistance / Financial Relief',
+    phone: '1-877-255-5923',
+    onlineUrl: 'https://support.apple.com/apple-card',
+    typicalTerms: '0% APR for 12 - 36 months, payment pause or fixed workout, card restricted',
+    hardshipPhoneScript: (cardholderName, mask, balance) => 
+      `"Hello, I am calling regarding my Apple Card account ending in ${mask || 'XXXX'} (balance: $${Number(balance || 0).toLocaleString()}). I am an elderly retiree on fixed retirement income experiencing financial hardship. I am requesting to speak with an Apple Card Customer Assistance Specialist regarding your Financial Assistance / Payment Relief Program to lower my APR to 0% and set up a structured repayment plan."`
+  },
+  {
+    institution: 'TD Bank (Target Circle Card)',
+    slug: 'tdbank',
+    category: 'Retail & Tech Cards',
+    department: 'Retail Card Workout & Hardship Services',
+    phone: '1-800-659-6569',
+    onlineUrl: 'https://www.td.com',
+    typicalTerms: '0% - 5.99% APR, 36 - 60 month workout plan, card closed',
+    hardshipPhoneScript: (cardholderName, mask, balance) => 
+      `"Hello, I am calling about my Target Circle / TD Bank credit card ending in ${mask || 'XXXX'} with a balance of $${Number(balance || 0).toLocaleString()}. I am retired on Social Security and CalPERS. The high APR makes it impossible to pay down the balance. I am requesting enrollment in your Hardship Workout Program with 0% interest and a fixed monthly payoff schedule."`
   }
 ];
+
+/**
+ * Scan bank transactions for recurring Social Security or Pension direct deposits
+ * @param {Array} transactions
+ * @returns {Array} detected benefit streams
+ */
+export function detectRetirementDeposits(transactions = []) {
+  if (!Array.isArray(transactions) || transactions.length === 0) return [];
+  const results = [];
+  const seenTypes = new Set();
+  
+  for (const tx of transactions) {
+    const name = (tx.name || tx.merchantName || '').toUpperCase();
+    const amount = Math.abs(Number(tx.amount || 0));
+    
+    // Look for deposits (in Plaid/banking, deposits often appear as inflow > $200)
+    if (amount < 200) continue;
+    
+    // Social Security patterns
+    if ((name.includes('SSA ') || name.includes('SOC SEC') || name.includes('SOCIAL SECURITY') || name.includes('TREAS 303') || name.includes('SSA TREAS')) && !seenTypes.has('social_security')) {
+      seenTypes.add('social_security');
+      results.push({
+        id: 'detected-ssa-' + (tx.id || 'auto'),
+        type: 'social_security',
+        label: 'Social Security (' + (tx.account || 'Checking') + ')',
+        amount: amount,
+        isStatutorilyExempt: true,
+        statutoryBasis: '42 U.S.C. § 407 (SSA § 207)',
+        detectedFrom: tx.name,
+        date: tx.date
+      });
+    }
+    // CalPERS / State Pension patterns
+    else if ((name.includes('CALPERS') || name.includes('CALSTRS') || name.includes('STRS') || name.includes('STATE RETIREMENT') || name.includes('PUBLIC PENSION')) && !seenTypes.has('calpers')) {
+      seenTypes.add('calpers');
+      results.push({
+        id: 'detected-calpers-' + (tx.id || 'auto'),
+        type: 'calpers',
+        label: 'CalPERS Pension (' + (tx.account || 'Checking') + ')',
+        amount: amount,
+        isStatutorilyExempt: true,
+        statutoryBasis: 'California CCP § 704.110',
+        detectedFrom: tx.name,
+        date: tx.date
+      });
+    }
+  }
+  return results;
+}

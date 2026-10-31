@@ -693,6 +693,24 @@ function KlarityApp() {
     } catch (e) {}
   }, [manualAssets]);
 
+  // Statutory Income Streams (Social Security, CalPERS, STRS, W-2, etc.)
+  const [incomeStreams, setIncomeStreams] = useState(() => {
+    try {
+      const saved = localStorage.getItem('klarity_income_streams');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_INCOME_STREAMS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('klarity_income_streams', JSON.stringify(incomeStreams));
+    } catch (e) {}
+  }, [incomeStreams]);
+
   // Modals & Editors for Budgets, Goals, Manual Accounts, Notes, Debt Planner
   const [isAddBudgetOpen, setIsAddBudgetOpen] = useState(false);
   const [newBudget, setNewBudget] = useState({ category: 'Groceries', limit: '350' });
@@ -2418,9 +2436,13 @@ function KlarityApp() {
           clientModel: cachedModel,
           attachments: payloadAttachments,
           statutoryShield: {
-            ...calculateJudgmentProofRatio(DEFAULT_INCOME_STREAMS),
-            incomeStreams: DEFAULT_INCOME_STREAMS
-          }
+            ...calculateJudgmentProofRatio(incomeStreams),
+            incomeStreams: incomeStreams
+          },
+          budgets: budgets,
+          savingsGoals: savingsGoals,
+          manualAssets: manualAssets,
+          netWorth: totalNetWorth || 0
         })
       });
 
@@ -2464,6 +2486,38 @@ function KlarityApp() {
               if (exists) return prev.map(b => b.id === exists.id ? { ...b, limit: lim } : b);
               return [...prev, { id: `b-${Date.now()}`, category: act.item.category, limit: lim, lastMonthSpent: Math.round(lim * 0.8) }];
             });
+          } else if (act.type === 'delete_budget' && act.item?.category) {
+            setBudgets(prev => prev.filter(b => (b.category || '').toLowerCase() !== (act.item.category || '').toLowerCase()));
+          } else if (act.type === 'delete_goal' && act.item?.name) {
+            setSavingsGoals(prev => prev.filter(g => (g.name || '').toLowerCase() !== (act.item.name || '').toLowerCase()));
+          } else if (act.type === 'delete_bill' && act.item?.name) {
+            setData(prev => {
+              const nextBills = (prev.bills || []).filter(b => (b.name || '').toLowerCase() !== (act.item.name || '').toLowerCase());
+              return { ...prev, bills: nextBills };
+            });
+          } else if (act.type === 'delete_subscription' && act.item?.name) {
+            setData(prev => {
+              const nextSubs = (prev.subscriptions || []).filter(s => (s.name || '').toLowerCase() !== (act.item.name || '').toLowerCase());
+              return { ...prev, subscriptions: nextSubs };
+            });
+          } else if (act.type === 'set_income' && act.item?.amount) {
+            setIncomeStreams(prev => {
+              const idx = prev.findIndex(s => s.type === act.item.type);
+              if (idx >= 0) {
+                const copy = [...prev];
+                copy[idx] = { ...copy[idx], amount: parseFloat(act.item.amount), label: act.item.label || copy[idx].label };
+                return copy;
+              }
+              return [...prev, {
+                id: `stream-${Date.now()}`,
+                type: act.item.type || 'other',
+                label: act.item.label || 'Retirement Benefit',
+                amount: parseFloat(act.item.amount),
+                isStatutorilyExempt: ['social_security', 'calpers', 'pension'].includes(act.item.type)
+              }];
+            });
+          } else if (act.type === 'delete_income' && act.item?.type) {
+            setIncomeStreams(prev => prev.filter(s => s.type !== act.item.type));
           } else if (act.type === 'goal' && act.item?.name && act.item?.targetAmount) {
             setSavingsGoals(prev => [
               ...prev,
@@ -5238,8 +5292,11 @@ function KlarityApp() {
 
                         {/* 1. Statutory Legal Shield Status Card (42 U.S.C. § 407, CA CCP § 704.110, 31 CFR Part 212) */}
             <LegalShieldStatusCard 
-              incomeStreams={DEFAULT_INCOME_STREAMS} 
+              incomeStreams={incomeStreams} 
               debtAccounts={allFilterableCards.filter(c => c.type === 'credit')} 
+              transactions={data.transactions || []}
+              accounts={data.accounts || []}
+              onUpdateIncomeStreams={setIncomeStreams}
             />
 
             {/* 2. Mathematical 4-Option Payoff Engine (Minimum, Accelerated, 0% Hardship/NFCC, Family Qard Hasan) */}
